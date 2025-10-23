@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --glow: 0 6px 30px rgba(10,60,110,0.35), 0 2px 8px rgba(10,60,110,0.2);
+}
+
+body{ @apply bg-qm-gradient; }
+
+.cube{
+  background: linear-gradient(135deg, rgba(5,74,120,0.08), rgba(15,40,70,0.18));
+  border: 1px solid rgba(175,190,200,0.06);
+  box-shadow: var(--glow);
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 12px 30px rgba(10,60,110,0.08));
+  backdrop-filter: blur(6px);
+  transition: transform 400ms cubic-bezier(.2,.9,.2,1), box-shadow 300ms;
+}
+
+.cube::after{
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+  mix-blend-mode: overlay;
+}
+
+/* responsive tweaks */
+@media (max-width: 640px){
+  .cube{ opacity: 0.6 }
+}
