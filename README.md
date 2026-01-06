@@ -1,8 +1,3 @@
 # QuatricMorph
 
-Vite + React starter for QuatricMorph with Tailwind CSS and Framer Motion.
-
-- Start dev server: `npm run dev`
-- Build: `npm run build`
-
-This scaffolding includes a minimalist landing page (src/App.jsx) that uses /src/assets/logo.png. Replace the placeholder logo at that path with your full-resolution QuatricMorph logo.
+QuatricMorph (marketed in China as 元方变) is a revolutionary programmable matter system that brings to life the vision of robotic "particles" capable of self-organizing into any physical entity. The system is comprised of millions of millimeter-scale cubic units (8–12mm) embedded with microprocessors and 8-way electromagnetic arrays, operating through dynamic attraction-repulsion mechanisms rather than traditional mechanical joints. Orchestrated by GPU-based parallel algorithms, these millions of units can reorient, connect, and reconfigure in real-time to form complex 3D structures with high-fidelity resolution and immense structural integrity. Beyond mere shape-shifting, QuatricMorph serves as an AI-driven smart material capable of adapting its stiffness and functionality on demand, unlocking infinite possibilities for flexible manufacturing, adaptive healthcare, and intelligent architecture on a global scale.
