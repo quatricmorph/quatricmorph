@@ -118,8 +118,7 @@ impl<'a> CheckpointIngestor<'a> {
                 )?;
                 bytes_read += raw.len() as u64;
                 let idx = ShardIndex::parse(&f.uri, &raw)?;
-                let available: Vec<String> =
-                    manifest.shards().map(|s| s.uri.clone()).collect();
+                let available: Vec<String> = manifest.shards().map(|s| s.uri.clone()).collect();
                 idx.verify_shards_present(&available, &manifest.root_uri)?;
                 Some(idx)
             }
@@ -168,8 +167,7 @@ impl<'a> CheckpointIngestor<'a> {
             bytes_read += 8 + header.header_length;
 
             self.budget.check(
-                (descriptors.len() as u64 + header.tensor_count() as u64)
-                    * APPROX_DESCRIPTOR_BYTES,
+                (descriptors.len() as u64 + header.tensor_count() as u64) * APPROX_DESCRIPTOR_BYTES,
             )?;
 
             for (name, entry) in &header.tensors {
@@ -192,14 +190,16 @@ impl<'a> CheckpointIngestor<'a> {
                             return Err(QError::malformed(
                                 uri,
                                 format!(
-                                    "tensor {name} is in {uri} but the index places it in {expected}"
-                                ),
+                                "tensor {name} is in {uri} but the index places it in {expected}"
+                            ),
                             ))
                         }
                         None => {
                             return Err(QError::malformed(
                                 uri,
-                                format!("tensor {name} is present in the shard but absent from the index"),
+                                format!(
+                                "tensor {name} is present in the shard but absent from the index"
+                            ),
                             ))
                         }
                     }
@@ -300,7 +300,9 @@ mod tests {
         assert!(out.shard_index.is_none());
         assert!(is_single_file(&out.manifest));
         assert!(out.find("model.layers.0.self_attn.q_proj.weight").is_some());
-        assert!(out.find("model.layers.10.self_attn.q_proj.weight").is_none());
+        assert!(out
+            .find("model.layers.10.self_attn.q_proj.weight")
+            .is_none());
     }
 
     #[test]
@@ -361,7 +363,9 @@ mod tests {
             .descriptors
             .iter()
             .all(|d| d.shard_uri == "model-00002-of-00002.safetensors"));
-        assert!(out.find("model.layers.10.self_attn.q_proj.weight").is_some());
+        assert!(out
+            .find("model.layers.10.self_attn.q_proj.weight")
+            .is_some());
         assert!(out.find("model.layers.0.self_attn.q_proj.weight").is_none());
     }
 
@@ -388,11 +392,7 @@ mod tests {
         let mut bytes = (json.len() as u64).to_le_bytes().to_vec();
         bytes.extend_from_slice(json.as_bytes());
         bytes.extend_from_slice(&[0u8; 4]);
-        std::fs::write(
-            dir.path().join("model-00001-of-00002.safetensors"),
-            &bytes,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("model-00001-of-00002.safetensors"), &bytes).unwrap();
 
         let src = q_source::LocalFsSource::open(dir.path()).unwrap();
         assert!(matches!(
@@ -408,7 +408,10 @@ mod tests {
         let mut bytes = (json.len() as u64).to_le_bytes().to_vec();
         bytes.extend_from_slice(json.as_bytes());
         bytes.extend_from_slice(&[0u8; 4]);
-        for shard in ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"] {
+        for shard in [
+            "model-00001-of-00002.safetensors",
+            "model-00002-of-00002.safetensors",
+        ] {
             std::fs::write(dir.path().join(shard), &bytes).unwrap();
         }
         // No index: both shards are scanned and both declare "a".

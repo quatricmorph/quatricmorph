@@ -74,7 +74,9 @@ impl ModelManifest {
     }
 
     pub fn shard_index(&self) -> Option<&SourceFile> {
-        self.files.iter().find(|f| f.kind == ArtifactKind::ShardIndex)
+        self.files
+            .iter()
+            .find(|f| f.kind == ArtifactKind::ShardIndex)
     }
 
     pub fn file(&self, uri: &str) -> Option<&SourceFile> {
@@ -134,7 +136,9 @@ pub struct ByteStream {
 
 impl std::fmt::Debug for ByteStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ByteStream").field("len", &self.len).finish()
+        f.debug_struct("ByteStream")
+            .field("len", &self.len)
+            .finish()
     }
 }
 

@@ -75,9 +75,7 @@ fn ambiguous_alias_is_rejected_with_the_candidate_list() {
     match engine.resolve_reference("Att[10]") {
         Err(QError::AmbiguousAlias { candidates, .. }) => {
             assert_eq!(candidates.len(), 4);
-            assert!(candidates
-                .iter()
-                .any(|c| c.contains("query_projection")));
+            assert!(candidates.iter().any(|c| c.contains("query_projection")));
             assert!(candidates.iter().any(|c| c.contains("key_projection")));
         }
         other => panic!("expected AmbiguousAlias, got {other:?}"),
@@ -169,10 +167,8 @@ fn chained_matmul_produces_two_nodes_and_the_documented_shape() {
     let engine = QueryEngine::planning_only(&cat, &model_id).unwrap();
     // Q[10]:[128,48] @ transpose(K[10]):[48,32] -> [128,32]
     //                                    @ V[10]:[32,48] -> [128,48]
-    let script = parse(
-        r#"show tensor("Q[10]") @ transpose(tensor("K[10]")) @ tensor("V[10]")"#,
-    )
-    .unwrap();
+    let script =
+        parse(r#"show tensor("Q[10]") @ transpose(tensor("K[10]")) @ tensor("V[10]")"#).unwrap();
     let plan = engine.plan(&script).unwrap();
     assert_eq!(plan.matmul_count, 2);
     assert_eq!(plan.output_shape, vec![128, 48]);

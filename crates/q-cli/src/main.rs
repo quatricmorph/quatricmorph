@@ -139,7 +139,10 @@ fn open(model_dir: &Path) -> Result<(LocalFsSource, Catalog, String)> {
         &ingested.manifest.revision,
         &ingested.manifest.fingerprint(),
         &resolved.resolver_id,
-        ingested.manifest.config_u64("hidden_size").map(|v| v as u32),
+        ingested
+            .manifest
+            .config_u64("hidden_size")
+            .map(|v| v as u32),
         &resolved,
     )?;
     Ok((
@@ -242,7 +245,10 @@ fn run(cli: &Cli) -> Result<()> {
             if cli.json {
                 println!("{}", json_out(&layers)?);
             } else {
-                println!("{:>5}  {:>8}  {:>14}  {:>14}", "layer", "tensors", "parameters", "bytes");
+                println!(
+                    "{:>5}  {:>8}  {:>14}  {:>14}",
+                    "layer", "tensors", "parameters", "bytes"
+                );
                 for l in layers {
                     println!(
                         "{:>5}  {:>8}  {:>14}  {:>14}",
@@ -414,13 +420,15 @@ fn run(cli: &Cli) -> Result<()> {
             let (r0, r1) = parse_range(rows)?;
             let (c0, c1) = parse_range(columns)?;
             let extent = BlockExtent::new(r0, r1, c0, c1)?.clamped_to(&descriptor.shape)?;
-            let stats =
-                CpuBackend.block_statistics(&source, &descriptor, extent, *bins)?;
+            let stats = CpuBackend.block_statistics(&source, &descriptor, extent, *bins)?;
             if cli.json {
                 println!("{}", json_out(&stats)?);
             } else {
                 println!("tensor    {}", descriptor.canonical_name);
-                println!("block     [{r0}:{r1}, {c0}:{c1}]  ({} elements)", stats.count);
+                println!(
+                    "block     [{r0}:{r1}, {c0}:{c1}]  ({} elements)",
+                    stats.count
+                );
                 println!("min/max   {} / {}", stats.min_value, stats.max_value);
                 println!("mean      {}", stats.mean);
                 println!("stddev    {}", stats.std_dev());
@@ -433,7 +441,11 @@ fn run(cli: &Cli) -> Result<()> {
                     "backend   {} (algorithm v{}, {})",
                     stats.backend,
                     stats.algorithm_version,
-                    if stats.approximate { "APPROXIMATE" } else { "exact" }
+                    if stats.approximate {
+                        "APPROXIMATE"
+                    } else {
+                        "exact"
+                    }
                 );
             }
         }

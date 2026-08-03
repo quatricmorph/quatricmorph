@@ -156,12 +156,8 @@ pub fn read_slice_2d(
     // order, so a column window is a run, but successive rows are not adjacent.
     for r in r0..r1 {
         let (start, end) = descriptor.element_run_range(&[r, c0], n_cols)?;
-        let bytes = source.read_range_buffered(
-            &descriptor.shard_uri,
-            start,
-            end - start,
-            &budget,
-        )?;
+        let bytes =
+            source.read_range_buffered(&descriptor.shard_uri, start, end - start, &budget)?;
         bytes_read += bytes.len() as u64;
         values.extend(descriptor.dtype.decode_run(&bytes)?);
     }
@@ -270,9 +266,22 @@ mod tests {
         assert_eq!((s.rows(), s.columns()), (4, 4));
         assert_eq!(s.bytes_read, 4 * 4 * 4);
         let golden = [
-            0x3C6AC97Eu32, 0x3CF61617, 0x3BD1FB7E, 0xBC11D8DF, 0x3BDB7F5B, 0xBBCE95A9, 0xBC831466,
-            0x3C22237C, 0x3B93C26B, 0xBCD65E80, 0x3CC4ACFC, 0xBBCD0478, 0xBD2C3367, 0xBCA7EE40,
-            0xBC95E7AA, 0xBD00D0AA,
+            0x3C6AC97Eu32,
+            0x3CF61617,
+            0x3BD1FB7E,
+            0xBC11D8DF,
+            0x3BDB7F5B,
+            0xBBCE95A9,
+            0xBC831466,
+            0x3C22237C,
+            0x3B93C26B,
+            0xBCD65E80,
+            0x3CC4ACFC,
+            0xBBCD0478,
+            0xBD2C3367,
+            0xBCA7EE40,
+            0xBC95E7AA,
+            0xBD00D0AA,
         ];
         for (got, want) in s.values.iter().zip(golden.iter()) {
             assert_eq!(*got as f32, f32::from_bits(*want));
@@ -286,7 +295,14 @@ mod tests {
         let (src, out) = setup();
         let d = out.find("model.layers.10.self_attn.k_proj.weight").unwrap();
         let s = read_slice_2d(&src, d, (0, 2), (0, 3)).unwrap();
-        let golden = [0xBB94AA1Fu32, 0xBC92CC80, 0x3C77372C, 0x3C546F02, 0xBC53405E, 0xBD1C9EFD];
+        let golden = [
+            0xBB94AA1Fu32,
+            0xBC92CC80,
+            0x3C77372C,
+            0x3C546F02,
+            0xBC53405E,
+            0xBD1C9EFD,
+        ];
         for (got, want) in s.values.iter().zip(golden.iter()) {
             assert_eq!(*got as f32, f32::from_bits(*want));
         }

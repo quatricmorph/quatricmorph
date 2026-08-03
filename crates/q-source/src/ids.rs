@@ -122,7 +122,10 @@ impl TensorId {
     /// naming depends on which architecture resolver ran, and a resolver
     /// improvement must not change the identity of already-catalogued tensors.
     pub fn derive(model: ModelId, raw_name: &str) -> Self {
-        Self(digest16(Self::DOMAIN, &[model.as_bytes(), raw_name.as_bytes()]))
+        Self(digest16(
+            Self::DOMAIN,
+            &[model.as_bytes(), raw_name.as_bytes()],
+        ))
     }
 }
 

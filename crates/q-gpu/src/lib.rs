@@ -329,12 +329,15 @@ mod tests {
 
     #[test]
     fn block_statistics_stream_a_real_fixture_block() {
+        // Descriptors come from the real ingestion path (q-safetensors), not a
+        // second header parser written for this test. A re-implementation would
+        // be an untested copy of SRC-001..SRC-004 that silently drifts.
         let src = LocalFsSource::open(fixture_dir()).unwrap();
-        let out = q_safetensors_ingest();
-        let d = out
-            .iter()
-            .find(|d| d.raw_name == "model.layers.10.self_attn.q_proj.weight")
-            .unwrap();
+        let ingested = q_safetensors::ingest_local(fixture_dir()).unwrap();
+        let d = ingested
+            .find("model.layers.10.self_attn.q_proj.weight")
+            .expect("fixture tensor");
+
         let stats = block_statistics_default(
             &CpuBackend,
             &src,
@@ -342,66 +345,19 @@ mod tests {
             BlockExtent::new(100, 104, 40, 44).unwrap(),
         )
         .unwrap();
+
         assert_eq!(stats.count, 16);
         assert!(!stats.approximate);
         assert_eq!(stats.backend, "cpu-reference");
         assert_eq!(stats.histogram.total(), 16);
-        // The known scalar at (100, 42) must lie inside the block's range.
+        // The golden scalar at (100, 42) lies inside this block, so it must lie
+        // inside the block's range.
         let known = f32::from_bits(0x3BD1FB7E) as f64;
         assert!(stats.min_value <= known && known <= stats.max_value);
         assert!(stats.l2_norm > 0.0);
-        assert!(stats.zero_ratio + stats.positive_ratio + stats.negative_ratio == 1.0);
-    }
-
-    /// Small helper so this crate can test against the fixture without
-    /// depending on q-safetensors in its own dependency graph.
-    fn q_safetensors_ingest() -> Vec<TensorDescriptor> {
-        // Re-derive descriptors from the shard header using q-source only.
-        use q_source::manifest::ModelSource;
-        let src = LocalFsSource::open(fixture_dir()).unwrap();
-        let manifest = src.manifest().unwrap();
-        let shard = "model-00002-of-00002.safetensors";
-        let file = manifest.file(shard).unwrap();
-        let head = src
-            .read_range_buffered(shard, 0, 8, &MemoryBudget::header())
-            .unwrap();
-        let n = u64::from_le_bytes(head.try_into().unwrap());
-        let json = src
-            .read_range_buffered(shard, 8, n, &MemoryBudget::header())
-            .unwrap();
-        let parsed: serde_json::Value = serde_json::from_slice(&json).unwrap();
-        let model = q_source::ModelId::derive("test", "", "fp");
-        let mut out = Vec::new();
-        for (name, entry) in parsed.as_object().unwrap() {
-            if name == "__metadata__" {
-                continue;
-            }
-            let shape: Vec<u64> = entry["shape"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v.as_u64().unwrap())
-                .collect();
-            let offsets = entry["data_offsets"].as_array().unwrap();
-            let (s, e) = (
-                offsets[0].as_u64().unwrap(),
-                offsets[1].as_u64().unwrap(),
-            );
-            out.push(TensorDescriptor {
-                tensor_id: q_source::TensorId::derive(model, name),
-                raw_name: name.clone(),
-                canonical_name: name.clone(),
-                shape,
-                dtype: q_source::DType::parse_safetensors(entry["dtype"].as_str().unwrap())
-                    .unwrap(),
-                shard_uri: shard.to_string(),
-                byte_start: 8 + n + s,
-                byte_end: 8 + n + e,
-                layer_index: None,
-                semantic_role: q_source::TensorRole::Unknown,
-            });
-        }
-        let _ = file;
-        out
+        assert_eq!(
+            stats.zero_ratio + stats.positive_ratio + stats.negative_ratio,
+            1.0
+        );
     }
 }

@@ -174,12 +174,13 @@ pub fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                     i += 1;
                 }
                 Token::Int(src[start..i].parse().map_err(|_| {
-                    QError::QueryRejected(format!("integer literal at byte {start} is out of range"))
+                    QError::QueryRejected(format!(
+                        "integer literal at byte {start} is out of range"
+                    ))
                 })?)
             }
             c if c.is_ascii_alphabetic() || c == b'_' => {
-                while i < b.len()
-                    && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'.')
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'.')
                 {
                     i += 1;
                 }
@@ -209,7 +210,11 @@ mod tests {
     use super::*;
 
     fn kinds(src: &str) -> Vec<Token> {
-        tokenize(src).unwrap().into_iter().map(|s| s.token).collect()
+        tokenize(src)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.token)
+            .collect()
     }
 
     #[test]
@@ -279,7 +284,10 @@ mod tests {
 
     #[test]
     fn string_escapes_are_limited_to_quote_and_backslash() {
-        assert_eq!(kinds(r#""a\"b""#), vec![Token::Str("a\"b".into()), Token::Eof]);
+        assert_eq!(
+            kinds(r#""a\"b""#),
+            vec![Token::Str("a\"b".into()), Token::Eof]
+        );
         // No \n, \x, \u — a deliberately tiny escape set.
         assert!(tokenize(r#""a\nb""#).is_err());
     }

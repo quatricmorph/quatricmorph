@@ -106,7 +106,11 @@ fn synthetic_descriptors(model_id: ModelId) -> Vec<TensorDescriptor> {
     let mut offset = 0u64;
     let mut shard = 0u32;
 
-    let push = |out: &mut Vec<TensorDescriptor>, name: String, shape: Vec<u64>, offset: &mut u64, shard: u32| {
+    let push = |out: &mut Vec<TensorDescriptor>,
+                name: String,
+                shape: Vec<u64>,
+                offset: &mut u64,
+                shard: u32| {
         let n: u64 = shape.iter().product();
         let len = n * BYTES_PER_PARAMETER;
         out.push(TensorDescriptor {
@@ -134,23 +138,101 @@ fn synthetic_descriptors(model_id: ModelId) -> Vec<TensorDescriptor> {
             offset = 0;
         }
         let p = format!("model.layers.{layer}.");
-        push(&mut out, format!("{p}self_attn.q_proj.weight"), vec![ATTENTION_HEADS_DIM, HIDDEN], &mut offset, shard);
-        push(&mut out, format!("{p}self_attn.k_proj.weight"), vec![ATTENTION_HEADS_DIM, HIDDEN], &mut offset, shard);
-        push(&mut out, format!("{p}self_attn.v_proj.weight"), vec![ATTENTION_HEADS_DIM, HIDDEN], &mut offset, shard);
-        push(&mut out, format!("{p}self_attn.o_proj.weight"), vec![HIDDEN, ATTENTION_HEADS_DIM], &mut offset, shard);
-        push(&mut out, format!("{p}input_layernorm.weight"), vec![HIDDEN], &mut offset, shard);
-        push(&mut out, format!("{p}post_attention_layernorm.weight"), vec![HIDDEN], &mut offset, shard);
-        push(&mut out, format!("{p}mlp.gate.weight"), vec![EXPERTS_PER_LAYER as u64, HIDDEN], &mut offset, shard);
+        push(
+            &mut out,
+            format!("{p}self_attn.q_proj.weight"),
+            vec![ATTENTION_HEADS_DIM, HIDDEN],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}self_attn.k_proj.weight"),
+            vec![ATTENTION_HEADS_DIM, HIDDEN],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}self_attn.v_proj.weight"),
+            vec![ATTENTION_HEADS_DIM, HIDDEN],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}self_attn.o_proj.weight"),
+            vec![HIDDEN, ATTENTION_HEADS_DIM],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}input_layernorm.weight"),
+            vec![HIDDEN],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}post_attention_layernorm.weight"),
+            vec![HIDDEN],
+            &mut offset,
+            shard,
+        );
+        push(
+            &mut out,
+            format!("{p}mlp.gate.weight"),
+            vec![EXPERTS_PER_LAYER as u64, HIDDEN],
+            &mut offset,
+            shard,
+        );
         for expert in 0..EXPERTS_PER_LAYER {
             let e = format!("{p}mlp.experts.{expert}.");
-            push(&mut out, format!("{e}gate_proj.weight"), vec![EXPERT_INTERMEDIATE, HIDDEN], &mut offset, shard);
-            push(&mut out, format!("{e}up_proj.weight"), vec![EXPERT_INTERMEDIATE, HIDDEN], &mut offset, shard);
-            push(&mut out, format!("{e}down_proj.weight"), vec![HIDDEN, EXPERT_INTERMEDIATE], &mut offset, shard);
+            push(
+                &mut out,
+                format!("{e}gate_proj.weight"),
+                vec![EXPERT_INTERMEDIATE, HIDDEN],
+                &mut offset,
+                shard,
+            );
+            push(
+                &mut out,
+                format!("{e}up_proj.weight"),
+                vec![EXPERT_INTERMEDIATE, HIDDEN],
+                &mut offset,
+                shard,
+            );
+            push(
+                &mut out,
+                format!("{e}down_proj.weight"),
+                vec![HIDDEN, EXPERT_INTERMEDIATE],
+                &mut offset,
+                shard,
+            );
         }
     }
-    push(&mut out, "model.embed_tokens.weight".into(), vec![163_840, HIDDEN], &mut offset, shard);
-    push(&mut out, "model.norm.weight".into(), vec![HIDDEN], &mut offset, shard);
-    push(&mut out, "lm_head.weight".into(), vec![163_840, HIDDEN], &mut offset, shard);
+    push(
+        &mut out,
+        "model.embed_tokens.weight".into(),
+        vec![163_840, HIDDEN],
+        &mut offset,
+        shard,
+    );
+    push(
+        &mut out,
+        "model.norm.weight".into(),
+        vec![HIDDEN],
+        &mut offset,
+        shard,
+    );
+    push(
+        &mut out,
+        "lm_head.weight".into(),
+        vec![163_840, HIDDEN],
+        &mut offset,
+        shard,
+    );
     out
 }
 

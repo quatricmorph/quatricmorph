@@ -202,8 +202,14 @@ impl QTile {
             ));
         }
         let (min, max) = min_max(values);
-        let header =
-            QTileHeader::for_block(tensor_id, lod, extent, BlockEncoding::QuantizedI16, min, max)?;
+        let header = QTileHeader::for_block(
+            tensor_id,
+            lod,
+            extent,
+            BlockEncoding::QuantizedI16,
+            min,
+            max,
+        )?;
         let payload = values
             .iter()
             .flat_map(|v| quantize_i16(*v, min, max).to_le_bytes())
@@ -359,7 +365,9 @@ fn quantize_i16(value: f32, min: f32, max: f32) -> i16 {
         return 0;
     }
     let t = ((value - min) / (max - min)).clamp(0.0, 1.0);
-    (t * (u16::MAX as f32) - 32768.0).round().clamp(-32768.0, 32767.0) as i16
+    (t * (u16::MAX as f32) - 32768.0)
+        .round()
+        .clamp(-32768.0, 32767.0) as i16
 }
 
 /// Inverse of [`quantize_i16`]. Lossy; callers must label results approximate.
@@ -377,7 +385,10 @@ mod tests {
     use q_source::ModelId;
 
     fn tensor_id() -> TensorId {
-        TensorId::derive(ModelId::derive("m", "", "f"), "model.layers.10.self_attn.q_proj.weight")
+        TensorId::derive(
+            ModelId::derive("m", "", "f"),
+            "model.layers.10.self_attn.q_proj.weight",
+        )
     }
 
     fn extent() -> BlockExtent {
@@ -425,7 +436,7 @@ mod tests {
             0.1,
             0.2,
             0.3,
-            123456.789,
+            123456.79,
             -0.000001,
             2.0,
             4.0,
@@ -435,8 +446,10 @@ mod tests {
         ];
         let t2 = QTile::from_f32(tensor_id(), Lod::Block, &extent(), &odd).unwrap();
         let b2 = QTile::decode(&t2.encode()).unwrap().to_f32().unwrap();
-        assert_eq!(b2.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-                   odd.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
+        assert_eq!(
+            b2.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            odd.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -463,10 +476,7 @@ mod tests {
         assert_eq!(q.payload.len() * 2, raw.payload.len());
         assert!(!q.header.encoding.is_lossless());
         // An exact decode of a lossy tile is refused, not approximated.
-        assert!(matches!(
-            q.to_f32(),
-            Err(QError::UnsupportedDType { .. })
-        ));
+        assert!(matches!(q.to_f32(), Err(QError::UnsupportedDType { .. })));
         // Round-tripping through the container is still byte-exact.
         assert_eq!(QTile::decode(&q.encode()).unwrap(), q);
     }
@@ -492,7 +502,10 @@ mod tests {
         // Wrong magic.
         let mut bad_magic = good.clone();
         bad_magic[0] = b'X';
-        assert!(QTile::decode(&bad_magic).unwrap_err().to_string().contains("magic"));
+        assert!(QTile::decode(&bad_magic)
+            .unwrap_err()
+            .to_string()
+            .contains("magic"));
         // Unsupported version.
         let mut bad_version = good.clone();
         bad_version[8..10].copy_from_slice(&999u16.to_le_bytes());

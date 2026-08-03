@@ -96,7 +96,9 @@ impl Parser {
     }
 
     fn bump(&mut self) -> Token {
-        let t = self.tokens[self.pos.min(self.tokens.len() - 1)].token.clone();
+        let t = self.tokens[self.pos.min(self.tokens.len() - 1)]
+            .token
+            .clone();
         if self.pos < self.tokens.len() - 1 {
             self.pos += 1;
         }
@@ -393,14 +395,13 @@ impl Parser {
             self.expect(Token::RParen)?;
             self.expect_keyword("by")?;
             let metric_name = self.ident()?;
-            let metric = ComparisonMetric::parse(&metric_name.to_ascii_lowercase()).ok_or_else(
-                || {
+            let metric =
+                ComparisonMetric::parse(&metric_name.to_ascii_lowercase()).ok_or_else(|| {
                     QError::QueryRejected(format!(
                         "unknown comparison metric `{metric_name}`; supported: \
                          cosine_similarity, relative_l2"
                     ))
-                },
-            )?;
+                })?;
             return Ok(Expr::Compare {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -533,7 +534,10 @@ mod tests {
                 assert_eq!(
                     selector.0,
                     vec![
-                        IndexTerm::Range { start: Some(0), end: Some(128) },
+                        IndexTerm::Range {
+                            start: Some(0),
+                            end: Some(128)
+                        },
                         IndexTerm::All
                     ]
                 );
@@ -610,8 +614,14 @@ mod tests {
 
     #[test]
     fn statements_may_be_separated_by_semicolons_or_newlines() {
-        assert_eq!(parse("A = tensor(\"x\"); show A").unwrap().statements.len(), 2);
-        assert_eq!(parse("A = tensor(\"x\")\nshow A").unwrap().statements.len(), 2);
+        assert_eq!(
+            parse("A = tensor(\"x\"); show A").unwrap().statements.len(),
+            2
+        );
+        assert_eq!(
+            parse("A = tensor(\"x\")\nshow A").unwrap().statements.len(),
+            2
+        );
     }
 
     #[test]

@@ -155,6 +155,8 @@ mod tests {
             .build(&spec(16, "tiles/a.qtile"), &block)
             .unwrap_err();
         assert_eq!(err.requirement_id(), Some("GLB-001"));
-        assert!(err.to_string().contains("indistinguishable from a real one"));
+        assert!(err
+            .to_string()
+            .contains("indistinguishable from a real one"));
     }
 }

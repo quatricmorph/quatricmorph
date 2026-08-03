@@ -12,9 +12,7 @@
 //! symlink is rejected with [`QError::PathOutsideRoot`].
 
 use crate::error::{QError, Result};
-use crate::manifest::{
-    ArtifactKind, ByteStream, ModelManifest, ModelSource, SourceFile,
-};
+use crate::manifest::{ArtifactKind, ByteStream, ModelManifest, ModelSource, SourceFile};
 use memmap2::Mmap;
 use std::collections::HashMap;
 use std::fs::File;
@@ -107,7 +105,9 @@ impl LocalFsSource {
         }
         let joined = self.root.join(rel);
         let canonical = joined.canonicalize().map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => QError::NotFound(format!("{uri} (under {:?})", self.root)),
+            std::io::ErrorKind::NotFound => {
+                QError::NotFound(format!("{uri} (under {:?})", self.root))
+            }
             _ => QError::Io {
                 path: joined.clone(),
                 source: e,
@@ -199,12 +199,14 @@ impl ModelSource for LocalFsSource {
     fn read_range(&self, uri: &str, offset: u64, length: u64) -> Result<ByteStream> {
         let map = self.map_for(uri)?;
         let file_len = map.len() as u64;
-        let end = offset.checked_add(length).ok_or_else(|| QError::RangeOutOfBounds {
-            uri: uri.to_string(),
-            start: offset,
-            end: u64::MAX,
-            length: file_len,
-        })?;
+        let end = offset
+            .checked_add(length)
+            .ok_or_else(|| QError::RangeOutOfBounds {
+                uri: uri.to_string(),
+                start: offset,
+                end: u64::MAX,
+                length: file_len,
+            })?;
         if end > file_len {
             return Err(QError::RangeOutOfBounds {
                 uri: uri.to_string(),
@@ -252,8 +254,14 @@ mod tests {
 
     #[test]
     fn model_id_is_stable_across_reopen() {
-        let a = LocalFsSource::open(fixture_dir()).unwrap().manifest().unwrap();
-        let b = LocalFsSource::open(fixture_dir()).unwrap().manifest().unwrap();
+        let a = LocalFsSource::open(fixture_dir())
+            .unwrap()
+            .manifest()
+            .unwrap();
+        let b = LocalFsSource::open(fixture_dir())
+            .unwrap()
+            .manifest()
+            .unwrap();
         assert_eq!(a.model_id(), b.model_id());
     }
 

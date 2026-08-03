@@ -149,7 +149,10 @@ impl DType {
                 format!("{} bytes is not a multiple of {w}", bytes.len()),
             ));
         }
-        bytes.chunks_exact(w).map(|c| self.decode_scalar(c)).collect()
+        bytes
+            .chunks_exact(w)
+            .map(|c| self.decode_scalar(c))
+            .collect()
     }
 }
 
@@ -239,7 +242,10 @@ mod tests {
     fn bf16_is_high_half_of_f32() {
         // 1.0f32 == 0x3F800000; bf16 1.0 == 0x3F80
         assert_eq!(bf16_bits_to_f32(0x3F80), 1.0);
-        assert_eq!(DType::BF16.decode_scalar(&0x3F80u16.to_le_bytes()).unwrap(), 1.0);
+        assert_eq!(
+            DType::BF16.decode_scalar(&0x3F80u16.to_le_bytes()).unwrap(),
+            1.0
+        );
     }
 
     #[test]

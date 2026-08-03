@@ -38,7 +38,10 @@ impl HttpByteRange {
         let last = offset
             .checked_add(length - 1)
             .ok_or_else(|| QError::malformed("http range", "offset + length overflows u64"))?;
-        Ok(Self { first: offset, last })
+        Ok(Self {
+            first: offset,
+            last,
+        })
     }
 
     pub fn header_value(&self) -> String {
@@ -124,7 +127,10 @@ impl ModelSource for HttpRangeSource {
         if bytes.len() as u64 != length {
             return Err(QError::malformed(
                 uri,
-                format!("range fetch returned {} bytes, expected {length}", bytes.len()),
+                format!(
+                    "range fetch returned {} bytes, expected {length}",
+                    bytes.len()
+                ),
             ));
         }
         Ok(ByteStream::from_vec(bytes))

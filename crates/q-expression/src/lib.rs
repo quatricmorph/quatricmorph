@@ -413,7 +413,11 @@ mod tests {
     #[test]
     fn matmul_shape_follows_the_architecture_md_worked_example() {
         // A: [128, 4096], B: [4096, 128] -> [128, 128]
-        let env = Env::new(&[("A", &[128, 4096]), ("B", &[4096, 128]), ("C", &[128, 4096])]);
+        let env = Env::new(&[
+            ("A", &[128, 4096]),
+            ("B", &[4096, 128]),
+            ("C", &[128, 4096]),
+        ]);
         let ab = Expr::matmul(Expr::binding("A"), Expr::binding("B"));
         assert_eq!(infer_shape(&ab, &env).unwrap(), Shape(vec![128, 128]));
 
@@ -439,10 +443,7 @@ mod tests {
         // Q @ K is invalid...
         assert!(infer_shape(&Expr::matmul(Expr::binding("Q"), Expr::binding("K")), &env).is_err());
         // ...but Q @ transpose(K) is [256, 256].
-        let ok = Expr::matmul(
-            Expr::binding("Q"),
-            Expr::transpose(Expr::binding("K")),
-        );
+        let ok = Expr::matmul(Expr::binding("Q"), Expr::transpose(Expr::binding("K")));
         assert_eq!(infer_shape(&ok, &env).unwrap(), Shape(vec![256, 256]));
     }
 
@@ -458,8 +459,14 @@ mod tests {
         let window = Expr::Slice {
             operand: Box::new(Expr::binding("Q")),
             selector: ElementSelector(vec![
-                IndexTerm::Range { start: Some(0), end: Some(32) },
-                IndexTerm::Range { start: Some(0), end: Some(16) },
+                IndexTerm::Range {
+                    start: Some(0),
+                    end: Some(32),
+                },
+                IndexTerm::Range {
+                    start: Some(0),
+                    end: Some(16),
+                },
             ]),
         };
         assert_eq!(infer_shape(&window, &env).unwrap(), Shape(vec![32, 16]));
@@ -484,7 +491,10 @@ mod tests {
         let env = Env::new(&[("Q", &[128, 48])]);
         let bad = Expr::Slice {
             operand: Box::new(Expr::binding("Q")),
-            selector: ElementSelector(vec![IndexTerm::Range { start: Some(0), end: Some(999) }]),
+            selector: ElementSelector(vec![IndexTerm::Range {
+                start: Some(0),
+                end: Some(999),
+            }]),
         };
         assert!(infer_shape(&bad, &env).is_err());
     }
@@ -568,10 +578,7 @@ mod tests {
 
     #[test]
     fn display_round_trips_structure() {
-        let e = Expr::matmul(
-            Expr::binding("A"),
-            Expr::transpose(Expr::tensor("K[10]")),
-        );
+        let e = Expr::matmul(Expr::binding("A"), Expr::transpose(Expr::tensor("K[10]")));
         assert_eq!(e.to_string(), "(A @ transpose(tensor(\"K[10]\")))");
     }
 

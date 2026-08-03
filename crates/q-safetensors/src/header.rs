@@ -96,7 +96,10 @@ impl SafeTensorsHeader {
         if bytes.len() < 8 {
             return Err(QError::malformed(
                 uri,
-                format!("file is {} bytes; a SafeTensors header needs at least 8", bytes.len()),
+                format!(
+                    "file is {} bytes; a SafeTensors header needs at least 8",
+                    bytes.len()
+                ),
             ));
         }
         let header_length = u64::from_le_bytes(bytes[..8].try_into().unwrap());
@@ -115,9 +118,7 @@ impl SafeTensorsHeader {
         if end > file_length {
             return Err(QError::malformed(
                 uri,
-                format!(
-                    "declared header length {header_length} exceeds file length {file_length}"
-                ),
+                format!("declared header length {header_length} exceeds file length {file_length}"),
             ));
         }
         if (bytes.len() as u64) < end {
@@ -131,8 +132,8 @@ impl SafeTensorsHeader {
         }
 
         let json = &bytes[8..end as usize];
-        let raw: RawHeader = serde_json::from_slice(json)
-            .map_err(|e| QError::json(format!("{uri} header"), e))?;
+        let raw: RawHeader =
+            serde_json::from_slice(json).map_err(|e| QError::json(format!("{uri} header"), e))?;
 
         let mut tensors: Vec<(String, HeaderEntry)> = Vec::new();
         let mut metadata = BTreeMap::new();

@@ -199,12 +199,10 @@ fn every_golden_scalar_matches_through_the_full_pipeline() {
             .map(|i| i.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        let query =
-            format!(r#"SELECT value FROM tensor("{raw_name}") AT [{index_list}]"#);
+        let query = format!(r#"SELECT value FROM tensor("{raw_name}") AT [{index_list}]"#);
         match engine.run(&query).unwrap() {
             QueryOutcome::Scalar { read, .. } => assert_eq!(
-                read.value as f32,
-                want,
+                read.value as f32, want,
                 "SELECT value mismatch for {raw_name}{index:?}"
             ),
             other => panic!("expected a scalar for {query}, got {other:?}"),
@@ -241,9 +239,8 @@ fn every_golden_slice_matches_through_the_query_layer() {
         let (r0, r1) = (rows[0].as_u64().unwrap(), rows[1].as_u64().unwrap());
         let (c0, c1) = (cols[0].as_u64().unwrap(), cols[1].as_u64().unwrap());
 
-        let query = format!(
-            r#"SELECT slice FROM tensor("{raw_name}") ROWS {r0}:{r1} COLUMNS {c0}:{c1}"#
-        );
+        let query =
+            format!(r#"SELECT slice FROM tensor("{raw_name}") ROWS {r0}:{r1} COLUMNS {c0}:{c1}"#);
         let read = match engine.run(&query).unwrap() {
             QueryOutcome::Slice { read, .. } => read,
             other => panic!("expected a slice for {query}, got {other:?}"),
@@ -288,9 +285,14 @@ fn bf16_tensors_are_described_exactly_as_the_reference_sees_them() {
         // The first stored u16 must be the bit pattern the reference recorded.
         let descriptor = row.to_descriptor().unwrap();
         let first = read_scalar(&source, &descriptor, &[0, 0]).unwrap();
-        let want_bits =
-            u16::from_str_radix(entry["first_u16_le"].as_str().unwrap().trim_start_matches("0x"), 16)
-                .unwrap();
+        let want_bits = u16::from_str_radix(
+            entry["first_u16_le"]
+                .as_str()
+                .unwrap()
+                .trim_start_matches("0x"),
+            16,
+        )
+        .unwrap();
         assert_eq!(
             (first.value as f32).to_bits(),
             (want_bits as u32) << 16,

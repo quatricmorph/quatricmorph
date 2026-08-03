@@ -160,11 +160,7 @@ impl<'a> NsirResolver<'a> {
     /// Resolve one raw tensor name. **Never sees a shape.**
     pub fn resolve_name(&self, raw: &str) -> NsirRecord {
         let naming = &self.plugin.naming;
-        let s = split_structure(
-            raw,
-            &naming.layer_segment,
-            naming.expert_segment.as_deref(),
-        );
+        let s = split_structure(raw, &naming.layer_segment, naming.expert_segment.as_deref());
 
         for rule in &self.plugin.rules {
             if rule_matches(rule, raw, &s) {
@@ -301,7 +297,10 @@ impl ResolvedModel {
     }
 
     /// Resolve a canonical address (with or without an element selector).
-    pub fn resolve_canonical(&self, address: &str) -> Result<(&TensorDescriptor, Option<ElementSelector>)> {
+    pub fn resolve_canonical(
+        &self,
+        address: &str,
+    ) -> Result<(&TensorDescriptor, Option<ElementSelector>)> {
         let parsed = CanonicalAddress::parse(address)?;
         let path = parsed.tensor_path();
         let d = self
@@ -418,8 +417,8 @@ mod tests {
     #[test]
     fn llama_resolves_moe_expert_tensors() {
         let reg = Registry::builtin().unwrap();
-        let r = llama_resolver(&reg)
-            .resolve_name("model.layers.10.mlp.experts.37.down_proj.weight");
+        let r =
+            llama_resolver(&reg).resolve_name("model.layers.10.mlp.experts.37.down_proj.weight");
         assert!(r.resolved);
         assert_eq!(r.layer, Some(10));
         assert_eq!(r.expert, Some(37));
@@ -495,10 +494,7 @@ mod tests {
                 ("self_attn.o_proj.weight", vec![48, 128]),
                 ("mlp.down_proj.weight", vec![48, 64]),
             ] {
-                ds.push(descriptor(
-                    &format!("model.layers.{layer}.{suffix}"),
-                    shape,
-                ));
+                ds.push(descriptor(&format!("model.layers.{layer}.{suffix}"), shape));
             }
         }
         ds.push(descriptor("model.embed_tokens.weight", vec![64, 48]));
@@ -598,7 +594,9 @@ mod tests {
 
         // The vision tensor is unresolved, so its raw name is its address.
         assert_eq!(m.unresolved_count(), 1);
-        let (d2, _) = m.resolve_canonical("visual.blocks.0.attn.qkv.weight").unwrap();
+        let (d2, _) = m
+            .resolve_canonical("visual.blocks.0.attn.qkv.weight")
+            .unwrap();
         assert_eq!(d2.semantic_role, TensorRole::Unknown);
     }
 

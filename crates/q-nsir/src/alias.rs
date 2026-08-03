@@ -166,7 +166,10 @@ mod tests {
         assert_eq!(
             expert.selector,
             Some(ElementSelector(vec![
-                IndexTerm::Range { start: Some(0), end: Some(128) },
+                IndexTerm::Range {
+                    start: Some(0),
+                    end: Some(128)
+                },
                 IndexTerm::All
             ]))
         );
@@ -174,7 +177,10 @@ mod tests {
         let att = ParsedAlias::parse("Att[10][100]").unwrap();
         assert_eq!(att.alias, "Att");
         assert_eq!(att.layer_index, Some(10));
-        assert_eq!(att.selector, Some(ElementSelector(vec![IndexTerm::Point(100)])));
+        assert_eq!(
+            att.selector,
+            Some(ElementSelector(vec![IndexTerm::Point(100)]))
+        );
     }
 
     #[test]
@@ -213,7 +219,16 @@ mod tests {
 
     #[test]
     fn invalid_syntax_is_rejected() {
-        for bad in ["", "  ", "Q[10", "Q[]", "Q[10][", "[10]", "Q..down", "Q[10] junk"] {
+        for bad in [
+            "",
+            "  ",
+            "Q[10",
+            "Q[]",
+            "Q[10][",
+            "[10]",
+            "Q..down",
+            "Q[10] junk",
+        ] {
             assert!(
                 ParsedAlias::parse(bad).is_err(),
                 "expected `{bad}` to be rejected"

@@ -223,7 +223,11 @@ impl TensorBlock {
     ///
     /// Pure arithmetic: it computes *where* the bytes are and reads none of
     /// them. This boundary is what the whole design rests on.
-    pub fn plan(descriptor: &TensorDescriptor, lod: Lod, extent: BlockExtent) -> Result<TensorBlock> {
+    pub fn plan(
+        descriptor: &TensorDescriptor,
+        lod: Lod,
+        extent: BlockExtent,
+    ) -> Result<TensorBlock> {
         let extent = extent.clamped_to(&descriptor.shape)?;
         let mut ranges = Vec::with_capacity(extent.rows() as usize);
         for row in extent.row_start..extent.row_end {
@@ -434,8 +438,8 @@ mod tests {
         let c = TensorBlock::plan(&d, Lod::Block, BlockExtent::new(0, 4, 4, 8).unwrap()).unwrap();
         assert_eq!(a.block_id, b.block_id);
         assert_ne!(a.block_id, c.block_id);
-        let s =
-            TensorBlock::plan(&d, Lod::ScalarRegion, BlockExtent::new(0, 4, 0, 4).unwrap()).unwrap();
+        let s = TensorBlock::plan(&d, Lod::ScalarRegion, BlockExtent::new(0, 4, 0, 4).unwrap())
+            .unwrap();
         assert_ne!(a.block_id, s.block_id);
         assert!(a.content_hash.starts_with("b3:"));
         assert_eq!(a.block_id.to_hex().len(), 32);

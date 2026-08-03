@@ -72,7 +72,11 @@ pub struct TilesetNode {
 impl TilesetNode {
     /// Total nodes in this subtree.
     pub fn node_count(&self) -> usize {
-        1 + self.children.iter().map(TilesetNode::node_count).sum::<usize>()
+        1 + self
+            .children
+            .iter()
+            .map(TilesetNode::node_count)
+            .sum::<usize>()
     }
 
     /// Check that geometric error decreases with depth.
@@ -129,11 +133,7 @@ mod tests {
     fn tile(lod: Lod, rows: (u64, u64)) -> TilesetNode {
         let tid = TensorId::derive(ModelId::derive("m", "", "f"), "t");
         TilesetNode {
-            tile_id: TileId::for_block(
-                tid,
-                lod,
-                &BlockExtent::new(rows.0, rows.1, 0, 4).unwrap(),
-            ),
+            tile_id: TileId::for_block(tid, lod, &BlockExtent::new(rows.0, rows.1, 0, 4).unwrap()),
             lod: lod.level(),
             bounding_box: BoundingBox {
                 center: [0.0, 0.0, 0.0],

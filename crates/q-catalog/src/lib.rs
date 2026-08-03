@@ -396,7 +396,8 @@ impl Catalog {
         model_id: &str,
         canonical_name: &str,
     ) -> Result<Option<TensorRow>> {
-        let found = self.conn()
+        let found = self
+            .conn()
             .query_row(
                 "SELECT * FROM tensors WHERE model_id = ?1 AND canonical_name = ?2",
                 params![model_id, canonical_name],
@@ -447,13 +448,21 @@ impl Catalog {
 
     /// Filtered tensor listing (shape/dtype/role/component/layer).
     pub fn list_tensors(&self, model_id: &str, filter: &TensorFilter) -> Result<Vec<TensorRow>> {
+        // Every caller-supplied value is bound as a parameter. The only strings
+        // interpolated into the SQL are `&'static str`s produced by enum
+        // `as_str()` methods, which cannot originate from user input.
         let mut sql = String::from("SELECT * FROM tensors WHERE model_id = ?1");
-        if filter.layer_index.is_some() {
-            sql.push_str(" AND layer_index = ?2");
+        let mut binds: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(model_id.to_string())];
+
+        if let Some(layer) = filter.layer_index {
+            binds.push(Box::new(layer));
+            sql.push_str(&format!(" AND layer_index = ?{}", binds.len()));
         }
-        // Role / component / dtype come from enums as `&'static str`, never from
-        // user input, so this interpolation cannot carry injected SQL. The only
-        // caller-supplied value (layer index) is bound as a parameter.
+        if let Some(r) = filter.min_rank {
+            binds.push(Box::new(r as i64));
+            sql.push_str(&format!(" AND rank >= ?{}", binds.len()));
+        }
+        // Enum-derived, never user input.
         if let Some(role) = filter.role {
             sql.push_str(&format!(" AND role = '{}'", role.as_str()));
         }
@@ -463,29 +472,25 @@ impl Catalog {
         if let Some(dt) = filter.dtype {
             sql.push_str(&format!(" AND dtype = '{}'", dt.as_safetensors_str()));
         }
-        if let Some(r) = filter.min_rank {
-            sql.push_str(&format!(" AND rank >= {r}"));
-        }
         if filter.only_resolved {
             sql.push_str(" AND resolved = 1");
         }
         sql.push_str(" ORDER BY layer_index, canonical_name");
         if let Some(n) = filter.limit {
+            // A `u32` has no SQL-significant spelling, so rendering it is safe;
+            // it is not bound because `LIMIT ?` complicates the parameter
+            // numbering above for no benefit.
             sql.push_str(&format!(" LIMIT {n}"));
         }
+
         let guard = self.conn();
         let mut stmt = guard.prepare(&sql).map_err(sql_err)?;
-        let rows = match filter.layer_index {
-            Some(layer) => stmt
-                .query_map(params![model_id, layer], tensor_from_row)
-                .map_err(sql_err)?
-                .collect::<std::result::Result<Vec<_>, _>>(),
-            None => stmt
-                .query_map(params![model_id], tensor_from_row)
-                .map_err(sql_err)?
-                .collect::<std::result::Result<Vec<_>, _>>(),
-        }
-        .map_err(sql_err)?;
+        let refs: Vec<&dyn rusqlite::ToSql> = binds.iter().map(|b| b.as_ref()).collect();
+        let rows = stmt
+            .query_map(refs.as_slice(), tensor_from_row)
+            .map_err(sql_err)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(sql_err)?;
         Ok(rows)
     }
 
@@ -553,7 +558,8 @@ impl Catalog {
     }
 
     pub fn update_job(&self, job: &ConversionJob) -> Result<()> {
-        let n = self.conn()
+        let n = self
+            .conn()
             .execute(
                 "UPDATE conversion_jobs SET state=?2, updated_at=?3, units_total=?4,
                      units_done=?5, resume_token=?6, error_message=?7, requirement=?8
@@ -577,7 +583,8 @@ impl Catalog {
     }
 
     pub fn get_job(&self, job_id: &str) -> Result<Option<ConversionJob>> {
-        let raw = self.conn()
+        let raw = self
+            .conn()
             .query_row(
                 "SELECT * FROM conversion_jobs WHERE job_id = ?1",
                 params![job_id],
@@ -713,8 +720,16 @@ mod tests {
                 ds.push(d);
             }
         }
-        ds.push(descriptor("model.embed_tokens.weight", vec![64, 48], offset));
-        ds.push(descriptor("mystery.tensor.weight", vec![2, 2], offset + 100_000));
+        ds.push(descriptor(
+            "model.embed_tokens.weight",
+            vec![64, 48],
+            offset,
+        ));
+        ds.push(descriptor(
+            "mystery.tensor.weight",
+            vec![2, 2],
+            offset + 100_000,
+        ));
 
         let resolved = ResolvedModel::build(&reg, Some("llama"), None, ds).unwrap();
         let model_id = ModelId::derive("local:test", "", "fp");
@@ -899,7 +914,7 @@ mod tests {
 
     #[test]
     fn reimporting_the_same_model_is_idempotent() {
-        let (mut cat, model_id) = seeded();
+        let (cat, model_id) = seeded();
         let before = cat.tensor_count(&model_id).unwrap();
         let reg = Registry::builtin().unwrap();
         let ds = vec![descriptor("model.embed_tokens.weight", vec![64, 48], 0)];
@@ -960,8 +975,10 @@ mod tests {
             )];
             let resolved = ResolvedModel::build(&reg, Some("llama"), None, ds).unwrap();
             let cat = Catalog::open(&path).unwrap();
-            cat.upsert_resolved(model_id, "/x", "local:x", "", "fp", "llama", None, &resolved)
-                .unwrap();
+            cat.upsert_resolved(
+                model_id, "/x", "local:x", "", "fp", "llama", None, &resolved,
+            )
+            .unwrap();
         }
         let cat = Catalog::open(&path).unwrap();
         assert_eq!(cat.schema_version().unwrap(), CURRENT_SCHEMA_VERSION);

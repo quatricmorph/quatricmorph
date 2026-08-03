@@ -30,7 +30,10 @@ pub enum IndexTerm {
     /// `42`
     Point(u64),
     /// `0:256`, `:256`, `0:`
-    Range { start: Option<u64>, end: Option<u64> },
+    Range {
+        start: Option<u64>,
+        end: Option<u64>,
+    },
     /// `:`
     All,
 }
@@ -124,9 +127,7 @@ impl ElementSelector {
         let cols = col_term.bounds(shape[1]);
         for ((s, e), dim, axis) in [(rows, shape[0], "row"), (cols, shape[1], "column")] {
             if e <= s {
-                return Err(QError::QueryRejected(format!(
-                    "empty {axis} range {s}:{e}"
-                )));
+                return Err(QError::QueryRejected(format!("empty {axis} range {s}:{e}")));
             }
             if e > dim {
                 return Err(QError::IndexOutOfBounds {
@@ -451,9 +452,10 @@ mod tests {
 
     #[test]
     fn parses_the_architecture_md_example() {
-        let a =
-            CanonicalAddress::parse("model.layers[10].self_attention.query_projection.weight[100,42]")
-                .unwrap();
+        let a = CanonicalAddress::parse(
+            "model.layers[10].self_attention.query_projection.weight[100,42]",
+        )
+        .unwrap();
         assert_eq!(
             a.tensor_path(),
             "model.layers[10].self_attention.query_projection.weight"
@@ -483,8 +485,8 @@ mod tests {
 
     #[test]
     fn extracts_layer_and_expert_indices() {
-        let a =
-            CanonicalAddress::parse("model.layers[3].moe.experts[37].down_projection.weight").unwrap();
+        let a = CanonicalAddress::parse("model.layers[3].moe.experts[37].down_projection.weight")
+            .unwrap();
         assert_eq!(a.layer_index(), Some(3));
         assert_eq!(a.expert_index(), Some(37));
     }
@@ -492,17 +494,44 @@ mod tests {
     #[test]
     fn parses_every_range_spelling() {
         let cases = [
-            ("t.w[0:256,0:256]", vec![
-                IndexTerm::Range { start: Some(0), end: Some(256) },
-                IndexTerm::Range { start: Some(0), end: Some(256) },
-            ]),
+            (
+                "t.w[0:256,0:256]",
+                vec![
+                    IndexTerm::Range {
+                        start: Some(0),
+                        end: Some(256),
+                    },
+                    IndexTerm::Range {
+                        start: Some(0),
+                        end: Some(256),
+                    },
+                ],
+            ),
             ("t.w[:]", vec![IndexTerm::All]),
-            ("t.w[:128]", vec![IndexTerm::Range { start: None, end: Some(128) }]),
-            ("t.w[128:]", vec![IndexTerm::Range { start: Some(128), end: None }]),
-            ("t.w[0:128,:]", vec![
-                IndexTerm::Range { start: Some(0), end: Some(128) },
-                IndexTerm::All,
-            ]),
+            (
+                "t.w[:128]",
+                vec![IndexTerm::Range {
+                    start: None,
+                    end: Some(128),
+                }],
+            ),
+            (
+                "t.w[128:]",
+                vec![IndexTerm::Range {
+                    start: Some(128),
+                    end: None,
+                }],
+            ),
+            (
+                "t.w[0:128,:]",
+                vec![
+                    IndexTerm::Range {
+                        start: Some(0),
+                        end: Some(128),
+                    },
+                    IndexTerm::All,
+                ],
+            ),
             ("t.w[100]", vec![IndexTerm::Point(100)]),
         ];
         for (src, want) in cases {
@@ -546,7 +575,10 @@ mod tests {
     #[test]
     fn resolve_2d_handles_ranges_and_all() {
         let sel = ElementSelector(vec![
-            IndexTerm::Range { start: Some(0), end: Some(128) },
+            IndexTerm::Range {
+                start: Some(0),
+                end: Some(128),
+            },
             IndexTerm::All,
         ]);
         assert_eq!(sel.resolve_2d(&[256, 48]).unwrap(), ((0, 128), (0, 48)));
@@ -554,7 +586,10 @@ mod tests {
 
     #[test]
     fn out_of_range_selector_is_rejected() {
-        let sel = ElementSelector(vec![IndexTerm::Range { start: Some(0), end: Some(999) }]);
+        let sel = ElementSelector(vec![IndexTerm::Range {
+            start: Some(0),
+            end: Some(999),
+        }]);
         assert!(matches!(
             sel.resolve_2d(&[128, 48]),
             Err(QError::IndexOutOfBounds { .. })
@@ -563,7 +598,10 @@ mod tests {
 
     #[test]
     fn inverted_range_is_rejected() {
-        let sel = ElementSelector(vec![IndexTerm::Range { start: Some(10), end: Some(2) }]);
+        let sel = ElementSelector(vec![IndexTerm::Range {
+            start: Some(10),
+            end: Some(2),
+        }]);
         assert!(matches!(
             sel.resolve_2d(&[128, 48]),
             Err(QError::QueryRejected(_))
@@ -591,8 +629,14 @@ mod tests {
     #[test]
     fn element_count_counts_the_selected_region() {
         let sel = ElementSelector(vec![
-            IndexTerm::Range { start: Some(0), end: Some(4) },
-            IndexTerm::Range { start: Some(0), end: Some(4) },
+            IndexTerm::Range {
+                start: Some(0),
+                end: Some(4),
+            },
+            IndexTerm::Range {
+                start: Some(0),
+                end: Some(4),
+            },
         ]);
         assert_eq!(sel.element_count(&[128, 48]), 16);
     }

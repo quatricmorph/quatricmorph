@@ -751,11 +751,11 @@ dependencies = [
 name = "q-gpu"
 version = "0.1.0"
 dependencies = [
+ "q-safetensors",
  "q-source",
  "q-statistics",
  "q-tensor-runtime",
  "serde",
- "serde_json",
 ]
 
 [[package]]

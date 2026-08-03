@@ -31,7 +31,9 @@ pub enum QError {
     },
 
     /// A read would have allocated more than the declared budget.
-    #[error("memory budget exceeded [{budget_name}]: requested {requested} bytes, limit {limit} bytes")]
+    #[error(
+        "memory budget exceeded [{budget_name}]: requested {requested} bytes, limit {limit} bytes"
+    )]
     BudgetExceeded {
         budget_name: &'static str,
         requested: u64,

@@ -13,4 +13,6 @@ q-source = { workspace = true }
 q-statistics = { workspace = true }
 q-tensor-runtime = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+
+[dev-dependencies]
+q-safetensors = { workspace = true }

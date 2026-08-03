@@ -351,9 +351,7 @@ impl<'a> QueryEngine<'a> {
                 rows,
                 columns,
             } => {
-                let mut terms = Vec::new();
-                terms.push(range_term(*rows));
-                terms.push(range_term(*columns));
+                let terms = vec![range_term(*rows), range_term(*columns)];
                 Expr::Slice {
                     operand: Box::new(Expr::tensor(reference.clone())),
                     selector: ElementSelector(terms),
@@ -497,7 +495,9 @@ impl<'a> QueryEngine<'a> {
 
         match plan.element_selector.clone() {
             Some(sel) if sel.is_scalar_for(&descriptor.shape) => {
-                let index = sel.as_point_index(&descriptor.shape).expect("checked above");
+                let index = sel
+                    .as_point_index(&descriptor.shape)
+                    .expect("checked above");
                 let read = read_scalar(source, &descriptor, &index)?;
                 Ok(QueryOutcome::Scalar { plan, read })
             }
@@ -526,10 +526,7 @@ impl<'a> QueryEngine<'a> {
 /// (`tensor("Q[10]")[100,42]`) — but never both, and never stacked. Composing
 /// nested slices is well-defined but unimplemented, so it is refused with a
 /// requirement ID instead of being approximated.
-fn pure_read_selector(
-    expr: &Expr,
-    references: &[ResolvedReference],
-) -> Result<ElementSelector> {
+fn pure_read_selector(expr: &Expr, references: &[ResolvedReference]) -> Result<ElementSelector> {
     let from_reference = references.first().and_then(|r| r.selector.clone());
 
     let mut from_expression: Option<ElementSelector> = None;

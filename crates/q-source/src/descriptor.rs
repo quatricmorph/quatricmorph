@@ -202,7 +202,10 @@ mod tests {
         let mut d = desc(vec![128, 48], DType::F32);
         assert!(d.validate().is_ok());
         d.byte_end -= 4;
-        assert!(matches!(d.validate(), Err(QError::MalformedArtifact { .. })));
+        assert!(matches!(
+            d.validate(),
+            Err(QError::MalformedArtifact { .. })
+        ));
     }
 
     #[test]

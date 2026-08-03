@@ -138,7 +138,10 @@ impl AppState {
                 &ingested.manifest.revision,
                 &ingested.manifest.fingerprint(),
                 &resolved.resolver_id,
-                ingested.manifest.config_u64("hidden_size").map(|v| v as u32),
+                ingested
+                    .manifest
+                    .config_u64("hidden_size")
+                    .map(|v| v as u32),
                 &resolved,
             )?;
             let id = ingested.model_id.to_hex();
@@ -175,7 +178,8 @@ impl AppState {
             .models
             .get(model_id)
             .ok_or_else(|| ApiError::from(QError::NotFound(format!("model `{model_id}`"))))?;
-        QueryEngine::with_source(&self.catalog, &open.model_id, &open.source).map_err(ApiError::from)
+        QueryEngine::with_source(&self.catalog, &open.model_id, &open.source)
+            .map_err(ApiError::from)
     }
 
     /// The model that owns a tensor.
@@ -205,10 +209,15 @@ pub struct ApiErrorBody {
     pub documentation: Option<String>,
 }
 
+/// An error on its way out to a client.
+///
+/// The body is boxed: it carries up to five strings, and every handler returns
+/// `Result<Json<T>, ApiError>`, so an unboxed body would inflate the size of
+/// every success path too.
 #[derive(Debug)]
 pub struct ApiError {
     pub status: StatusCode,
-    pub body: ApiErrorBody,
+    pub body: Box<ApiErrorBody>,
 }
 
 impl ApiError {
@@ -216,13 +225,13 @@ impl ApiError {
     pub fn not_implemented(requirement: &str, message: impl Into<String>, doc: &str) -> Self {
         Self {
             status: StatusCode::NOT_IMPLEMENTED,
-            body: ApiErrorBody {
+            body: Box::new(ApiErrorBody {
                 error: "not_implemented".into(),
                 message: message.into(),
                 requirement: Some(requirement.to_string()),
                 candidates: None,
                 documentation: Some(doc.to_string()),
-            },
+            }),
         }
     }
 }
@@ -253,20 +262,20 @@ impl From<QError> for ApiError {
         let requirement = e.requirement_id().map(str::to_string);
         Self {
             status,
-            body: ApiErrorBody {
+            body: Box::new(ApiErrorBody {
                 error: kind.into(),
                 message: e.to_string(),
                 requirement,
                 candidates,
                 documentation: None,
-            },
+            }),
         }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(self.body)).into_response()
+        (self.status, Json(*self.body)).into_response()
     }
 }
 
@@ -671,7 +680,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(tensor_statistics_501),
         )
         .route("/v1/query", post(post_query))
-        .route("/v1/visualizations/:model_id/tileset.json", get(tileset_501))
+        .route(
+            "/v1/visualizations/:model_id/tileset.json",
+            get(tileset_501),
+        )
         .route(
             "/v1/visualizations/:model_id/tiles/:tile_id/content.glb",
             get(glb_tile_501),

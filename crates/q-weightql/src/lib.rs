@@ -37,6 +37,4 @@ pub mod plan;
 
 pub use lexer::{tokenize, Token};
 pub use parser::{parse, Script, Statement};
-pub use plan::{
-    QueryEngine, QueryOutcome, QueryPlan, ReferenceKind, ResolvedReference,
-};
+pub use plan::{QueryEngine, QueryOutcome, QueryPlan, ReferenceKind, ResolvedReference};

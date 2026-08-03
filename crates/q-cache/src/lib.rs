@@ -85,7 +85,9 @@ impl CacheKey {
     /// directory never accumulates millions of entries.
     pub fn relative_path(&self) -> PathBuf {
         let d = self.digest();
-        PathBuf::from(&d[0..2]).join(&d[2..4]).join(format!("{d}.qcache"))
+        PathBuf::from(&d[0..2])
+            .join(&d[2..4])
+            .join(format!("{d}.qcache"))
     }
 }
 
@@ -244,7 +246,12 @@ impl L2Cache {
             let read = match std::fs::read_dir(&dir) {
                 Ok(r) => r,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(QError::Io { path: dir, source: e }),
+                Err(e) => {
+                    return Err(QError::Io {
+                        path: dir,
+                        source: e,
+                    })
+                }
             };
             for entry in read {
                 let entry = entry.map_err(|e| QError::Io {
@@ -621,7 +628,10 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         c.put(&key("c"), &[3u8; 8]).unwrap();
         assert!(c.total_bytes().unwrap() <= 16);
-        assert!(c.get(&key("a")).unwrap().is_none(), "oldest should be evicted");
+        assert!(
+            c.get(&key("a")).unwrap().is_none(),
+            "oldest should be evicted"
+        );
         assert!(c.get(&key("c")).unwrap().is_some());
         assert!(matches!(
             c.put(&key("huge"), &[0u8; 64]),
@@ -676,7 +686,11 @@ mod tests {
             Box::new(L4RemoteCache),
         ] {
             let err = tier.get(&k).unwrap_err();
-            assert!(err.requirement_id().is_some(), "{} lacks a requirement ID", tier.name());
+            assert!(
+                err.requirement_id().is_some(),
+                "{} lacks a requirement ID",
+                tier.name()
+            );
             assert!(tier.put(&k, b"x").is_err());
         }
         assert_eq!(
