@@ -216,6 +216,8 @@ export function createApp() {
       setHoverInfo('')
       return
     }
+    // Magnifier mode sets raycaster.far = 0 when inactive; restore range for hover picks (VIZ-07).
+    raycaster.far = Infinity
     raycaster.setFromCamera(pointer, camera)
     raycaster.params.Points.threshold = Math.max(params.deco.spotlight || 0, 0.5)
     const mats = [
