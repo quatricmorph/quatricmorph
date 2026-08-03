@@ -6,37 +6,51 @@
 | --- | --- |
 | Document title | Quatricmorph System Architecture |
 | Product name | Quatricmorph |
-| Architecture version | 0.1.0 |
+| Architecture version | 0.2.0 |
 | MVP version | Visualization MVP (Track A / `VIZ-*`) |
 | Status | Draft — grounded in repository analysis |
 | Intended audience | Engineers, graphics engineers, QA, autonomous coding agents, maintainers |
-| Source repository | https://github.com/bhosmer/mm (reference); active product code in this repo under `quatricmorph/` |
-| Related documents | `docs/TECHNICAL_REQUIREMENTS.md` *(authoritative contract; see note)*, `docs/requirements/VIZ_MVP.md`, `prompts.md`, `docs/PRODUCT_BRIEF.md`, `docs/PRODUCT_ARCHITECTURE_v1.md`, `docs/TESTING.md`, `AGENTS.md`, `docs/agent/CHARTER.md` |
+| Source repository | Reference upstream: https://github.com/bhosmer/mm ; product code: `quatricmorph/` in this workspace |
+| Related documents | `docs/TECHNICAL_REQUIREMENTS.md` *(see Authority note)*, `docs/requirements/VIZ_MVP.md`, `prompts.md`, `docs/PRODUCT_BRIEF.md`, `docs/PRODUCT_ARCHITECTURE_v1.md`, `docs/TESTING.md`, `AGENTS.md`, `docs/agent/CHARTER.md` |
 | Last updated | 2026-08-03 |
 | Architecture owner | *[TBD]* |
 | Reviewers | *[TBD]* |
 
 ### Authority note
 
-**Assumption Requiring Verification:** At the time of writing, `docs/TECHNICAL_REQUIREMENTS.md` is not present as a published requirements document. The repository root contains `TECHNICAL_REQUIREMENTS.md`, which is a *generation prompt* for that document, not the TRD itself. This architecture is grounded in:
+**Assumption Requiring Verification / Open Question:** `docs/TECHNICAL_REQUIREMENTS.md` is not present as a published requirements document. The repository root file `TECHNICAL_REQUIREMENTS.md` is a *generation prompt* for that TRD, not the TRD itself.
 
-1. The TRD contract structure and MVP scope defined by that prompt.
-2. Published requirements in `docs/requirements/VIZ_MVP.md` and `prompts.md`.
-3. Direct analysis of `quatricmorph/` and read-only `mm/`.
+This architecture is grounded in:
 
-When `docs/TECHNICAL_REQUIREMENTS.md` is published, this architecture must be re-checked for consistency and updated if the TRD and this document diverge. Until then, `VIZ_MVP.md` + this document jointly govern Track A implementation.
+1. The MVP scope and technical contract encoded by that TRD prompt and by `prompts.md`.
+2. Published Track A requirements in `docs/requirements/VIZ_MVP.md`.
+3. Direct analysis of `quatricmorph/` (active product) and read-only `mm/` (reference).
+
+When `docs/TECHNICAL_REQUIREMENTS.md` is published, this architecture **must** be re-checked for consistency. Until then, `VIZ_MVP.md` + this document jointly govern Track A implementation. Platform requirements in `docs/requirements/MVP_REQUIREMENTS.md` (`PLAT-P0-*`) are **out of scope** for this visualization MVP architecture.
 
 ### Change history
 
 | Version | Date | Author | Summary |
 | --- | --- | --- | --- |
 | 0.1.0 | 2026-08-03 | Architecture draft | Initial system architecture from repository analysis |
+| 0.2.0 | 2026-08-03 | Architecture update | Reflect partial `math/` / `layout/` / `interaction/` extraction; correct Temporary Migration State |
 
 ---
 
 ## 2. Executive Summary
 
-**Current architecture.** Quatricmorph’s active app is a Vite + TypeScript port of `mm` under `quatricmorph/`. Runtime entry is `src/main.ts` → `createApp()`. A mutable nested `params` object drives leaf matrix initialization (`Array2D` + `INIT_FUNCS`), embedded matmul (`MatMul.dotprod`), point-sprite rendering (`Mat` + shared `ShaderMaterial`), hard-coded 3D placements (rotations/translations in `MatMul.init*Viz`), lil-gui controls, orbit camera, spotlight hover labels, and query-string URL state. Advanced features (nested matmul trees, expression `eval`, remote `url`/`config` loading, attention examples) remain in the build surface.
+**Current architecture.** Quatricmorph’s active application is a Vite + TypeScript port of `mm` under `quatricmorph/`. Runtime entry is `src/main.ts` → `createApp()`. A mutable nested `params` object drives leaf matrix initialization (`Array2D` + `INIT_FUNCS`), embedded matmul (`MatMul.dotprod`), point-sprite rendering (`Mat` + shared GLSL1 `ShaderMaterial`), operand placement via `layout/margin-grid.ts` `placeOperands` (still composed under `MatMul` with root `rotation.x = π`), lil-gui controls, orbit camera, spotlight hover labels, and query-string URL state. Advanced features (nested matmul trees, expression `eval`, remote `url`/`config` loading, attention examples) remain in the build surface.
+
+**Temporary Migration State (as of 2026-08-03).** Partial extraction has begun:
+
+| Layer | Status |
+| --- | --- |
+| `math/` (`matmul`, `parse`, `validate`, `presets`, `shape`) | Present; `validateMatmulDims` used by `MatMul`; pure `matmul()` not yet the product multiply path |
+| `layout/` (`margin-grid`, `tensor-frame`) | Present; `MatMul.getPlanePlacement()` calls `placeOperands` |
+| `interaction/` (`animation`, `selection`) | Present as pure helpers; **not wired** into `create-app` / GUI |
+| Canonical `AppState` / commands | **Not present** — still global mutable `params` |
+| Scene controller / ResourceManager | **Not present** — `initObj()` full rebuild |
+| MVP product UI | **Not present** — lil-gui still primary |
 
 **Target architecture.** A layered browser application for one expression `A @ B = C` with matrix/vector/scalar shapes, where:
 
@@ -49,13 +63,13 @@ When `docs/TECHNICAL_REQUIREMENTS.md` is published, this architecture must be re
 
 **Main transformation.** From a params-driven monolithic visualizer (`Mat`/`MatMul`/GUI coupled) to a command/state/layout/scene pipeline with a shared 3D margin grid as the product feature.
 
-**Major boundaries.** `math` → `state` → `layout` → `scene` → `interaction`/`ui` → `app`. Cycles prohibited.
+**Major boundaries.** `config` → `math` → `state` → `layout` → `scene` → `interaction`/`ui` → `app`. Cycles prohibited.
 
 **3D margin grid role.** Every tensor plane, cell, frame, label anchor, guide, and camera-fit bound must derive from `MarginGrid3D` + coordinate convention (`X→J`, `Y→I`, `Z→K`).
 
-**Migration strategy.** Incremental extraction inside `quatricmorph/`; keep `mm/` read-only; hide/remove MVP-excluded UX; add tests before each structural cut.
+**Migration strategy.** Incremental extraction inside `quatricmorph/`; keep `mm/` read-only; hide/remove MVP-excluded UX; add tests before each structural cut; prefer wiring existing pure modules over rewriting them.
 
-**Important decisions.** Retain point sprites for MVP; retain/refactor `Array2D`; introduce lightweight reducer-style state (no Redux); replace hard-coded placement with pure layout; remove `eval` and sync XHR from product paths; keep TypeScript; prefer deterministic animation recomputation for step-back.
+**Important decisions.** Retain point sprites for MVP; retain/refactor `Array2D`; introduce lightweight reducer-style state (no Redux); complete margin-grid authority (partial today); remove `eval` and sync XHR from product paths; keep TypeScript; prefer deterministic animation recomputation for step-back.
 
 ---
 
@@ -103,7 +117,7 @@ Every Three.js geometry/material/texture, DOM node owned by the app, event liste
 
 ### 4.6 Deterministic Transitions
 
-The same canonical state and command sequence must produce the same derived math, layout, animation indices, and share payload (modulo documented non-determinism such as random initializers, which MVP should avoid in default paths).
+The same canonical state and command sequence must produce the same derived math, layout, animation indices, and share payload (modulo documented non-determinism such as random initializers, which MVP default paths must avoid).
 
 ### 4.7 Incremental Refactoring
 
@@ -126,9 +140,10 @@ Do not design unused frameworks for attention, LoRA, nested expressions, backend
 | App wiring | `quatricmorph/src/app/create-app.ts` |
 | Build | Vite 8 + `tsc`; multi-page inputs: main, ref, intro, attngpt2, attnqkov |
 | Dependencies | `three` ^0.185, `lil-gui` ^0.21, Vitest, TypeScript |
+| Tests | `npm test` (Vitest); present tests: `viz/__tests__/array2d.test.ts`, `viz/__tests__/expr.test.ts` |
 | Reference (read-only) | `mm/` — original ES-module visualizer with vendored `lib/` |
 
-Almost all product TS files currently use `// @ts-nocheck`.
+Almost all legacy product TS files still use `// @ts-nocheck`. Newer `math/`, `layout/`, and `interaction/` modules are typed.
 
 ### 5.2 Runtime flow (page load → first frame)
 
@@ -144,7 +159,11 @@ index.html
           → initFromParams()
               → saveUrlInfo (optional)
               → apply camera
-              → initObj() → new MatMul(params, context); rotation.x = π; center(); initAnimation(); scene.add
+              → initObj() → new MatMul(params, context)
+                  → validateMatmulDims (throws before leaf/Three creation on mismatch)
+                  → initLeft/Right/Result (Array2D + Mat/MatMul)
+                  → initViz via placeOperands positions/rotations
+              → group.rotation.x = π; center(); initAnimation(); scene.add
               → gui.initGui(params, callbacks, info)
       → animate() loop (requestAnimationFrame)
       → window.onload → setupInstructions
@@ -152,19 +171,21 @@ index.html
 
 ### 5.3 Mathematical representation (current)
 
-- `Array2D` (`viz/array2d.ts`): `{ h, w, data: Float32Array }`, row-major `addr = i*w + j`.
+- `Array2D` (`viz/array2d.ts`): `{ h, w, data: Float32Array }`, row-major `addr = i*w + j`. Still imports epilog helpers.
 - Leaf matrices filled by `getInitFunc` (`viz/init.ts`) from named initializers, optional sync URL CSV, or `eval` expression.
-- Result computed in `MatMul.initResult` via `dotprod(i,j,0,D)` over left/right data arrays.
+- Result computed in `MatMul.initResult` via embedded `dotprod(i,j,0,D)` over left/right data arrays (not `math/matmul.ts`).
+- Pure `math/matmul.ts` and `math/parse.ts` exist for tests/future wiring.
 - Nested `matmul` children allowed (expression tree); epilogs may rescale/transform results.
+- Default MVP example values live in `math/presets.ts` (`DEFAULT_A`, `DEFAULT_B`, `DEFAULT_C`) and are referenced from `viz/defaults.ts`.
 
 ### 5.4 Matrix object construction and scene hierarchy (current)
 
 ```text
 Scene
 └── MatMul.group  (additionally rotated x=π by create-app, then centered)
-    ├── left.group   (Mat or nested MatMul; often rot Y ±π/2)
-    ├── right.group  (Mat or nested MatMul; often rot X ±π/2)
-    ├── result.group (Mat; z front/back)
+    ├── left.group   (Mat or nested MatMul; placement from placeOperands A)
+    ├── right.group  (Mat or nested MatMul; placement from placeOperands B)
+    ├── result.group (Mat; placement from placeOperands C)
     ├── flow_guide_group (optional)
     └── anim_mats[*].group (animation intermediates)
 ```
@@ -172,28 +193,30 @@ Scene
 Each `Mat` owns:
 
 - `Points` geometry with `position`, `pointSize`, `pointColor`
-- shared `MATERIAL` shader (ball texture)
-- legend text meshes (`getText` / FontLoader shapes)
+- shared `MATERIAL` shader (ball texture from `/assets/ball.png`)
+- legend text meshes (`getText` / FontLoader shapes from vendored typeface)
 - optional row guides and spotlight label meshes
 
 ### 5.5 Placement logic (current)
 
-Placement is **not** a shared margin grid. It is:
+Placement is **partially** migrated to MarginGrid helpers:
 
 1. Unit cell indices mapped to local XY in `emptyPoints` (`j`→x, `i`→y, z=0), with block `gap` offsets.
-2. Operand rotations/translations in `MatMul.initLeftViz` / `initRightViz` / `initResultViz` based on polarity and placement enums.
-3. Global `group.rotation.x = Math.PI` flipping the composed volume.
+2. Operand rotations/translations from `placeOperands` in `layout/margin-grid.ts` (called by `MatMul.getPlanePlacement`).
+3. Global `group.rotation.x = Math.PI` flipping the composed volume in `create-app`.
 4. `center()` translating so the world AABB center is at origin.
 
-**Assumption Requiring Verification:** Exact equivalence between current “negative polarity + left/top/front” layout and the target `X→J, Y→I, Z→K` planes after removing the π flip has not been formally proven; Phase 3 must measure and document.
+**Assumption Requiring Verification:** Exact equivalence between current “negative polarity + left/top/front” layout plus the π flip and the target `X→J, Y→I, Z→K` planes after removing the π flip has not been formally proven; Phase 3 must measure and document.
+
+**Current gap vs target:** There is no shared world major/minor grid mesh derived from `MarginGridConfig`; tensor frames from `buildTensorFrame` are layout DTOs only and are not yet rendered by a dedicated frame renderer.
 
 ### 5.6 Interaction, animation, URL, GUI, disposal (current)
 
 | Concern | Current behavior |
 | --- | --- |
 | Hover | Raycast against `Points`; rebuild world-space text labels within spotlight threshold |
-| Selection | No first-class `C[i,j]` selection model; animation algorithms drive reveal |
-| Animation | `MatMul.initAnimation` + `bump` closures; algs: dotprod/axpy/mv/vm/vv; pause/step in create-app |
+| Selection | Pure helpers in `interaction/selection.ts` exist; **no product wiring** for persistent `C[i,j]` selection |
+| Animation | `MatMul.initAnimation` + `bump` closures; algs: dotprod/axpy/mv/vm/vv; pause/step in create-app. Pure `interaction/animation.ts` exists but is unwired |
 | URL | Query string: flattened+compressed keys or `params=` JSON; optional sync `config=` XHR |
 | GUI | Global lil-gui instance; mutates `params` and often calls `initObj()` full rebuild |
 | Disposal | `disposeAndClear` disposes geometries recursively; **materials generally not disposed**; shared `MATERIAL` intentional |
@@ -208,8 +231,17 @@ Placement is **not** a shared margin grid. It is:
 | `quatricmorph/src/app/url.ts` | URL info + history push | Medium | Medium | Wrap → share-state |
 | `quatricmorph/src/app/default-params.ts` | Default nested params | Medium | Medium | Refactor → config + state schema |
 | `quatricmorph/src/app/instructions.ts` | Instructions modal | Low | High | Retain / brand |
+| `quatricmorph/src/math/matmul.ts` | Pure matmul + `dotprodCell` | Low | High | Retain; wire as product path |
+| `quatricmorph/src/math/parse.ts` | Text matrix parser (no eval) | Low | High | Retain; wire to UI |
+| `quatricmorph/src/math/validate.ts` | Dim compatibility | Low | High | Retain |
+| `quatricmorph/src/math/presets.ts` | Default A/B/C + fill presets | Low | High | Retain |
+| `quatricmorph/src/math/shape.ts` | Shape helpers | Low | High | Retain / expand |
+| `quatricmorph/src/layout/margin-grid.ts` | MarginGrid config, snap, placeOperands, camera presets | Low–medium | High | Retain; expand as sole authority |
+| `quatricmorph/src/layout/tensor-frame.ts` | Pure TensorMarginFrame metrics | Low | High | Retain; add renderer consumer |
+| `quatricmorph/src/interaction/animation.ts` | Pure anim step state machine | Low | High | Retain; wire via commands |
+| `quatricmorph/src/interaction/selection.ts` | Pure selection helpers | Low | High | Retain; wire via commands |
 | `quatricmorph/src/viz/array2d.ts` | 2D tensor storage | Low (epi import) | High | Retain + Refactor (isolate epi) |
-| `quatricmorph/src/viz/matmul.ts` | Matmul + layout + anim + guides | Very high | Medium core / low structure | Split |
+| `quatricmorph/src/viz/matmul.ts` | Matmul + layout call + anim + guides | Very high | Medium core / low structure | Split |
 | `quatricmorph/src/viz/mat.ts` | Points viz, color/size, labels | High (Three.js) | High renderer ideas | Split |
 | `quatricmorph/src/viz/material.ts` | Point sprite shader | Medium | High | Retain |
 | `quatricmorph/src/viz/sizing.ts` | Points geometry, elem size globals | Medium | High | Refactor |
@@ -237,14 +269,15 @@ Recommended actions vocabulary: Retain | Refactor | Wrap | Split | Deprecate | R
 
 | Issue | Evidence | Impact | MVP risk | Treatment | Priority |
 | --- | --- | --- | --- | --- | --- |
-| Monolithic `MatMul` | `matmul.ts` ~883 lines: math, layout, viz, animation | Hard to test/change placement | High | Split into math/layout/scene/animation | P0 |
+| Monolithic `MatMul` | `matmul.ts` ~883 lines: math, layout call, viz, animation | Hard to test/change placement | High | Split into math/layout/scene/animation | P0 |
+| Dual matmul paths | `MatMul.dotprod` vs unused product-path `math/matmul.ts` | Divergence risk | High | Make pure matmul authoritative | P0 |
 | Mixed responsibilities in `create-app` | URL, input, mag lens, GUI callbacks, RAF | Opaque lifecycle | High | Extract controllers + commands | P0 |
 | Global mutable `params` | Single object mutated by GUI, URL, postMessage | No clear transitions | High | Canonical state + commands | P0 |
-| Hard-coded placement | Rotations/translations in `init*Viz` | Blocks margin-grid product | Critical | Replace with `MarginGrid3D` | P0 |
+| Incomplete margin-grid authority | `placeOperands` wired; no shared grid mesh; π flip outside layout | Product feature incomplete | Critical | Finish layout authority + remove conflicting flips | P0 |
 | Hidden coordinate conventions | Local i/j axes + `rotation.x=π` + polarity enums | Easy to break alignment | Critical | Document + pure converters + tests | P0 |
-| Math coupled to rendering | `dotprod` inside `MatMul` construction with Three groups | Cannot unit-test cleanly in situ | High | Extract `math/matmul` | P0 |
+| Math coupled to rendering | `dotprod` inside `MatMul` construction with Three groups | Cannot unit-test product path cleanly | High | Use `math/matmul` only | P0 |
 | GUI coupled to state | `gui/index.ts` mutates params + rebuilds scene | UI changes rewrite architecture | High | Commands; MVP native UI | P1 |
-| Animation coupled to scene rebuild | Anim mats created as full `Mat` instances | Heavy; hard to reverse step | High | Deterministic anim state machine | P1 |
+| Animation coupled to scene rebuild | Anim mats created as full `Mat` instances; pure anim unwired | Heavy; hard to reverse step | High | Wire deterministic anim state machine | P1 |
 | Incomplete disposal | `disposeAndClear` skips materials; label mats per mesh | Leak risk on churn | Medium | ResourceManager + material policy | P1 |
 | Unsafe expression evaluation | `eval` in `expr.ts`, `init.ts` | XSS / arbitrary code | Critical | Remove from product paths | P0 |
 | Synchronous network loading | `XMLHttpRequest` sync in `init.ts`, `params.ts` | UI freeze; CSP/network risk | High | Remove from MVP | P0 |
@@ -252,10 +285,11 @@ Recommended actions vocabulary: Retain | Refactor | Wrap | Split | Deprecate | R
 | Legacy attention functionality | `examples/attngpt2`, `attnqkov` in Vite inputs | Distracts MVP; build cost | Medium | Remove from MVP build surface | P2 |
 | URL-state complexity | flatten/compress + JSON + config URL | Fragile restore | Medium | Versioned ShareStateV1 | P1 |
 | Unclear data ownership | `Mat.data` mutated; params copied into MatMul | Dual copies of params | Medium | Canonical tensors in state | P0 |
-| Difficult testing boundaries | Three.js classes hold math | Slow/fragile tests | High | Pure layers first | P0 |
-| Zero values invisible | `sizeFromData(0)=0`, black color | Conflicts with “visible zero cell” TRD intent | High | Layout cell + distinct zero style | P0 |
+| Difficult testing boundaries | Three.js classes hold math; few pure tests beyond Array2D/expr | Slow/fragile tests | High | Expand pure-layer tests | P0 |
+| Zero values invisible | `sizeFromData(0)=0`, black color | Conflicts with visible-zero intent | High | Layout cell + distinct zero style | P0 |
 | Title uses `innerHTML` | `create-app` `updateTitle` | XSS if names ever user-hostile | Medium | `textContent` | P1 |
-| Shape validation weak | Dim mismatch only `console.log` | Invalid scenes | Critical | Hard validate before update | P0 |
+| Shape validation partial | Constructor throws on mismatch (good); GUI paths may still rebuild unsafely | Invalid scenes / crashes | High | Hard validate before any scene mutate; keep last-good | P0 |
+| Unwired interaction modules | `interaction/*` not imported by app | Dead code / drift | Medium | Wire in Phase 7 or delete stubs | P1 |
 
 ---
 
@@ -310,7 +344,7 @@ flowchart LR
 
 ## 8. Target Module Architecture
 
-Conceptual target under `quatricmorph/src/` (evolves from current tree; names may be `.ts`):
+Conceptual target under `quatricmorph/src/` (evolves from current tree; names are `.ts`):
 
 ```text
 src/
@@ -366,7 +400,7 @@ src/
   main.ts
 ```
 
-**Temporary Migration State:** Existing `viz/`, `gui/`, `util/` remain until functions are extracted. New modules should be preferred for new behavior.
+**Temporary Migration State:** Existing `viz/`, `gui/`, `util/` remain until functions are extracted. Prefer extending existing `math/`, `layout/`, `interaction/` rather than inventing parallel modules. New modules should be preferred for new behavior.
 
 ### Module catalog
 
@@ -400,12 +434,13 @@ src/
 | Aspect | Definition |
 | --- | --- |
 | Responsibility | Shapes, parsing, validation, matmul, addressing |
-| Public API | `parseMatrixText`, `validateShapes`, `matmul`, `get/set` |
+| Public API | `parseMatrixText`, `validateMatmulDims`, `matmul`, `get/set` |
 | Dependencies | config/limits only |
 | Prohibited | three, DOM, gui |
 | Owned state | None (pure) |
 | Errors | Result types / thrown domain errors — no scene side effects |
 | Tests | Exhaustive unit tests |
+| Current | `matmul.ts`, `parse.ts`, `validate.ts`, `presets.ts`, `shape.ts` exist; expand toward `tensor.ts` / rename parser if needed |
 
 #### `state/*`
 
@@ -416,6 +451,7 @@ src/
 | Prohibited | three, DOM |
 | Owned state | `AppState` |
 | Tests | Reducer + serialization round-trips |
+| Current | **Missing** — highest structural gap |
 
 #### `layout/*`
 
@@ -426,6 +462,7 @@ src/
 | Prohibited | GUI; creating Three.js objects (plain `{x,y,z}` only) |
 | Output | `TensorLayout`, `MarginGridLayout`, `Bounds3` |
 | Tests | Alignment invariants without WebGL |
+| Current | `margin-grid.ts`, `tensor-frame.ts` — expand; ensure create-app π flip moves into layout or is eliminated |
 
 #### `scene/*`
 
@@ -436,6 +473,7 @@ src/
 | Prohibited | Matmul; parsing; owning canonical tensors |
 | Owned resources | Scene graph nodes, geometries, materials it creates |
 | Tests | Integration with headless/mock renderer where possible |
+| Current | Partial: `app/scene.ts` bootstrap only; render logic still in `Mat`/`MatMul` |
 
 #### `interaction/*`
 
@@ -445,6 +483,7 @@ src/
 | Dependencies | scene hit metadata, commands |
 | Prohibited | Direct canonical tensor mutation |
 | Tests | Unit for animation index math; integration for hit mapping |
+| Current | Pure `animation.ts` / `selection.ts`; controllers not yet extracted from create-app |
 
 #### `ui/*`
 
@@ -454,6 +493,7 @@ src/
 | Dependencies | commands, selectors |
 | Prohibited | Direct Three.js mutation; matmul |
 | Tests | DOM unit/integration as needed |
+| Current | lil-gui in `gui/` — replace for MVP surface |
 
 #### `config/*`
 
@@ -461,6 +501,7 @@ src/
 | --- | --- |
 | Responsibility | Defaults, dimension limits, grid defaults |
 | Prohibited | Runtime services |
+| Current | Scattered in `default-params.ts`, `defaults.ts`, `DEFAULT_MARGIN_GRID` |
 
 ---
 
@@ -554,8 +595,8 @@ Vectors and scalars are shapes, not separate types:
 type TensorId = 'A' | 'B' | 'C';
 
 interface TensorShape {
-  rows: number;    // m or K depending on tensor
-  columns: number; // K or n depending on tensor
+  rows: number;
+  columns: number;
 }
 
 interface Tensor2D {
@@ -578,11 +619,11 @@ interface MatmulProblem {
 | --- | --- |
 | Storage ordering | Row-major: `addr(i,j) = i * columns + j` |
 | Shape validation | `A.columns === B.rows`; positive integers within `config/limits` |
-| Immutability | Inputs replaced wholesale on successful parse; `C` recomputed; in-place anim must not mutate `A`/`B` |
+| Immutability | Inputs replaced wholesale on successful parse; `C` recomputed; animation must not mutate `A`/`B` |
 | Result derivation | Always derived; never authoritative user input |
-| Numeric precision | Canonical math uses `Float64Array`; render path may downsample |
-| Invalid values | Reject `NaN`/±`Infinity` at parse (display validation error); do not write into canonical tensors |
-| Conversion from input | Parser → `Tensor2D` |
+| Numeric precision | Canonical math prefers `Float64Array`; **Current** render path uses `Float32Array` via `Array2D` — migration may keep Float32 for GPU upload while computing in f64 |
+| Invalid values | Reject `NaN`/±`Infinity` at parse; do not write into canonical tensors |
+| Conversion from input | Parser → `Tensor2D` / `Array2D` adapter |
 | Conversion to render | Selectors expose values + layout cell centers |
 
 ### `Array2D` disposition
@@ -590,7 +631,7 @@ interface MatmulProblem {
 **Decision: Retain + Refactor (wrap for compatibility).**
 
 - Keep `Array2D` as a battle-tested row-major container used by existing renderers during migration.
-- Extract pure `matmul(a,b)` that today exists only in tests into `math/matmul.ts`.
+- Treat `math/matmul.ts` as the authoritative multiply implementation for new code and tests; migrate `MatMul.initResult` to call it.
 - Stop importing epilog into the core array module for MVP paths.
 - Longer term, prefer `Tensor2D` interface; `Array2D` may implement or adapt it.
 - **Do not Replace** until renderers no longer depend on `.h/.w/.data`.
@@ -601,7 +642,7 @@ interface MatmulProblem {
 
 ```text
 Raw Text
-  → Tokenization (rows by newline; entries by comma/whitespace)
+  → Tokenization (rows by newline/semicolon; entries by comma/whitespace)
   → Row Parsing
   → Numeric Validation (finite decimals)
   → Rectangularity Validation
@@ -610,6 +651,10 @@ Raw Text
 
 Parsing must not use `eval`, execute expressions, load remote data, or mutate last-good tensors before validation succeeds.
 
+**Current:** `math/parse.ts` implements this pipeline and returns `{ ok: true, rows, cols, data }` or `{ ok: false, message }`.
+
+**Target result types:**
+
 ```ts
 interface ParseSuccess { ok: true; tensor: Tensor2D }
 interface ParseFailure { ok: false; errors: ValidationError[] }
@@ -617,11 +662,11 @@ interface ParseFailure { ok: false; errors: ValidationError[] }
 
 | Concern | Owner |
 | --- | --- |
-| Parse errors | `math/matrix-parser` → `ValidationState` |
+| Parse errors | `math` parser → `ValidationState` |
 | Presentation | `ui/validation-view` |
 | Scene on failure | Unchanged last-good scene (QM-ARC-INV-007) |
 
-**Current gap:** Product path uses procedural initializers + `expr`/`url`, not textual matrix editors. MVP must add the parser pipeline.
+**Current gap:** Product path still uses procedural initializers + `expr`/`url`, not textual matrix editors. MVP must wire the parser to UI commands.
 
 ---
 
@@ -737,17 +782,17 @@ flowchart LR
 | Topic | Target convention |
 | --- | --- |
 | Handedness | Three.js right-handed |
-| Origin | Margin-grid origin (config); problem volume centered for camera convenience via layout bounds, not ad hoc hacks |
+| Origin | Margin-grid origin (config); problem volume may be centered for camera convenience via layout bounds, not ad hoc hacks outside layout |
 | Axis direction | +X increases J; +Y increases I; +Z increases K |
 | Camera up | `+Y` |
 | Grid cell unit | `cellSize` world units per index step |
 | Index→world | `layout.worldPositionForTensorCell(...)` |
-| World→index | Inverse with snap tolerance `1e-6 * cellSize` (**Assumption:** exact epsilon TBD in tests) |
+| World→index | Inverse with snap tolerance (current helpers use ~`1e-6`; exact epsilon TBD in tests) |
 | Tensor-plane orientation | A: I×K (Y×Z); B: K×J (Z×X); C: I×J (Y×X) |
 | Labels | Layout provides anchors; renderer billboards or fixed plane text per label strategy |
 | Bounds | Union of frames, titles, guides |
 
-**Current Architecture note:** Local `Mat` uses x=j, y=i; operands rotated into volume; root `rotation.x=π` inverts Y. Target must eliminate conflicting flips by baking orientation into layout.
+**Current Architecture note:** Local `Mat` uses x=j, y=i; operands rotated into volume via `placeOperands`; root `rotation.x=π` inverts Y. Target must eliminate conflicting flips by baking orientation into layout.
 
 Pure functions must return plain `{x,y,z}` — not `THREE.Vector3` — from `layout/`.
 
@@ -759,15 +804,18 @@ Pure functions must return plain `{x,y,z}` — not `THREE.Vector3` — from `lay
 
 Responsibilities: cell size, minor/major grid, tensor anchors, margins, frame padding, label margins, operand gaps, depth spacing, axis alignment, grid bounds, camera-fit bounds.
 
+**Current implementation:** `layout/margin-grid.ts` defines `MarginGridConfig`, `snapToGrid`, `cellCenterLocal`, `localTensorExtent`, `mulVolumeExtent`, `placeOperands`, `cameraPresetPose`, `marginGridFromParams`.
+
 ```ts
 interface MarginGridConfig {
   cellSize: number;
   minorGridSpacing: number;
   majorGridInterval: number;
-  framePadding: number;
-  titleMargin: number;
+  tensorPadding: number;
   labelMargin: number;
+  framePadding: number;
   operandGap: number;
+  axisMargin: number;
   depthSpacing: number;
   origin: Point3;
 }
@@ -788,8 +836,9 @@ Rules:
 - Layout must not depend on viewport dimensions.
 - Positions derive only from shapes + coordinate convention + `MarginGridConfig`.
 - Scene grid renderer consumes the same config.
+- All placement calls in product code must go through layout APIs (no duplicated magic numbers in scene/UI).
 
-**Current:** `layout.gap` and polarity placements approximate spacing but are not a shared margin grid. **Target:** replace.
+**Temporary Migration State:** Operand placement uses `placeOperands`; shared decorative grid meshes and camera-fit bounds from full margin-grid still incomplete.
 
 ---
 
@@ -823,13 +872,13 @@ B.J aligns with C.J
 
 | Topic | Rule |
 | --- | --- |
-| Anchors | `matmul-layout` places A/B/C with `operandGap` / `depthSpacing` so frames do not overlap |
+| Anchors | `placeOperands` / `matmul-layout` places A/B/C with `operandGap` / `depthSpacing` so frames do not overlap |
 | Vectors | Same plane rules with extent 1 on thin axis |
 | Scalars | Single cell + frame |
 | Labels | Anchors outside frame padding; readable facing policy in renderer |
 | Result relation | `C[i,j]` cell lines up with `A[i,*]` and `B[*,j]` under shared indices |
 
-Exact default polarity (which side of C holds A/B) is an open decision with recommended default matching current negative/left/top/front after coordinate cleanup (**§41**).
+Default polarity recommended for MVP: preserve current negative/left/top/front semantics until coordinate cleanup proves a simpler absolute mapping (**§41**).
 
 ---
 
@@ -837,8 +886,8 @@ Exact default polarity (which side of C holds A/B) is an open decision with reco
 
 Separate:
 
-- `TensorMarginFrameLayout` — pure description (boundary, grid, title, shape, axes, guides, hit bounds).
-- `TensorMarginFrameRenderer` — Three.js meshes/lines from layout.
+- `TensorMarginFrameLayout` — pure description (boundary, grid, title, shape, axes, guides, hit bounds). **Current:** `buildTensorFrame` in `layout/tensor-frame.ts`.
+- `TensorMarginFrameRenderer` — Three.js meshes/lines from layout. **Current:** missing; legends today are ad hoc in `Mat.setLegends`.
 
 | Concern | Strategy |
 | --- | --- |
@@ -885,6 +934,8 @@ Scene
 | Raycast eligibility | Value markers + optional frame proxies; not decorative major grids |
 | Disposal | Replace group → `resourceManager.disposeSubtree` |
 
+**Current:** flat `MatMul.group` hierarchy without GridGroup / OverlayGroup separation.
+
 ---
 
 ## 19. Scene Controller Architecture
@@ -927,80 +978,95 @@ Scene
 - Keep GLSL1 shader until a deliberate shader migration ADR.
 - Shared `MATERIAL`; per-geometry attributes for size/color.
 - Normalize by configurable sensitivity (global default).
-- Clamp extremes; reject non-finite at parse.
-- Transparency: discard low alpha in sprite texture (current).
-- Depth: default Three.js; document sorting limitations of points.
+- Positive/negative via hue mapping (existing `hue gap` / `hue spread` / `zero hue` params as starting point).
+- Transparency: binary discard in fragment shader (`alpha < 0.5`).
+- Depth: standard Three.js depth test; accept sprite sorting limits for MVP.
 
 ---
 
 ## 21. Label Architecture
 
-### Options
+### Options evaluated
 
-| Option | MVP fitness |
+| Option | Notes | MVP |
+| --- | --- | --- |
+| DOM overlays | Easy HTML; sync cost | Hover tooltip / validation only |
+| CSS2DRenderer | Extra renderer | Avoid unless needed |
+| Canvas textures | Flexible | Optional later |
+| SDF text | High quality; heavy | Out of MVP |
+| Three.js sprites | Possible | Secondary |
+| Existing FontLoader meshes (`util/text.ts`) | Already working | **Recommended for world labels** |
+
+### Label types and spaces
+
+| Label | Space |
 | --- | --- |
-| Existing ShapeGeometry font meshes | **Recommended short-term** — already integrated |
-| DOM / CSS2D | Good for tooltips/validation; use for UI + hover tooltip fallback |
-| Canvas textures | Possible later |
-| SDF text | Overkill for MVP |
+| Tensor name / shape | World |
+| Axis labels | World |
+| Value labels (spotlight) | World (current) |
+| Hover tooltip (optional summary) | DOM UI |
+| Running sum | World or DOM — prefer World near C cell |
+| Validation message | DOM UI |
 
-### Label placement spaces
+Ownership: `label-renderer` owns meshes/DOM nodes it creates; layout owns anchors; interaction owns which values are labeled.
 
-| Label type | Space |
-| --- | --- |
-| Tensor name, shape, axis | World (layout anchors) |
-| Value labels (optional dense) | World, gated by density |
-| Hover tooltip | Screen/DOM preferred for accessibility |
-| Running sum | World or DOM overlay near selection |
-| Validation messages | DOM UI |
+Visibility scales with camera distance (current legend distance heuristics may be reused carefully). Occlusion: best-effort; MVP does not require perfect depth-correct text.
 
-Ownership: `label-renderer` + UI validation view. Dispose font meshes on replace. Occlusion: accept imperfect depth for MVP; do not build full occlusion system.
+Accessibility fallback: DOM validation + matrix editors expose the same numeric values as text.
+
+Disposal: dispose geometry on label mesh remove; do not leave orphan text meshes after spotlight moves.
 
 ---
 
 ## 22. Camera Architecture
 
-`CameraController` owns perspective camera, OrbitControls, presets, reset, fit, resize, serialization.
+`CameraController` owns: camera configuration, OrbitControls, presets, reset, Fit View, resize, serialization, restoration.
 
-| Preset | Intent |
-| --- | --- |
-| Isometric | Default teaching view |
-| Front | Face C (I×J) |
-| Top | Emphasize B / J×K relationship |
-| Multiplication Volume | Show A/B/C together |
+Supported presets:
 
-**Fit View** uses layout bounds including frames, titles, shape labels, active guides — not only point positions.
+```text
+Isometric
+Front
+Top
+Multiplication Volume
+```
+
+**Current:** `cameraPresetPose` in `layout/margin-grid.ts` defines poses; product wiring is partial (`params.mvp.cameraPreset`).
+
+Fit View must use calculated world bounds including tensor frames, titles, shape labels, relevant axes, and active multiplication guides — not only value markers.
 
 | Topic | Decision |
 | --- | --- |
-| Projection | Perspective (current); FOV adaptive to aspect as today |
-| Near/far | Start from current `5` / `10000`; revisit with bounds |
-| Up | `+Y` |
-| Damping | Optional; current OrbitControls defaults + zoomSpeed 0.2 |
-| DPR | Cap pixel ratio (e.g. `min(devicePixelRatio, 2)`) for perf |
-| Serialization | Pose + target in share state (see open Q on preset-only) |
+| Projection | Perspective (retain). Orthographic is open for later |
+| Near / far | Current: near `5`, far `10000` — revisit Fit View so near plane does not clip small scenes |
+| FOV | Current dynamic `45 / min(1, aspect)` |
+| Up vector | +Y |
+| Damping | OrbitControls defaults unless UX requires damping |
+| Min/max distance | Set explicitly in controller (today largely unconstrained) |
+| Target | Orbit target; serializable |
+| DPR | Bound pixel ratio (recommend `Math.min(devicePixelRatio, 2)`) — **Current unbounded** |
 
 ---
 
 ## 23. Interaction Architecture
 
-### RaycastController
+### Raycast Controller
 
-Normalize pointer → raycast → ordered hits → extract `userData` → filter eligible kinds.
+Pointer normalization, raycast execution, hit ordering, metadata extraction, interaction-target filtering.
 
-### HoverController
+### Hover Controller
 
-Tracks hover target; updates tooltip state; requests interaction scene update; clears on leave.
+Current hover target, metadata, visuals, tooltip state, cleanup. **Current:** spotlight path in `create-app` + `Mat.updateLabels`.
 
-### SelectionController
+### Selection Controller
 
-Owns selected `C[i,j]` (and derived row/col/path). Clear selection command. Selecting cancels incompatible animation or rebinds animation to cell.
+Selected output cell, row, column, contraction path, clear. **Current:** pure helpers unwired.
 
-### KeyboardController
+### Keyboard Controller
 
-Shortcuts → commands; ignore when typing in inputs; cleanup on dispose.
+Shortcut registration, focus protection (do not steal keys from text editors), command dispatch, listener cleanup.
 
-**Current:** spotlight hover exists; first-class cell selection does not — must be added.
+Interaction controllers must issue application commands rather than mutate rendering objects directly where practical. Scene may apply ephemeral hover visuals from interaction state for performance, but selection/animation indices remain canonical.
 
 ---
 
@@ -1008,45 +1074,51 @@ Shortcuts → commands; ignore when typing in inputs; cleanup on dispose.
 
 ```ts
 interface MatmulAnimationState {
-  status: 'idle' | 'playing' | 'paused' | 'completed';
+  status: AnimationStatus; // idle | playing | paused | done
   outputRow: number;
   outputColumn: number;
   contractionIndex: number;
   runningSum: number;
-  completedCells: Array<{ i: number; j: number }>;
+  completedCells: OutputCellId[];
   speed: number;
 }
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> CellSelected: select_Cij
-    CellSelected --> HighlightOperands
-    HighlightOperands --> Contracting
-    Contracting --> Contracting: next_k
-    Contracting --> RevealCell: k_done
-    RevealCell --> CellSelected: next_cell_or_wait
-    RevealCell --> Completed: all_done
-    CellSelected --> Idle: clear
-    Contracting --> Paused: pause
-    Paused --> Contracting: play
-    Paused --> Idle: reset
-```
+**Current pure helper:** `interaction/animation.ts` uses `cellIndex` + `kIndex` (equivalent encoding). Prefer aligning names toward the schema above when wiring.
 
 Deterministic sequence:
 
 ```text
-Select C[i,j] → highlight A[i,:] & B[:,j]
-  → for k: highlight A[i,k], B[k,j], show product, update running sum
-  → reveal C[i,j]
+Select C[i,j]
+  → Highlight A[i,:]
+  → Highlight B[:,j]
+  → For each k: highlight A[i,k], B[k,j], show product, update running sum
+  → Reveal C[i,j]
 ```
 
-**Step Backward:** Prefer **deterministic recomputation** of animation state from `(selection, stepIndex)` rather than snapshot stacks, unless profiling proves it too expensive for 32×32.
+| Behavior | Rule |
+| --- | --- |
+| Play / Pause | Toggle status; RAF or timed steps at `speed` |
+| Step forward | Advance one micro-step deterministically |
+| Step backward | **Recompute** animation state from `(cell,k)` indices + tensors — do not rely on snapshots unless performance proves recomputation unsuitable |
+| Reset | Return to idle at start; clear guides |
+| Input/selection change | Cancel or rebind animation to new selection |
+| Scene rebuild | Rebuild guides from canonical anim state; do not lose indices if shapes unchanged |
+| Completion | status `done`; C fully revealed |
 
-Input/selection changes cancel or rebind animation. Animation must not mutate input tensors (QM-ARC-INV-009).
+**Current:** legacy multi-alg bump animation inside `MatMul` remains the live path; pure module is the target.
 
-**Current:** rich block-oriented algs in `MatMul` — **Temporarily retain** internally; MVP UI exposes only the deterministic educational sequence above.
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Playing: PLAY_or_STEP
+    Playing --> Paused: PAUSE
+    Paused --> Playing: PLAY
+    Playing --> Done: last_step
+    Paused --> Idle: RESET
+    Done --> Idle: RESET
+    Playing --> Idle: input_or_shape_change
+```
 
 ---
 
@@ -1054,27 +1126,27 @@ Input/selection changes cancel or rebind animation. Animation must not mutate in
 
 | Command | Input | Validation | State changes | Derived | Scene update | Failure | Serializable |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `SET_MATRIX_A` | text/tensor | parse+shape w/ B | A, clear anim | C, layout | layout/value | keep last-good | Yes (tensor) |
-| `SET_MATRIX_B` | text/tensor | parse+shape w/ A | B, clear anim | C, layout | layout/value | keep last-good | Yes |
-| `SET_DIMENSIONS` | m,k,n | limits | reshape policy | C, layout | layout | error | Yes |
-| `APPLY_PRESET` | preset id | known preset | tensors+display | all | rebuild | ignore | Yes |
-| `VALIDATE_INPUT` | drafts | parser | validation only | — | none | errors | No |
-| `SELECT_OUTPUT_CELL` | i,j | in C bounds | selection | guides | interaction | no-op | Yes |
-| `CLEAR_SELECTION` | — | — | clear | — | interaction | — | Yes |
-| `PLAY_ANIMATION` | — | selection exists | status playing | — | animation | error toast | No |
-| `PAUSE_ANIMATION` | — | — | paused | — | animation | — | No |
-| `STEP_FORWARD` | — | — | indices++ | running sum | animation | clamp | No |
-| `STEP_BACKWARD` | — | — | recompute prior | running sum | animation | clamp | No |
-| `RESET_ANIMATION` | — | — | idle defaults | — | animation | — | No |
-| `SET_DISPLAY_OPTION` | key/value | schema | display | — | display | reject | Yes |
-| `SET_GRID_OPTION` | key/value | schema | layout | layouts | layout | reject | Yes |
-| `SET_CAMERA_PRESET` | preset | known | camera | — | camera | reject | Yes |
-| `RESET_CAMERA` | — | — | default cam | — | camera | — | Yes |
-| `FIT_CAMERA` | — | bounds exist | camera | — | camera | — | Yes |
-| `RESTORE_SHARED_STATE` | payload | schema | many | all | rebuild | defaults+error | Yes |
-| `COPY_SHARE_LINK` | — | — | metadata | URL | none | clipboard fail | No |
+| `SET_MATRIX_A` | text or values | parse + shape w/ B | A, clear anim | C, layout | value/layout | keep last-good | yes (values) |
+| `SET_MATRIX_B` | text or values | parse + shape w/ A | B, clear anim | C, layout | value/layout | keep last-good | yes |
+| `SET_DIMENSIONS` | m,k,n | limits | reshape/fill | C, layout | layout | reject | yes |
+| `APPLY_PRESET` | preset id | known preset | A/B | C, layout | value/layout | reject | yes |
+| `VALIDATE_INPUT` | draft text | parse | validation only | — | none | errors only | n/a |
+| `SELECT_OUTPUT_CELL` | i,j | in bounds | selection | path highlight | interaction | no-op | yes |
+| `CLEAR_SELECTION` | — | — | selection none | — | interaction | — | yes |
+| `PLAY_ANIMATION` | — | valid C | anim playing | — | animation | ignore if invalid | no (runtime) |
+| `PAUSE_ANIMATION` | — | — | paused | — | animation | — | no |
+| `STEP_FORWARD` | — | — | indices/sum | — | animation | — | no |
+| `STEP_BACKWARD` | — | — | recompute indices | — | animation | — | no |
+| `RESET_ANIMATION` | — | — | idle | — | animation | — | no |
+| `SET_DISPLAY_OPTION` | key/value | schema | display | — | display | reject | yes |
+| `SET_GRID_OPTION` | key/value | schema | layout | layouts | layout | reject | yes |
+| `SET_CAMERA_PRESET` | preset | known | camera | — | camera | reject | yes |
+| `RESET_CAMERA` | — | — | default cam | — | camera | — | yes |
+| `FIT_CAMERA` | — | bounds exist | camera | — | camera | — | yes (pose) |
+| `RESTORE_SHARED_STATE` | payload | schema | many | all | rebuild | defaults+error | yes |
+| `COPY_SHARE_LINK` | — | — | share meta | URL string | none | clipboard fail UX | n/a |
 
-Commands are the primary UI entry points.
+Commands are the primary entry points for UI interaction.
 
 ---
 
@@ -1083,7 +1155,10 @@ Commands are the primary UI entry points.
 ```ts
 interface ShareStateV1 {
   version: 1;
-  tensors: { A: SerializableTensor; B: SerializableTensor };
+  tensors: {
+    A: SerializableTensor;
+    B: SerializableTensor;
+  };
   layout: SerializableLayoutSettings;
   display: SerializableDisplaySettings;
   camera: SerializableCameraState;
@@ -1093,37 +1168,41 @@ interface ShareStateV1 {
 
 | Topic | Decision |
 | --- | --- |
-| Encoding | JSON → `URLSearchParams` (`s=<payload>`) or hash fragment; prefer **query** for consistency with current `mm`, with size guard |
-| Compression | Optional `lz`-style or existing flatten/compress **only if** versioned; default omit defaults |
-| Omit defaults | Yes |
-| Validation | Schema + math validation on restore |
-| Versioning | `version: 1`; migrate functions per version |
-| Invalid payload | Fall back to defaults; show Share-State Error |
-| URL length | Soft limit ~2k; compress or refuse + copy instructions |
+| Encoding | Prefer query string with versioned JSON or compact typed fields; migrate off opaque compress map |
+| Compression | Optional; omit defaults |
+| Location | Query string for MVP (matches current); hash fragment is open |
+| Validation | Schema + numeric limits before applying |
+| Versioning | `version: 1` required; unknown → reject with fallback |
+| Migration | Explicit migrators per version |
+| Invalid payload | Load defaults; show share-state error |
+| URL length | Soft warn beyond ~2k chars; hard fail beyond browser-practical limits |
 | Clipboard | `navigator.clipboard.writeText` with fallback |
 
-**Do not serialize:** C (recompute), timers, Three.js, DOM, handlers, GPU resources, animation playhead (optional exception: selection only).
+Must not serialize: result tensor (recompute), animation timers, Three.js objects, DOM refs, handlers, GPU resources.
 
-**Current format:** unversioned flattened params — classify as **Migrate** with optional temporary reader.
+**Current:** unversioned flatten/compress or `params=` JSON + optional remote `config=` — replace for MVP product path.
 
 ---
 
 ## 27. Resource-Management Architecture
 
-`ResourceManager` tracks geometries, materials, textures, render targets, label meshes, listeners, timers, RAF, OrbitControls, renderer, resize observers.
+`ResourceManager` (or equivalent explicit ownership) tracks: geometries, materials, textures, shader materials, render targets, label elements, event listeners, timers, RAF handles, OrbitControls, renderer, resize observers.
 
-Lifecycle: `create` → `update` → `replace` → `dispose` / `disposeAll`.
+Lifecycle: `create` / `update` / `replace` / `dispose` / `disposeAll`.
 
 | Event | Disposal rule |
 | --- | --- |
-| Shape change | Dispose tensor value geometry + frame subtree; rebuild |
-| Value change | Update attributes in place when possible |
+| Tensor shape change | Dispose value geometries + frames; rebuild |
+| Tensor value change | Update attributes; do not dispose shared material |
+| Renderer change / loss | disposeAll + recreate context |
 | Grid change | Dispose grid geometries; rebuild |
-| Renderer change | disposeAll + recreate context |
-| App reset | disposeAll visualization; keep renderer |
-| Hot reload / unload | `disposeApp` removes listeners and GPU resources |
+| Application reset | disposeAll scene viz resources; keep WebGL context if healthy |
+| Hot reload | Best-effort disposeAll |
+| Page unload | Cancel RAF; dispose controls; release renderer |
 
-**Current gap:** materials on text meshes not disposed; shared point material must not be disposed per Mat.
+**Current gap:** `disposeAndClear` disposes geometries only; materials/textures/listeners incomplete.
+
+Every scene component must declare owned resources in code comments or a registry API.
 
 ---
 
@@ -1134,98 +1213,97 @@ Lifecycle: `create` → `update` → `replace` → `dispose` / `disposeAll`.
 ```mermaid
 sequenceDiagram
     participant Browser
-    participant Bootstrap
+    participant Boot as Bootstrap
     participant State
     participant Math
-    participant Layout
+    participant Lay as Layout
     participant Scene
     participant UI
     participant Loop as AnimationLoop
 
-    Browser->>Bootstrap: load
-    Bootstrap->>State: defaults
-    Bootstrap->>State: parse URL
+    Browser->>Boot: load page
+    Boot->>State: defaults
+    Boot->>State: parse URL share state
     State->>Math: validate + matmul
-    Math-->>State: C
-    State->>Layout: shapes + config
-    Layout-->>Scene: TensorLayouts + bounds
-    Bootstrap->>Scene: create context + apply
-    Bootstrap->>UI: mount
-    Bootstrap->>Loop: start RAF
+    State->>Lay: layouts + bounds
+    Boot->>Scene: create context + apply layouts
+    Boot->>UI: mount controls
+    Boot->>Boot: bind interaction
+    Boot->>Loop: start RAF
 ```
 
-### Other lifecycles (summary)
+### Other lifecycles
 
 | Event | Flow |
 | --- | --- |
-| Matrix edit | UI draft → VALIDATE → SET_MATRIX_* → math → layout → scene partial |
-| Invalid input | validation state; scene unchanged |
-| Shape change | layout update + resource replace |
-| Selection | command → interaction update → optional anim rebind |
-| Animation | RAF polls controller OR controller schedules steps from speed |
-| Camera preset | camera controller |
-| Share restore | decode → validate → replace state → rebuild |
-| Resize | camera aspect + DPR; layout unchanged |
-| Teardown | disposeApp |
+| Matrix edit | draft → validate → commit → C → layout → scene update |
+| Invalid input | validation errors; scene unchanged |
+| Shape change | cancel anim; layout rebuild; dispose old geometries |
+| Selection | command → interaction state → guides |
+| Animation | command → anim state → guide update each step |
+| Camera preset | command → camera controller |
+| Share restore | decode → validate → replace state → full/layout rebuild |
+| Resize | update projection + size; request label update; bound DPR |
+| Teardown | cancel RAF; dispose resources; remove listeners |
 
 ---
 
 ## 29. Error Architecture
 
-| Category | Detection | Representation | Log | User | Recovery | Keep scene? |
+| Category | Detection | Representation | Logging | User-facing | Recovery | Keep last-good scene |
 | --- | --- | --- | --- | --- | --- | --- |
-| Input Error | UI/parser | ValidationError[] | debug | inline | edit | Yes |
-| Validation Error | math/state | ValidationError[] | debug | validation view | edit | Yes |
-| Mathematical Error | matmul invariants | thrown/domain | error | banner | reset dims | Yes if last-good |
-| Layout Error | layout asserts | Error | error | banner | fallback layout | Best-effort |
-| Rendering Error | scene try/catch | Error | error | banner | skip frame update | Yes |
-| WebGL Error | context lost | flag | error | blocking message | restore handler | N/A |
-| Share-State Error | codec | Error | warn | toast + defaults | defaults | New defaults scene |
-| Asset Error | texture/font | Error | warn | degraded labels | continue | Yes |
-| Unexpected | window.onerror | Error | error | generic | continue loop | Yes |
+| Input Error | parser | ValidationError[] | debug | inline editor | edit again | yes |
+| Validation Error | shape/limits | ValidationError[] | info | validation view | edit | yes |
+| Mathematical Error | matmul guards | Error / result | error | message | revert command | yes |
+| Layout Error | layout asserts | Error | error | banner | fallback layout | prefer yes |
+| Rendering Error | try/catch around updates | Error | error | banner | skip frame / rebuild | yes if possible |
+| WebGL Error | context lost | event | error | blocking banner | restore context | n/a |
+| Share-State Error | schema | ShareError | warn | toast + defaults | defaults | n/a on cold start |
+| Asset Error | texture/font load | Error | error | degraded labels | continue | yes |
+| Unexpected Runtime | global handler | Error | error | generic | keep loop alive | yes |
 
-Render loop must not die on invalid user input.
+Invalid user input must not crash the render loop.
 
 ---
 
 ## 30. Security Architecture
 
-| Control | Requirement |
-| --- | --- |
-| No `eval` | Product paths must not evaluate user strings as code |
-| No remote code | No arbitrary remote module loading |
-| Safe URL parse | Schema validation; size limits |
-| Input-size limits | Enforce max rows/cols/chars (`config/limits`) |
-| Safe DOM | Use `textContent`; no `innerHTML` for user values |
-| Dependency review | Keep three/lil-gui/vite pinned; review upgrades |
-| CSP compatibility | Avoid inline script requirements where possible |
-| Clipboard | Permission-safe fallbacks |
-| Safe merge | Share restore replaces via schema, not blind `updateProps` deep merge of unknown keys |
-| Secrets | None in repo for MVP |
+Client-side boundaries:
+
+- No `eval` for user input.
+- No arbitrary remote data execution.
+- Safe URL-state parsing (schema + limits).
+- Input-size limits (rows/cols/chars).
+- Safe DOM rendering (`textContent`, not `innerHTML` for user values).
+- Dependency review for `three`, `lil-gui`, Vite.
+- CSP compatibility (no inline script requirements beyond build).
+- Clipboard permission handling with fallback.
+- Safe state merging (no prototype pollution via raw `Object.assign` of untrusted objects — validate keys).
+- No repository secrets.
+- No arbitrary remote module loading.
 
 ### Existing violations / risks
 
-| Behavior | Location | Migration |
-| --- | --- | --- |
-| `eval` expression parse | `viz/expr.ts` | Remove from MVP; isolate or delete |
-| `eval` init expressions | `viz/init.ts` | Remove from MVP UI |
-| Sync XHR URL/config | `init.ts`, `params.ts` | Remove from MVP |
-| `innerHTML` title | `create-app.ts` | Switch to `textContent` |
-| postMessage param injection | `create-app.ts` | Restrict/disable for MVP or validate schema |
+| Behavior | Location | Risk | Migration |
+| --- | --- | --- | --- |
+| `eval` for expr/init | `viz/expr.ts`, `viz/init.ts` | Code execution | Remove from MVP product paths |
+| Sync XHR remote config/CSV | `util/params.ts`, `viz/init.ts` | Freeze + SSRF-like fetch of attacker URL | Remove from MVP |
+| `innerHTML` title | `create-app.ts` `updateTitle` | XSS if hostile names | Use `textContent` |
+| Unvalidated JSON `params=` | `util/params.ts` | Prototype / unexpected keys | Schema validation |
 
 ---
 
 ## 31. Performance Architecture
 
-Sensitive areas: grid geometry, value markers, labels, raycasting, scene rebuilds, animation guides, URL encoding, camera fit, HiDPI.
+Sensitive areas: grid geometry, value markers, labels, raycasting, scene rebuilding, animation guides, URL encoding, camera fitting, high-DPI rendering.
 
-Strategies: geometry/material reuse; partial updates; cache layouts/bounds; limit raycast targets to value points; cap DPR; avoid sync network; avoid full rebuild on value-only edits; bound label count.
+Strategies: geometry/material reuse; instancing later if needed; bounded DPR; partial updates; cached layout/bounds; reduced raycast targets; avoid allocations in RAF; no sync remote requests; no full rebuild for value-only changes.
 
-| Limit class | Guidance |
+| Limit | Guidance |
 | --- | --- |
-| Recommended interactive maximum | **32×32** (and K≤32) per VIZ / TRD intent |
-| Functional maximum | 64 (may degrade) — **Assumption Requiring Verification** |
-| Stress-test maximum | 128 for perf tests only |
+| Recommended interactive maximum | `32 × 32` (and corresponding K) |
+| Functional maximum | Soft-cap in UI (e.g. 64) with warning |
+| Stress-test maximum | Automate larger sizes for leak/perf tests only |
 
 ---
 
@@ -1233,81 +1311,46 @@ Strategies: geometry/material reuse; partial updates; cache layouts/bounds; limi
 
 ### Pure unit tests
 
-Parsing, validation, addressing, matmul, coordinates, layout alignment, bounds, reducers, animation index transitions, share codec.
+Parsing, validation, tensor addressing, matmul, coordinate conversion, layout alignment, bounds, state transitions, animation transitions, serialization.
+
+**Current:** Array2D + genExpr tests only — expand aggressively as modules stabilize.
 
 ### Scene integration tests
 
-Node creation, updates, visibility, selection visuals, disposal (mock Three.js or minimal WebGL).
+Node creation, tensor updates, frame updates, visibility, selection visuals, resource replacement, disposal.
 
 ### Browser tests
 
-Default load, edit, invalid input, camera, hover, selection, animation, share links, resize.
+Default app, input editing, invalid input, camera, hover, selection, animation, share links, resize.
 
 ### Visual regression
 
-Default; matrix-vector; vector-matrix; scalar; selection; animation; grid toggles; presets.
+Default scene; matrix-vector; vector-matrix; scalar; selection; animation; grid toggles; camera presets.
 
 ### Performance tests
 
-Startup; 32×32; repeated edits/resets; memory growth; frame responsiveness.
+Startup; `32×32`; repeated matrix changes; reset; memory growth; frame responsiveness.
 
-**Boundary:** pure math/layout tests must not require WebGL.
-
-**Current:** Vitest unit tests for `Array2D` and expr helpers only.
+Pure math/layout tests must not require WebGL.
 
 ---
 
 ## 33. Technology Decisions
 
-### JavaScript versus TypeScript
+| Topic | Context | Options | Decision | Rationale | Consequences | Migration Cost | MVP Requirement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| JS vs TS | Port already TS | JS / TS | **TypeScript** | Types for tensors/state; repo already TS | Keep typing new modules; reduce `@ts-nocheck` over time | Low–medium | Yes |
+| Modules | Vite ESM | ESM | **Native ESM** | Matches Vite | `.js` import suffixes | Done | Yes |
+| Build | Vite present | Vite / none | **Vite** | Fast, multi-page | Keep config lean | Done | Yes |
+| Three.js | Core renderer | three npm | **three ^0.185** | Current | Watch addon import paths | Done | Yes |
+| OrbitControls | Camera UX | three addons | **Retain** | Works | Via camera-controller | Low | Yes |
+| lil-gui | Dense research UI | lil-gui / native | **Native HTML for MVP product UI**; lil-gui optional/dev | MVP UX simpler; decouple state | Replace primary GUI | Medium | Yes (native) |
+| Unit tests | Vitest present | Vitest | **Vitest** | Already configured | Expand suites | Low | Yes |
+| Browser tests | None | Playwright / Cypress | **Playwright later** | Strong static app testing | Add when UI stable | Medium | Phase 8 |
+| Lint/format | Minimal | ESLint/Prettier | **Add lightweight ESLint** when feasible | Catch import-boundary violations | Config debt | Low | Soft |
+| Visual regression | None | Percy / Playwright screenshots | **Playwright screenshots** | No SaaS required | Fixture maintenance | Medium | Phase 8 |
 
-| | |
-| --- | --- |
-| Context | Repo already TypeScript with widespread `@ts-nocheck` |
-| Options | Stay JS; gradual TS; full strict TS now |
-| Decision | **TypeScript, gradual strictness** |
-| Rationale | Matches package tooling; enables typed state/commands |
-| Consequences | More typing work during extraction |
-| Migration cost | Medium |
-| MVP requirement | Yes — do not revert to plain JS |
-
-### Native ES modules + Vite
-
-| | |
-| --- | --- |
-| Decision | **Keep Vite + native ESM** |
-| Rationale | Already working; simple static deploy |
-| MVP requirement | Yes |
-
-### Three.js + OrbitControls
-
-| | |
-| --- | --- |
-| Decision | **Keep three r185+ and OrbitControls** |
-| Rationale | Core of existing viz |
-| MVP requirement | Yes |
-
-### lil-gui versus native HTML
-
-| | |
-| --- | --- |
-| Context | lil-gui exposes research controls |
-| Decision | **MVP product UI = native HTML controls**; lil-gui optionally behind “advanced” or removed from main entry |
-| Rationale | VIZ-09; clearer UX |
-| Migration cost | Medium |
-| MVP requirement | Native UI required |
-
-### Unit / browser / lint / format / visual tools
-
-| Tool | Decision |
-| --- | --- |
-| Unit | **Vitest** (present) |
-| Browser | Playwright or Cypress — **open**, default Playwright when added |
-| Lint | ESLint recommended when modules stabilize |
-| Format | Prettier optional |
-| Visual regression | Defer until fixtures exist (`docs/TESTING.md`) |
-
-Do not introduce React/Vue/Svelte without an ADR and demonstrated need.
+Do not introduce React/Vue/Svelte without an ADR and demonstrated requirement.
 
 ---
 
@@ -1315,18 +1358,18 @@ Do not introduce React/Vue/Svelte without an ADR and demonstrated need.
 
 | ADR | Status | Why ADR | Alternatives | Recommended decision |
 | --- | --- | --- | --- | --- |
-| ADR-001 Coordinate-System Convention | Proposed | Prevent conflicting axes | Keep π-flip folklore; alternate mappings | X→J, Y→I, Z→K; document migration from π flip |
-| ADR-002 Tensor-Plane Placement | Proposed | Product feature | Keep polarity enums only | MarginGrid planes with testable invariants |
-| ADR-003 Canonical Tensor Representation | Proposed | Math/render split | Replace Array2D now; Float32 only | Tensor2D Float64 + Array2D adapter |
-| ADR-004 State-Management Strategy | Proposed | GUI coupling | Redux; MobX; status quo params | Small custom store/reducer |
-| ADR-005 Rendering Primitive | Proposed | Perf vs clarity | Cubes/voxels | Point sprites MVP |
-| ADR-006 Label Rendering | Proposed | Complexity | CSS2D-only; SDF | ShapeGeometry + DOM tooltips |
-| ADR-007 Share-State Encoding | Proposed | URL fragility | Keep unversioned flatten | Versioned ShareStateV1 |
-| ADR-008 Scene Resource Ownership | Proposed | Leaks | Ad hoc dispose | ResourceManager |
-| ADR-009 JavaScript or TypeScript | Proposed | Tooling | Revert to JS | TypeScript gradual |
-| ADR-010 Build and Test Tooling | Proposed | Quality gates | Add heavy e2e now | Vitest + build; browser tests next |
+| ADR-001 Coordinate-System Convention | Proposed | Avoid silent axis flips | Alternate axis maps | X→J, Y→I, Z→K; right-handed; +Y up |
+| ADR-002 Tensor-Plane Placement | Proposed | Alignment invariants | Different polarity defaults | A=I×K, B=K×J, C=I×J; preserve mm default polarity until proven |
+| ADR-003 Canonical Tensor Representation | Proposed | Dual Array2D/Tensor2D | Replace immediately | Retain Array2D; introduce Tensor2D adapter; f64 canonical preferred |
+| ADR-004 State-Management Strategy | Proposed | Avoid framework churn | Redux/Zustand/custom | Small custom store + commands |
+| ADR-005 Rendering Primitive | Proposed | Costly rewrite risk | Cubes/planes/hybrid | Point sprites + frame occupancy for zeros |
+| ADR-006 Label Rendering | Proposed | Multiple strategies | DOM/CSS2D/SDF | Font mesh world labels + DOM validation |
+| ADR-007 Share-State Encoding | Proposed | Legacy URL complexity | Hash vs query; compress vs JSON | Versioned ShareStateV1 query; omit defaults |
+| ADR-008 Scene Resource Ownership | Proposed | Leak risk | Ad hoc dispose | ResourceManager + ownership table |
+| ADR-009 JavaScript or TypeScript | Proposed | Consistency | Stay mixed | TypeScript; remove nocheck gradually |
+| ADR-010 Build and Test Tooling | Proposed | Agent workflow | Alternate runners | Vite + Vitest + later Playwright |
 
-Full ADR bodies are out of scope for this document.
+Full ADR bodies live under `docs/adr/` when authored (directory exists; currently empty).
 
 ---
 
@@ -1336,81 +1379,103 @@ Full ADR bodies are out of scope for this document.
 
 | | |
 | --- | --- |
-| Inputs | Current `quatricmorph`, `mm` |
-| Outputs | Screenshots, behavior notes, URL format notes, test/build green |
+| Inputs | Running `quatricmorph` app |
+| Outputs | Screenshots; behavior notes; build/test commands; current URL format notes |
 | Files | Docs only |
 | Verification | `npm test`, `npm run build`, manual smoke |
 | Rollback | N/A |
-| Done when | Baseline recorded |
+| Completion | Baseline recorded |
 
 ### Phase 1 — Extract Pure Mathematics
 
 | | |
 | --- | --- |
-| Outputs | `math/matmul`, parser stub, shape validation; tests |
-| Files | `viz/array2d.ts`, new `math/*`, tests |
-| Dependencies | Phase 0 |
-| Verification | Unit tests including example walkthrough numbers |
-| Rollback | Keep adapters to Array2D |
-| Done when | VIZ-01/02 testable without Three.js |
+| Inputs | `Array2D`, `MatMul.dotprod`, init/eval paths |
+| Outputs | `math/*` authoritative; tests |
+| Files | `math/*`, `viz/array2d.ts`, callers |
+| Status | **Partial** — modules exist; product still uses embedded `dotprod` |
+| Verification | Unit tests for matmul/parse/validate; no Three imports in math |
+| Rollback | Keep dual path temporarily |
+| Completion | Product multiply path calls `math/matmul`; eval removed from MVP path |
 
 ### Phase 2 — Establish Canonical State
 
 | | |
 | --- | --- |
-| Outputs | AppState + commands; GUI dispatches commands |
-| Files | `state/*`, `create-app.ts`, `gui` |
-| Verification | State tests; app still renders |
-| Rollback | Feature flag to legacy params writes |
-| Done when | Single authoritative state for A/B/C |
+| Inputs | `params` tree |
+| Outputs | `AppState`, commands, selectors |
+| Files | new `state/*`; adapt `create-app` |
+| Verification | Reducer tests; GUI still works via commands |
+| Rollback | Feature flag to params |
+| Completion | Single store; GUI does not mutate tensors directly |
 
 ### Phase 3 — Extract Coordinate and Layout Logic
 
 | | |
 | --- | --- |
-| Outputs | coordinate + matmul layout pure modules; characterization tests vs old positions |
-| Files | new `layout/*`, reduce `matmul.ts` placement |
-| Done when | Invariants tested; old hard-coded paths wrapped |
+| Inputs | `placeOperands`, π flip, emptyPoints |
+| Outputs | Pure coordinate + full TensorLayout |
+| Files | `layout/*`, `create-app`, `MatMul` |
+| Status | **Partial** — placeOperands wired |
+| Verification | Alignment invariant tests |
+| Rollback | Keep polarity helpers |
+| Completion | No placement math outside `layout/` |
 
 ### Phase 4 — Implement 3D Margin Grid
 
 | | |
 | --- | --- |
-| Outputs | MarginGrid3D, frames, bounds |
-| Files | `layout/*`, `scene/grid-renderer`, frame renderer |
-| Done when | VIZ-03/04/05 acceptance |
+| Inputs | MarginGridConfig |
+| Outputs | Grid meshes, frames, labels, fit bounds |
+| Files | `layout/*`, `scene/*` |
+| Verification | Visual + unit bounds tests |
+| Rollback | Hide grid toggles |
+| Completion | VIZ-03…VIZ-05 |
 
 ### Phase 5 — Refactor Scene Ownership
 
 | | |
 | --- | --- |
-| Outputs | SceneController, ResourceManager, partial updates |
-| Files | `scene/*`, slim `Mat`/`MatMul` |
-| Done when | Disposal tests; no product matmul in scene |
+| Inputs | `Mat`/`MatMul` viz |
+| Outputs | SceneController, renderers, ResourceManager |
+| Files | `scene/*`, slim `viz/` |
+| Verification | Disposal tests; partial updates |
+| Rollback | `initObj` path |
+| Completion | Explicit ownership |
 
 ### Phase 6 — Simplify Product UI
 
 | | |
 | --- | --- |
-| Outputs | Quatricmorph shell; matrix editors; hide attention/nested/url-expr |
-| Files | `ui/*`, `index.html`, vite inputs |
-| Done when | VIZ-09 |
+| Inputs | lil-gui + attention pages |
+| Outputs | Quatricmorph shell; hide OOS features |
+| Files | `ui/*`, `vite.config.ts`, examples |
+| Verification | VIZ-09; smoke |
+| Rollback | Keep gui behind flag |
+| Completion | MVP UI only |
 
 ### Phase 7 — Interaction and Animation
 
 | | |
 | --- | --- |
-| Outputs | Selection, deterministic animation, camera presets |
-| Files | `interaction/*`, camera controller |
-| Done when | VIZ-07 + animation AC |
+| Inputs | Pure interaction modules + legacy anim |
+| Outputs | Wired hover/selection/deterministic anim/presets |
+| Files | `interaction/*`, scene guides |
+| Status | Helpers exist unwired |
+| Verification | Anim transition tests; manual play/step |
+| Rollback | Legacy bump alg |
+| Completion | VIZ-07 selection/anim acceptance |
 
 ### Phase 8 — Share State and Hardening
 
 | | |
 | --- | --- |
-| Outputs | ShareStateV1, browser/perf tests, docs updates |
-| Files | `share-state`, TESTING docs |
-| Done when | VIZ-08 hardened; gates green |
+| Inputs | Legacy URL codec |
+| Outputs | ShareStateV1; browser/perf tests; docs |
+| Files | `state/share-state.ts`, CI |
+| Verification | Round-trip tests; length limits |
+| Rollback | Read legacy URLs temporarily |
+| Completion | VIZ-08 replaced |
 
 ---
 
@@ -1418,39 +1483,41 @@ Full ADR bodies are out of scope for this document.
 
 | Artifact | Classification |
 | --- | --- |
-| Existing `mm` share URLs | Migrate (temporary reader) → Deprecate |
-| Existing examples (attention) | Remove from MVP / Out of scope |
-| Matrix initializers (row major, etc.) | Temporarily retain for demos; MVP prefers explicit matrix text |
-| Existing animations (vmprod, etc.) | Temporarily retain internally; MVP UI uses educational sequence |
+| Existing share URLs | Temporarily retain read path; Migrate writers to V1; Deprecate compress map |
+| Existing examples (attention) | Out of scope / Remove from MVP UI and preferably from production build inputs |
+| Existing matrix initializers | Temporarily retain subset (sequential/identity/zeros); Remove `expr`/`url` from MVP UI |
+| Existing animations (multi-alg) | Deprecate in MVP UI; Replace with single deterministic path |
 | Attention explorer | Out of scope |
-| Existing GUI parameters | Deprecate from primary UX |
-| Shader behavior | Preserve |
-| Reference pages (`ref.html`, intro) | Temporarily retain |
-| Nested expr / epilog / blocking | Remove from MVP UX; isolate code |
-| License attribution (MIT Meta) | Preserve |
+| Existing GUI parameters | Migrate minimal display/layout subset; Remove advanced |
+| Existing shader behavior | Preserve |
+| Reference pages (`ref.html`, intro) | Temporarily retain as reference; not primary MVP |
+| `mm/` tree | Preserve read-only |
 
-Do not preserve legacy behavior that conflicts with margin-grid alignment or security.
+Do not preserve legacy behavior when it conflicts with the focused MVP unless documented.
 
 ---
 
 ## 37. Deployment Architecture
 
 ```mermaid
-flowchart LR
-    Src[quatricmorph/src] --> Build[Vite production build]
+flowchart TD
+    Source[quatricmorph/src] --> Build[Vite production build]
     Build --> Dist[quatricmorph/dist static assets]
-    Dist --> Host[Static hosting / GitHub Pages]
+    Dist --> Host[Static hosting e.g. GitHub Pages]
     Host --> Browser[Browser]
 ```
 
-| Topic | Guidance |
+| Topic | Spec |
 | --- | --- |
-| Output | `quatricmorph/dist` |
-| Asset paths | Root-absolute `/assets/...` today — verify base-path for Pages (`base` in Vite) — **Assumption Requiring Verification** for project Pages URL |
-| Cache | Hashed assets; HTML short cache |
+| Output | `quatricmorph/dist/` |
+| Asset paths | Respect Vite `base` for Pages subpaths |
+| Cache | Fingerprinted assets; HTML short cache |
 | Local preview | `npm run preview` |
-| Source maps | Enable for debugging builds as needed |
-| Backend | None |
+| Error page | Host-dependent; app must self-handle route-less SPA needs (MVP is multi-page static, not SPA router) |
+| Source maps | Optional in prod; enable in CI artifacts if needed |
+| Reproducibility | Lockfile committed (`package-lock.json`) |
+
+No backend infrastructure.
 
 ---
 
@@ -1458,19 +1525,19 @@ flowchart LR
 
 | Document | Purpose | Authority | Audience | Update trigger | Relationship |
 | --- | --- | --- | --- | --- | --- |
-| `README.md` | Entry | Low | All | Setup changes | Points to docs |
-| `docs/TECHNICAL_REQUIREMENTS.md` | What to build | **Product/eng contract** | Eng/agents | Requirement changes | Governs architecture |
-| `docs/SYSTEM_ARCHITECTURE.md` | How to structure | Architecture | Eng/agents | Structural decisions | Implements TRD |
-| `docs/requirements/VIZ_MVP.md` | Track A checklist | Active coding gate | Agents | VIZ progress | Subset of TRD |
-| `docs/TESTING.md` / `TESTING_GUIDELINE.md` | How to test | Process | Eng/QA | Tooling changes | Aligns §32 |
-| `docs/COORDINATE_SYSTEM.md` | Deep axis spec | Derived from ADR-001 | Graphics | Coord changes | Detail extract |
-| `docs/SCENE_LIFECYCLE.md` | Scene update/dispose | Derived | Graphics | Scene refactors | Detail extract |
-| `docs/STATE_MODEL.md` | State schema | Derived | Eng | State changes | Detail extract |
-| `docs/adr/*` | Decision records | Decision | Eng | ADR accepted | Traceability |
-| `prompts.md` | Historical eng brief | Advisory | Agents | Rare | Superseded by TRD+architecture when published |
-| `docs/PRODUCT_ARCHITECTURE_v1.md` | Long-term platform | Platform vision | All | Platform work | **Not** viz MVP scope expander |
+| `README.md` | Project entry | Low | Humans | Release/setup changes | Points to docs |
+| `docs/TECHNICAL_REQUIREMENTS.md` | What to build | **Product/eng contract when published** | All implementers | Requirement changes | Governs architecture |
+| `docs/SYSTEM_ARCHITECTURE.md` | How to structure | Architecture | Implementers/agents | Structural decisions | Implements TRD |
+| `docs/requirements/VIZ_MVP.md` | Track A checklist | Active Track A | Agents | VIZ progress | Interim TRD |
+| `docs/TESTING_GUIDELINE.md` | Test how-to | Testing | QA/agents | Strategy changes | **Target;** today `docs/TESTING.md` |
+| `docs/COORDINATE_SYSTEM.md` | Axes deep-dive | Coord detail | Graphics eng | Axis ADR | Extracts §14–16 |
+| `docs/SCENE_LIFECYCLE.md` | Scene create/update/dispose | Scene detail | Graphics eng | Scene ADR | Extracts §18–19, §27–28 |
+| `docs/STATE_MODEL.md` | AppState schema | State detail | Frontend eng | State ADR | Extracts §12–13, §25–26 |
+| `docs/adr/` | Decision records | Decision | Reviewers | Each ADR | Supports architecture |
+| `prompts.md` | Engineering brief | Historical/brief | Agents | Rare | Aligns with VIZ MVP |
+| `AGENTS.md` | Agent operating rules | Process | Agents | Process changes | Points here |
 
-Avoid duplicating normative rules; link instead.
+Avoid duplicating normative requirements across documents; link instead.
 
 ---
 
@@ -1488,54 +1555,54 @@ Avoid duplicating normative rules; link instead.
 | QM-ARC-INV-008 | Scene resources have explicit owners | Scene lifecycle | Review and tests |
 | QM-ARC-INV-009 | Animation does not mutate input tensors | Animation | Unit test |
 | QM-ARC-INV-010 | UI does not directly calculate matmul | Dependency rules | Static review |
-| QM-ARC-INV-011 | Product paths do not `eval` user input | Security | Static grep + tests |
-| QM-ARC-INV-012 | Layout does not depend on viewport size | Layout | Unit test |
-| QM-ARC-INV-013 | `C` is always derived from `A` and `B` | Math/state | Unit test |
-| QM-ARC-INV-014 | Raycast targets carry tensor metadata | Scene | Integration test |
-| QM-ARC-INV-015 | MVP UI does not expose attention/nested/url-expr loaders | UI | Review + checklist VIZ-09 |
+| QM-ARC-INV-011 | Layout modules do not create Three.js objects | Module boundaries | Static analysis |
+| QM-ARC-INV-012 | Product multiply uses one authoritative matmul implementation | Math/state | Unit + integration |
+| QM-ARC-INV-013 | Dim mismatch fails before allocating tensor scene subgraphs | MatMul/state | Integration test |
+| QM-ARC-INV-014 | MVP UI does not surface attention/LoRA/nested expr/model loading | UI/build | Review + smoke |
 
 ---
 
 ## 40. Risks and Trade-Offs
 
-| Risk | Probability | Impact | Mitigation | Detection | Contingency | Blocking? |
+| Risk | Probability | Impact | Mitigation | Detection | Contingency | Blocking |
 | --- | --- | --- | --- | --- | --- | --- |
-| Refactoring monolithic files | High | High | Incremental extract + tests | Build/test fail | Wrap before split | Yes for Phases 1–5 |
-| Behavior drift during extract | High | High | Characterization tests vs old positions | Visual/unit diffs | Freeze layout behind adapter | Yes Phase 3 |
-| Shader portability | Medium | Medium | Keep GLSL1 | Visual break on three bump | Pin three version | No |
-| Label complexity | Medium | Medium | DOM tooltips for hover | Perf jank | Density caps | No |
-| Resource leaks | High | Medium | ResourceManager + tests | `renderer.info.memory` | Periodic full rebuild | No |
-| Coordinate mistakes | High | Critical | Invariant tests | Misaligned planes | Revert to adapter | Yes |
-| Grid performance | Medium | Medium | Instanced lines / merge | FPS drop at 32 | Simplify grid | No |
-| URL size | Medium | Medium | Omit defaults; compress | Restore fail | External gist out of scope — truncate | No |
-| State sync bugs | High | High | Single store | UI/scene mismatch | Force rebuild | Yes Phase 2 |
-| Animation determinism | Medium | High | Recompute steps | Flaky step-back | Snapshots | No |
-| Browser differences | Medium | Medium | Cap DPR; smoke browsers | Bug reports | Feature detect | No |
-| Experimental code gravity | High | High | VIZ-09 UI discipline | Scope creep in PRs | Code owners review | Yes |
-| Overengineering MVP | Medium | High | Scope list § non-goals | Extra frameworks | Reject PR | Yes |
-| Removing too much reusable code | Medium | Medium | Prefer isolate over delete | Regressions | Restore from `mm/` | No |
-| Retaining too much legacy | High | High | Phase 6 UI cut | Confused UX | Hard remove entry points | Yes |
+| Refactoring monolithic sources | High | High | Small vertical slices; tests first | Build/test failures | Revert slice | Yes for Phases 1–5 |
+| Behavior drift during extraction | High | High | Screenshot baseline; golden matmul | Visual + numeric diffs | Dual-path compare | Yes |
+| Shader portability | Medium | Medium | Keep GLSL1 | Browser smoke | Freeze three version | No |
+| Label complexity | Medium | Medium | Cap spotlight labels | Perf counters | Reduce legends | No |
+| Resource leaks | High | High | ResourceManager + tests | Memory stress | Force full rebuild | Yes Phase 5 |
+| Coordinate mistakes | High | Critical | Invariant tests | Unit tests | Freeze layout API | Yes |
+| Grid performance | Medium | Medium | Instanced/batched lines | 32×32 profiling | Simplify grid | No |
+| URL size | Medium | Medium | Omit defaults; limits | Length checks | Local-only presets | No |
+| State sync bugs | High | High | Single store | Transition tests | Disable partial updates | Yes Phase 2 |
+| Animation nondeterminism | Medium | High | Recompute steps | Golden sequences | Snapshots | Yes Phase 7 |
+| Browser differences | Medium | Medium | Playwright matrix | CI | Feature detect | No |
+| Experimental code retention | High | Medium | Hide from UI/build | VIZ-09 checklist | Hard delete later | Soft |
+| Overengineering MVP | Medium | High | Scope discipline | Review | Cut abstractions | Soft |
+| Removing reusable code | Medium | Medium | File map actions | Regression | Restore from `mm/` | Soft |
+| Retaining too much legacy | High | High | Compatibility table | UI audit | Aggressive deprecate | Soft |
+| Dual matmul path drift | High | High | Delete embedded path after wiring | Diff tests | Prefer math/ | Yes |
 
 ---
 
 ## 41. Open Architecture Questions
 
-| Question | Context | Options | Recommended default | Consequences | Deadline | Blocking phase |
+| Question | Context | Options | Recommended default | Consequences | Decision deadline | Blocking phase |
 | --- | --- | --- | --- | --- | --- | --- |
-| Point sprites vs cubes | Zero visibility | Sprites / cubes / hybrid | Sprites + frame cells | May revisit zeros | Phase 4 | Phase 4 |
-| JS vs TS strictness | nocheck everywhere | Gradual / strict now | Gradual | Slower typing payoff | Continuous | Phase 1+ |
-| GUI vs native | lil-gui density | Native / lil-gui / both | Native MVP | Rebuild controls | Phase 6 | Phase 6 |
-| DOM vs world labels | Hover readability | DOM / world / both | World titles + DOM hover | Two systems | Phase 7 | Phase 7 |
-| Perspective vs ortho | Teaching clarity | Persp / ortho | Perspective | Ortho later preset | Phase 7 | Phase 7 |
-| Full camera vs preset-only in URL | URL size | Full pose / presets | Full pose | Larger URLs | Phase 8 | Phase 8 |
-| Hash vs query share | Routing | Hash / query | Query `s=` versioned | History UX | Phase 8 | Phase 8 |
-| Snapshot vs recompute step-back | Anim | Snapshot / recompute | Recompute | CPU on large K | Phase 7 | Phase 7 |
-| Max editable dims | Perf | 32 / 64 | 32 interactive | Hard limits in UI | Phase 1 | Phase 1 |
-| Retain initializers | Demo convenience | Keep / drop | Keep off MVP primary path | Code weight | Phase 6 | Phase 6 |
-| Legacy URLs | Compat | Support / break | Temporary reader | Codec complexity | Phase 8 | Phase 8 |
-| Retain examples in build | Bundle | Keep / drop | Drop from MVP build | Breaks old links | Phase 6 | Phase 6 |
-| Publish TRD path | Missing `docs/TECHNICAL_REQUIREMENTS.md` | Author TRD / treat prompt as TRD | Author real TRD ASAP | Authority gap | Immediate | All |
-| Default plane polarity | Match old mm | polarity sets | Match current default after cleanup | Visual continuity | Phase 3 | Phase 3 |
+| Point sprites vs cubes | Zeros visibility | Sprites / cubes / hybrid | Sprites + frame cells | Less rewrite | Phase 4 | Phase 4 |
+| JS vs TS strictness | Many `@ts-nocheck` | Gradual / big-bang | Gradual typed modules | Slower purity | Ongoing | No |
+| lil-gui vs native | UX | Keep / replace | Native MVP shell | Rebuild controls | Phase 6 | Phase 6 |
+| DOM vs world labels | Readability | Mix | World + DOM validation | Dual systems | Phase 4–7 | Soft |
+| Perspective vs ortho | Camera | Persp / ortho | Perspective | Familiar orbit | Phase 7 | Soft |
+| Full camera serialize vs presets | URL size | Full pose / presets only | Full pose (current-like) | Larger URLs | Phase 8 | Soft |
+| Hash vs query state | Sharing | `#` / `?` | Query (compat) | Server logs see state | Phase 8 | Soft |
+| Snapshot vs recompute step-back | Anim | Snapshots / recompute | Recompute | CPU vs memory | Phase 7 | Phase 7 |
+| Max editable dims | Perf | 32 / 64 / unbounded | UI soft-cap 32 interactive | Limits editors | Phase 6 | Soft |
+| Retain initializers | UX | Subset / none | Deterministic subset | Random off by default | Phase 6 | Soft |
+| Retain legacy URLs | Compat | Read forever / sunset | Temporary read | Codec complexity | Phase 8 | Soft |
+| Retain examples in build | Scope | Keep / drop | Drop from prod build | Smaller build | Phase 6 | Soft |
+| Remove create-app π flip | Coordinates | Keep / bake into layout | Bake into layout after tests | Visual change risk | Phase 3 | Phase 3 |
+| Float32 vs Float64 canonical | Precision | f32 / f64 / dual | f64 math, f32 GPU | Conversion cost | Phase 1–2 | Soft |
 
 ---
 
@@ -1546,25 +1613,26 @@ User enters A and B
   → UI dispatches update command
   → Parser validates textual values
   → Shape validator validates dimensions
-  → Canonical input state updated (only if valid)
+  → Canonical input state is updated
   → Math engine derives C
-  → Layout engine derives A, B, C placements
+  → Layout engine derives A, B, and C placements
   → Scene controller applies layout
-  → Tensor renderers update markers
-  → Camera-fit bounds recalculated (if shape/layout changed)
-  → Interaction metadata rebuilt
-  → Renderer displays scene
+  → Tensor renderers update visual markers
+  → Camera-fit bounds are recalculated
+  → Interaction metadata is rebuilt
+  → Renderer displays the updated scene
 ```
 
 ### Failure paths
 
-| Stage | Failure | Result |
+| Stage | Failure | Behavior |
 | --- | --- | --- |
-| Parse | Malformed / non-finite | Validation errors; state/scene unchanged |
-| Shape | `A.cols !== B.rows` | Validation errors; unchanged |
-| Math | Unexpected domain error | Mathematical Error banner; unchanged if caught pre-commit |
-| Layout | Assert fail | Layout Error; best-effort previous layout |
-| Scene | WebGL error | Rendering/WebGL Error; loop continues if possible |
+| Parse | Non-numeric / ragged | Validation errors; no state commit |
+| Shape | `A.cols !== B.rows` | Validation errors; no multiply; last-good scene |
+| Math | Unexpected NaN | Treat as math error; do not commit C |
+| Layout | Assert fail | Layout error banner; keep prior layouts if possible |
+| Scene | WebGL/resource error | Log; attempt rebuild; keep loop |
+| Interaction rebuild | Hit map fail | Disable hover until next successful update |
 
 ---
 
@@ -1573,26 +1641,27 @@ User enters A and B
 Default example:
 
 ```text
-A = [[1,2,3],[4,5,6]]     # 2×3
-B = [[7,8],[9,10],[11,12]] # 3×2
-C = [[58,64],[139,154]]    # 2×2
+A = [[1,2,3],[4,5,6]]   # 2×3
+B = [[7,8],[9,10],[11,12]]  # 3×2
+C = [[58,64],[139,154]]  # 2×2
 ```
 
-1. **Parsing** — Two rectangular finite tensors; shapes `(2,3)`, `(3,2)`.
-2. **Canonical tensors** — `Float64Array` row-major; `A.values[5]=6`, `B.values[5]=12`.
-3. **Validation** — `A.columns===B.rows===3`.
-4. **Result** — `C[0,0]=1·7+2·9+3·11=58`, etc.
-5. **Planes** — A on I×K; B on K×J; C on I×J.
-6. **Cell coordinates** — With `cellSize=1`, `origin=(0,0,0)` (illustrative):  
-   `C[0,0]→(0,0,zC)`, `A[0,0]→(xA,0,0)`, `B[0,0]→(0,yB,0)` per `matmul-layout` (exact offsets from `operandGap`).
-7. **Frames** — Each tensor gets padding/`titleMargin` bounds from layout.
-8. **Scene nodes** — `TensorAGroup` points at cell centers; shared sprite material.
-9. **Camera fit** — Sphere/box from union bounds → OrbitControls target + distance.
-10. **Hover** — Ray hit `userData:{tensorId:'A',i:0,j:1}` → tooltip `A[0,1]=2`.
-11. **Select `C[0,0]`** — Highlights `A[0,:]`, `B[:,0]`.
-12. **Animation k=0..2** — Products `7,18,33`; running sum `7 → 25 → 58`; reveal `C[0,0]`.
-13. **Share** — `ShareStateV1` encodes A/B + layout/display/camera/selection; C omitted.
-14. **Shape change cleanup** — ResourceManager disposes old A/B/C geometries/frames; rebuilds for new shapes; materials shared retained.
+1. **Parsing** — `parseMatrixText` yields rectangular finite rows (or presets load `DEFAULT_A`/`DEFAULT_B`).
+2. **Canonical tensors** — A `{rows:2,cols:3}`, B `{rows:3,cols:2}` with row-major values.
+3. **Validation** — `validateMatmulDims(2,3,3,2)` → ok `{m:2,k:3,n:2}`.
+4. **Result** — `matmul(A,B)` → C; e.g. `C[0,0] = 1·7 + 2·9 + 3·11 = 58`.
+5. **Planes** — A on I×K, B on K×J, C on I×J via `placeOperands(2,3,2, config)`.
+6. **Cell coordinates** — local centers from `cellCenterLocal(i,j)`; world via plane transforms.
+7. **Frames** — `buildTensorFrame('A'|…)` outer/inner AABB in local coords.
+8. **Scene nodes** — Tensor groups with Points attributes sized/colored from values.
+9. **Camera fit** — bounds ∪ frames/labels → Fit View / volume preset.
+10. **Hover** — ray hit `userData {tensorId,i,j}` → label.
+11. **Select `C[0,0]`** — selection `{kind:'output',i:0,j:0}` → path highlight A row 0, B col 0.
+12. **Animate k=0..2** — products `1·7`, `2·9`, `3·11`; running sum → 58; reveal C[0,0].
+13. **Share** — serialize A/B + layout/display/camera; omit C.
+14. **Shape change cleanup** — dispose old geometries/labels; rebuild layout; cancel anim; retain shared `MATERIAL`.
+
+Concrete world positions after polarity/π-flip cleanup are **Assumption Requiring Verification** until Phase 3 measurements land in tests.
 
 ---
 
@@ -1603,13 +1672,14 @@ Agents must:
 1. Read `docs/TECHNICAL_REQUIREMENTS.md` when present; otherwise `VIZ_MVP.md` + this document.
 2. Read this architecture before structural edits.
 3. Identify affected layers and preserve dependency rules.
-4. Add tests for new deterministic behavior.
-5. Update checklist/docs when acceptance criteria met.
-6. Avoid unrelated refactors and excluded features.
-7. Verify resource disposal on scene replacements.
-8. Report unverified assumptions explicitly.
-9. Use requirement IDs (`VIZ-*`) in plans and PRs.
-10. Keep math out of scene; placement out of UI.
+4. Prefer wiring existing `math/` / `layout/` / `interaction/` modules over duplicating them.
+5. Add tests for new deterministic behavior.
+6. Update checklist/docs when acceptance criteria met.
+7. Avoid unrelated refactors and excluded features (including `PLAT-P0-*` platform work).
+8. Verify resource disposal on scene replacements.
+9. Report unverified assumptions explicitly.
+10. Use requirement IDs (`VIZ-*`) in plans and PRs.
+11. Keep math out of scene; placement out of UI.
 
 Agents must not:
 
@@ -1620,7 +1690,8 @@ Agents must not:
 - Serialize Three.js objects.
 - Add unsafe input evaluation.
 - Mark complete without `npm test` / `npm run build` verification for `quatricmorph/` changes.
-- Treat platform SafeTensors work as part of this MVP.
+- Treat platform SafeTensors / WeightQL work as part of this MVP.
+- Claim architecture is implemented merely because it is documented.
 
 ---
 
@@ -1628,7 +1699,7 @@ Agents must not:
 
 This document is complete only when:
 
-1. It reflects the actual repository — **yes (analysis-based)**.
+1. It reflects the actual repository — **yes (analysis-based, v0.2.0)**.
 2. It maps existing files to target responsibilities — **yes §5**.
 3. It defines the canonical mathematical model — **yes §10**.
 4. It defines the canonical application-state model — **yes §12**.
@@ -1653,18 +1724,18 @@ This document is complete only when:
 
 ## Appendix A — Diagram Index
 
-1. System context — §7  
-2. Module dependencies — §9  
-3. Mathematical data flow — below  
-4. Coordinate-system mapping — §14  
-5. Tensor-plane arrangement — §16  
-6. Application-state transitions — §13  
-7. Runtime startup sequence — §28  
-8. Matrix-edit sequence — below  
-9. Animation state machine — §24  
-10. Scene lifecycle — below  
-11. Resource ownership — below  
-12. Deployment flow — §37  
+1. System context — §7
+2. Module dependencies — §9
+3. Mathematical data flow — below
+4. Coordinate-system mapping — §14
+5. Tensor-plane arrangement — §16
+6. Application-state transitions — §13
+7. Runtime startup sequence — §28
+8. Matrix-edit sequence — below
+9. Animation state machine — §24
+10. Scene lifecycle — below
+11. Resource ownership — below
+12. Deployment flow — §37
 
 ### A.3 Mathematical data flow
 
@@ -1742,4 +1813,4 @@ flowchart TB
 
 ---
 
-*End of architecture document. This documents the target design; it does not implement it.*
+*End of architecture document. This documents the target design and current Temporary Migration State; it does not implement the target architecture.*

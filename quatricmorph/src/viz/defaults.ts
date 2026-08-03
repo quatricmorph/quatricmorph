@@ -1,33 +1,41 @@
 // @ts-nocheck
-export const default_dims = { i: 32, j: 32, k: 32 }
+import { DEFAULT_A, DEFAULT_B } from '../math/presets.js'
+import { matrixToText } from '../math/parse.js'
+
+export const default_dims = { i: 2, j: 3, k: 2 }
 
 export const defaultCam = () => ({
-  x: -default_dims.i * 1.5,
-  y: default_dims.j * 1.5,
-  z: default_dims.k * 1.5,
+  x: -12,
+  y: 10,
+  z: 14,
+  target: { x: 0, y: 0, z: 0 },
 })
 
 export const default_epilog = 'none'
 
 export const defaultLeft = () => ({
-  name: 'L',
+  name: 'A',
   matmul: false,
-  h: default_dims.i,
-  w: default_dims.j,
-  init: 'row major',
+  h: DEFAULT_A.length,
+  w: DEFAULT_A[0].length,
+  init: 'values',
+  valuesText: matrixToText(DEFAULT_A),
   url: '',
+  expr: '',
   min: -1,
   max: 1,
   dropout: 0,
 })
 
 export const defaultRight = () => ({
-  name: 'R',
+  name: 'B',
   matmul: false,
-  h: default_dims.j,
-  w: default_dims.k,
-  init: 'col major',
+  h: DEFAULT_B.length,
+  w: DEFAULT_B[0].length,
+  init: 'values',
+  valuesText: matrixToText(DEFAULT_B),
   url: '',
+  expr: '',
   min: -1,
   max: 1,
   dropout: 0,
@@ -48,6 +56,5 @@ export const defaultLayout = () => ({
   'left placement': 'left',
   'right placement': 'top',
   'result placement': 'front',
+  cellSize: 1,
 })
-
-// adjust tree to match a param node's i/k/j blocks

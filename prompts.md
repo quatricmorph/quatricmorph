@@ -23,7 +23,7 @@ A @ B = C
 
 It must visualize simple matrix multiplication in a structured 3D coordinate system.
 
-Every matrix, vector, scalar, value, label, and multiplication guide must align to a shared **3D margin grid**, similar to how handwriting is constrained and aligned by ruled or graph-paper margins.
+Every matrix, vector, scalar, value, label, and multiplication guide must align to shared **3D grid ruled lines**, similar to how handwriting is constrained and aligned by ruled lines or graph paper.
 
 The grid is not merely a decorative background. It is the spatial layout system for the entire visualization.
 
@@ -167,14 +167,14 @@ Use deterministic floating-point calculations for the same input values.
 
 ---
 
-# 3D Margin Grid
+# 3D Grid Ruled Lines
 
 ## Concept
 
 Build a reusable spatial component named conceptually:
 
 ```text
-MarginGrid3D
+GridRuledLines3D
 ```
 
 The grid must behave like graph paper extended into three dimensions.
@@ -234,7 +234,7 @@ The shared dimensions must align exactly:
 * The `K` dimension of `A` aligns with the `K` dimension of `B`.
 * The `J` dimension of `B` aligns with the `J` dimension of `C`.
 
-Use the existing `mm` spatial model where it already represents these relationships correctly. Refactor its placement calculations so they are explicitly derived from the shared margin-grid coordinate system.
+Use the existing `mm` spatial model where it already represents these relationships correctly. Refactor its placement calculations so they are explicitly derived from the shared grid-ruled-lines coordinate system.
 
 ---
 
@@ -330,7 +330,7 @@ For the first MVP, reusing the existing point-sprite renderer is acceptable.
 
 Do not spend the MVP rewriting the complete rendering system into meshes unless the existing point renderer prevents correct cell alignment.
 
-If practical without destabilizing the application, use instanced cube or voxel markers as an optional Quatricmorph visual style. The margin-grid architecture is more important than the primitive shape.
+If practical without destabilizing the application, use instanced cube or voxel markers as an optional Quatricmorph visual style. The grid-ruled-lines architecture is more important than the primitive shape.
 
 ---
 
@@ -553,7 +553,7 @@ src/
 
   scene/
     scene-context.js
-    margin-grid-3d.js
+    grid-ruled-lines-3d.js
     tensor-margin-frame.js
     tensor-renderer.js
     matmul-layout.js
@@ -644,7 +644,7 @@ Recommended visual hierarchy:
 * Readable text labels
 * Minimal visual noise
 
-The 3D margin grid should look intentional and architectural, not like an infinite game-world grid.
+The 3D grid ruled lines should look intentional and architectural, not like an infinite game-world grid.
 
 Avoid:
 
@@ -792,7 +792,7 @@ Document:
 * Source architecture
 * Mathematical data flow
 * Scene graph
-* Margin-grid coordinate system
+* Grid-ruled-lines coordinate system
 * Tensor-plane placement
 * Animation state machine
 * URL-state format
@@ -810,7 +810,7 @@ Tensor Data
     ↓
 Matrix Multiplication
     ↓
-Margin-Grid Layout
+Grid-Ruled-Lines Layout
     ↓
 Three.js Scene Objects
     ↓
@@ -846,7 +846,7 @@ The implementation is complete only when:
 2. A user can enter two compatible matrices.
 3. The result is computed correctly.
 4. Matrix, vector, and scalar shapes render correctly.
-5. All tensors align within the shared 3D margin grid.
+5. All tensors align within shared 3D grid ruled lines.
 6. The `I`, `J`, and `K` dimensions are spatially consistent.
 7. A user can orbit, reset, and fit the camera.
 8. A user can hover values and inspect indices.

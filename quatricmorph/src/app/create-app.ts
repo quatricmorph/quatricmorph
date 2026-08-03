@@ -7,9 +7,12 @@ import { createDefaultParams } from './default-params.js'
 import { createUrlInfo, saveUrl as persistUrl, saveUrlInfo } from './url.js'
 import { createScene } from './scene.js'
 import { setupInstructions } from './instructions.js'
+import { validateMatmulDims } from '../math/validate.js'
+import { cameraPresetPose, gridRuledLinesFromParams, mulVolumeExtent } from '../layout/grid-ruled-lines.js'
+import { selectOutput, clearSelection as emptySelection, pathFromSelection } from '../interaction/selection.js'
 
 /**
- * Wire scene, params, input, animation, and GUI into a running mm viewer.
+ * Wire scene, params, input, animation, and MVP GUI into Quatricmorph.
  */
 export function createApp() {
   const params = createDefaultParams()
@@ -25,7 +28,22 @@ export function createApp() {
   }
 
   function updateTitle() {
-    document.getElementById('info').innerHTML = viz.genExpr(params)
+    const el = document.getElementById('info')
+    if (el) el.innerHTML = viz.genExpr(params)
+  }
+
+  function setValidationMessage(msg) {
+    const el = document.getElementById('validation')
+    if (!el) return
+    el.textContent = msg || ''
+    el.style.display = msg ? 'block' : 'none'
+  }
+
+  function setHoverInfo(text) {
+    const el = document.getElementById('hover-info')
+    if (!el) return
+    el.textContent = text || ''
+    el.style.display = text ? 'block' : 'none'
   }
 
   const url_info = createUrlInfo()
@@ -38,6 +56,8 @@ export function createApp() {
 
   let obj
   const getObj = () => obj
+  let selection = emptySelection()
+  let lastValidParams = util.copyTree(params)
 
   let cam_changing = false
   let spin_stash = 0
@@ -45,10 +65,11 @@ export function createApp() {
   let mag
   let clientX = 0
   let clientY = 0
-  let last_anim_alg = params.anim.alg
+  let last_anim_alg = 'dotprod (row major)'
   let last_anim_spin = params.anim.spin
   let anim_pause = false
   let anim_step = false
+  let anim_prev = false
 
   function animPause(p) {
     anim_pause = p
@@ -58,6 +79,93 @@ export function createApp() {
     if (anim_pause) {
       anim_step = true
     }
+  }
+
+  function animPrevStep() {
+    // Deterministic rewind: rebuild with same alg and pause at start of cycle.
+    // Full micro-step reverse is approximated by resetting calculation.
+    resetCalculation()
+    animPause(true)
+  }
+
+  function resetCalculation() {
+    selection = emptySelection()
+    const was = params.anim.alg
+    params.anim.alg = was === 'none' ? 'dotprod (row major)' : was
+    anim_pause = true
+    anim_step = false
+    initObj()
+    applySelectionHighlight()
+  }
+
+  function fitView() {
+    if (!obj) return
+    const bb = obj.getBoundingBox()
+    const size = new THREE.Vector3()
+    const center = new THREE.Vector3()
+    bb.getSize(size)
+    bb.getCenter(center)
+    const maxDim = Math.max(size.x, size.y, size.z, 1)
+    const dist = maxDim * 2.2
+    camera.position.set(center.x - dist * 0.7, center.y + dist * 0.55, center.z + dist * 0.7)
+    orbit.target.copy(center)
+    orbit.update()
+    params.cam = viewState()
+    saveUrl()
+  }
+
+  function resetView() {
+    const preset = params.mvp?.cameraPreset || 'volume'
+    setCameraPreset(preset)
+  }
+
+  function setCameraPreset(presetName) {
+    const gridCfg = gridRuledLinesFromParams(params.layout)
+    const extent = mulVolumeExtent(
+      params.left.h,
+      params.left.w,
+      params.right.w,
+      gridCfg,
+    )
+    const pose = cameraPresetPose(presetName, extent)
+    camera.position.set(pose.position.x, pose.position.y, pose.position.z)
+    orbit.target.set(pose.target.x, pose.target.y, pose.target.z)
+    orbit.update()
+    params.cam = viewState()
+    params.mvp = params.mvp || {}
+    params.mvp.cameraPreset = presetName
+  }
+
+  async function copyShareLink() {
+    saveUrlInfo(params, url_info)
+    try {
+      await navigator.clipboard.writeText(url_info.url)
+      setValidationMessage('Share link copied.')
+      setTimeout(() => setValidationMessage(''), 1500)
+    } catch {
+      setValidationMessage(url_info.url)
+    }
+  }
+
+  function clearSelection() {
+    selection = emptySelection()
+    applySelectionHighlight()
+  }
+
+  function applySelectionHighlight() {
+    if (!obj || obj.left?.params?.matmul) return
+    // Reset colors then bump path
+    try {
+      obj.left.setColorsAndSizes?.()
+      obj.right.setColorsAndSizes?.()
+      obj.result.setColorsAndSizes?.()
+      const path = pathFromSelection(selection)
+      if (path) {
+        obj.left.bumpColor?.(path.aRow, undefined)
+        obj.right.bumpColor?.(undefined, path.bCol)
+        obj.result.bumpColor?.(path.cCell.i, path.cCell.j)
+      }
+    } catch (_) { /* ignore during teardown */ }
   }
 
   const axes = util.axes()
@@ -100,6 +208,36 @@ export function createApp() {
       raycaster.far = 0
     }
     obj.updateLabels()
+    updateHoverPanel()
+  }
+
+  function updateHoverPanel() {
+    if (!obj || !obj.result?.points) {
+      setHoverInfo('')
+      return
+    }
+    raycaster.setFromCamera(pointer, camera)
+    raycaster.params.Points.threshold = Math.max(params.deco.spotlight || 0, 0.5)
+    const mats = [
+      { mat: obj.left, name: 'A', shape: [obj.H, obj.D] },
+      { mat: obj.right, name: 'B', shape: [obj.D, obj.W] },
+      { mat: obj.result, name: 'C', shape: [obj.H, obj.W] },
+    ]
+    for (const { mat, name, shape } of mats) {
+      if (!mat?.points) continue
+      const hits = raycaster.intersectObject(mat.points)
+      if (hits.length) {
+        const index = hits[0].index
+        const i = Math.floor(index / mat.W)
+        const j = index % mat.W
+        const val = mat.getData(i, j)
+        setHoverInfo(
+          `Tensor: ${name}\nIndex: [${i}, ${j}]\nValue: ${val}\nShape: [${shape[0]}, ${shape[1]}]`,
+        )
+        return
+      }
+    }
+    setHoverInfo('')
   }
 
   let label_update_pending = false
@@ -121,24 +259,50 @@ export function createApp() {
   }
 
   function initObj() {
+    const check = validateMatmulDims(
+      params.left.h, params.left.w, params.right.h, params.right.w,
+    )
+    if (!check.ok) {
+      setValidationMessage(check.message)
+      // Preserve last valid scene — do not construct partial Three objects
+      return
+    }
+
     let oldmag
     if (obj) {
       const oldsz = util.bbhwd(obj.getBoundingBox())
       oldmag = oldsz.h + oldsz.w + oldsz.d
       scene.remove(obj.group)
       obj.disposeAll()
+      obj = undefined
     }
 
-    obj = new viz.MatMul(params, getContext())
-    obj.group.rotation.x = Math.PI
-    obj.center()
+    try {
+      obj = new viz.MatMul(params, getContext())
+      obj.group.rotation.x = Math.PI
+      obj.center()
+      lastValidParams = util.copyTree(params)
+      setValidationMessage('')
+    } catch (e) {
+      setValidationMessage(e.message || String(e))
+      // Restore last valid if available
+      if (lastValidParams) {
+        try {
+          obj = new viz.MatMul(lastValidParams, getContext())
+          obj.group.rotation.x = Math.PI
+          obj.center()
+        } catch (_) {
+          obj = undefined
+        }
+      }
+      return
+    }
 
     if (oldmag) {
       const newsz = util.bbhwd(obj.getBoundingBox())
       const newmag = newsz.h + newsz.w + newsz.d
       const ratio = newmag / oldmag
       if (ratio != 1) {
-        console.log(`HEY ratio ${ratio}`)
         camera.position.set(camera.position.x * ratio, camera.position.y * ratio, camera.position.z * ratio)
         orbit.update()
         requestCameraPositionSave()
@@ -148,6 +312,7 @@ export function createApp() {
     obj.setLegends()
     obj.initAnimation()
     scene.add(obj.group)
+    applySelectionHighlight()
     updateTitle()
   }
 
@@ -179,7 +344,22 @@ export function createApp() {
     initAxes(params.deco.axes)
     initObj()
 
-    const callbacks = { initObj, getObj, saveUrl, updateTitle, animPause, animStep }
+    const callbacks = {
+      initObj,
+      getObj,
+      saveUrl,
+      updateTitle,
+      animPause,
+      animStep,
+      animPrevStep,
+      resetCalculation,
+      resetView,
+      fitView,
+      setCameraPreset,
+      copyShareLink,
+      setValidationMessage,
+      clearSelection,
+    }
     const info = { url_info, render_info }
     gui.initGui(params, callbacks, info)
   }
@@ -187,13 +367,23 @@ export function createApp() {
   function initFromSearchParams() {
     const searchParams = new URL(window.location.href).searchParams
     if (searchParams.size > 0) {
-      util.updateObjectFromSearchParams(params, searchParams)
+      try {
+        util.updateObjectFromSearchParams(params, searchParams)
+      } catch (e) {
+        console.log('invalid URL params, falling back to defaults', e)
+        resetParams()
+        setValidationMessage('Invalid share URL — loaded defaults.')
+      }
     } else {
       resetParams()
     }
     if (params.sync_expr !== undefined) {
       delete params.sync_expr
     }
+    // Ensure leaf names for MVP
+    params.left.name ||= 'A'
+    params.right.name ||= 'B'
+    params.name ||= 'C'
     params.expr = viz.genExpr(params)
     initFromParams(false)
   }
@@ -210,6 +400,7 @@ export function createApp() {
 
   let pointer_moved
   let pointer_move_timeout
+  let pointer_down = false
 
   window.addEventListener('pointermove', e => {
     clientX = e.clientX
@@ -228,6 +419,7 @@ export function createApp() {
     pointer.x = e.clientX / window.innerWidth * 2 - 1
     pointer.y = -(e.clientY / window.innerHeight * 2 - 1)
     pointer_moved = false
+    pointer_down = true
     pointer_move_timeout = setTimeout(() => {
       if (!pointer_moved && e.target === renderer.domElement) {
         mag = true
@@ -238,11 +430,26 @@ export function createApp() {
     }, 500)
   })
 
-  window.addEventListener('pointerup', () => {
+  window.addEventListener('pointerup', e => {
     clearTimeout(pointer_move_timeout)
     mag = false
     orbit.enabled = true
     updateSpotlight()
+
+    // Click select C[i,j] path when little movement
+    if (pointer_down && !pointer_moved && e.target === renderer.domElement && obj?.result?.points) {
+      raycaster.setFromCamera(pointer, camera)
+      raycaster.params.Points.threshold = Math.max(params.deco.spotlight || 0, 0.8)
+      const hits = raycaster.intersectObject(obj.result.points)
+      if (hits.length) {
+        const index = hits[0].index
+        const i = Math.floor(index / obj.result.W)
+        const j = index % obj.result.W
+        selection = selectOutput(i, j, obj.H, obj.W)
+        applySelectionHighlight()
+      }
+    }
+    pointer_down = false
   })
 
   const key_funcs = {
@@ -313,7 +520,6 @@ export function createApp() {
       ;(messageEvent?.source)?.postMessage({ params }, messageEvent.origin)
     },
     setParams: ({ props = {}, reset = false } = {}) => {
-      console.log(`HEY setParams called props ${JSON.stringify(props)} reset ${reset}`)
       reset && resetParams()
       if (props.sync_expr) {
         params.expr = props.expr
@@ -364,6 +570,10 @@ export function createApp() {
       obj.bump()
       last_render = t
       anim_step = false
+      // advancing calculation clears sticky selection path
+      if (selection.kind !== 'none') {
+        selection = emptySelection()
+      }
     }
 
     if (params.anim.spin != 0) {

@@ -37,7 +37,7 @@ The architecture must explain:
 * How mathematical data is represented
 * How matrix multiplication is calculated
 * How matrices, vectors, and scalars are mapped into 3D
-* How the shared 3D margin grid controls spatial placement
+* How shared 3D grid ruled lines control spatial placement
 * How Three.js scene objects are created and updated
 * How interaction and animation are managed
 * How application state is structured
@@ -70,7 +70,7 @@ Row Vector @ Column Vector → Scalar
 The primary product feature is the shared:
 
 ```text
-3D Margin Grid
+3D Grid Ruled Lines
 ```
 
 Every matrix, vector, scalar, tensor frame, tensor value, guide, label, highlight, and camera-fit boundary must derive its spatial position from the same coordinate system.
@@ -185,7 +185,7 @@ Summarize:
 * The target architecture
 * The main architectural transformation
 * The major boundaries
-* The role of the 3D margin grid
+* The role of the 3D grid ruled lines
 * The migration strategy
 * The most important technical decisions
 
@@ -202,7 +202,7 @@ At minimum:
 * Mathematical correctness
 * Deterministic behavior
 * Explicit coordinate conventions
-* Reusable 3D margin-grid layout
+* Reusable 3D grid-ruled-lines layout
 * Separation of mathematics and rendering
 * Separation of state and GUI
 * Predictable scene lifecycle
@@ -355,7 +355,7 @@ flowchart LR
 
     Math[Math Engine]
 
-    Layout[3D Margin-Grid Layout]
+    Layout[3D Grid-Ruled-Lines Layout]
 
     Scene[Three.js Scene]
 
@@ -412,7 +412,7 @@ src/
 
   layout/
     coordinate-system.js
-    margin-grid-3d.js
+    grid-ruled-lines-3d.js
     tensor-layout.js
     matmul-layout.js
     bounds.js
@@ -777,12 +777,12 @@ Prefer plain coordinate data from the layout layer rather than Three.js vector o
 
 ---
 
-## 15. 3D Margin-Grid Architecture
+## 15. 3D Grid-Ruled-Lines Architecture
 
 Define the central abstraction:
 
 ```text
-MarginGrid3D
+GridRuledLines3D
 ```
 
 It is responsible for:
@@ -803,7 +803,7 @@ It is responsible for:
 Suggested configuration:
 
 ```ts
-interface MarginGridConfig {
+interface GridRuledLinesConfig {
   cellSize: number;
   minorGridSpacing: number;
   majorGridInterval: number;
@@ -836,7 +836,7 @@ It must derive all positions from:
 
 * Tensor shapes
 * Coordinate convention
-* Margin-grid configuration
+* Grid-ruled-lines configuration
 
 ---
 
@@ -1718,7 +1718,7 @@ Recommended phases:
 * Define tensor layouts
 * Remove hard-coded placement
 
-### Phase 4 — Implement 3D Margin Grid
+### Phase 4 — Implement 3D Grid Ruled Lines
 
 * Grid layout
 * Tensor frames
@@ -2070,7 +2070,7 @@ The architecture document is complete only when:
 3. It defines the canonical mathematical model.
 4. It defines the canonical application-state model.
 5. It defines one coordinate-system authority.
-6. It defines the 3D margin-grid architecture.
+6. It defines the 3D grid-ruled-lines architecture.
 7. It defines tensor-plane placement.
 8. It defines scene ownership.
 9. It defines resource disposal.
@@ -2157,7 +2157,7 @@ After creating `docs/SYSTEM_ARCHITECTURE.md`, provide:
 4. Main module boundaries
 5. Main dependency rules
 6. Coordinate-system decision
-7. Margin-grid architecture decision
+7. Grid-ruled-lines architecture decision
 8. Rendering recommendation
 9. State-management recommendation
 10. Resource-ownership strategy

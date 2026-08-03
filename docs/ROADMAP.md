@@ -6,7 +6,7 @@ From architecture §28. This repo currently executes **Phase 0 / Track A** (viz)
 
 - Migrate `mm` → Vite TypeScript (`quatricmorph/`) — done
 - Modularize viz modules — done
-- Margin-grid MVP (`A @ B = C`) — in progress
+- Grid-ruled-lines MVP (`A @ B = C`) — in progress
 - Unit tests for pure math — scaffolding
 
 ## Phase 1 — Inspect

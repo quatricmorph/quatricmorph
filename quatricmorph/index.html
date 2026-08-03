@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>mm</title>
+  <title>Quatricmorph — Spatial Matrix Multiplication</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <meta name="description" content="Quatricmorph: spatial visualization of A @ B = C in shared 3D grid ruled lines." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
 <body>
+  <header id="brand">
+    <div class="brand-name">Quatricmorph</div>
+    <div class="brand-tag">Spatial Matrix Multiplication</div>
+  </header>
   <div id="info">loading</div>
+  <div id="validation" role="alert" aria-live="polite"></div>
+  <pre id="hover-info"></pre>
   <div id="container"></div>
   <div id="instructions" class="instructions-modal">
     <div id="minimized" class="minimized-content">
@@ -19,10 +26,10 @@
         <table>
           <tr>
             <td class="leftcol">Zoom</td>
-            <td>Two finger swipe</td>
+            <td>Two finger swipe / scroll</td>
           </tr>
           <tr>
-            <td class="leftcol">Spin</td>
+            <td class="leftcol">Orbit</td>
             <td>Click + drag</td>
           </tr>
           <tr>
@@ -34,9 +41,8 @@
             <td>Long click + drag</td>
           </tr>
           <tr>
-            <td>
-              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="ref.html">Reference</a>
-            </td>
+            <td class="leftcol">Select C</td>
+            <td>Click a result cell</td>
           </tr>
         </table>
       </div>
@@ -47,7 +53,7 @@
             <td>Pinch</td>
           </tr>
           <tr>
-            <td class="leftcol">Spin</td>
+            <td class="leftcol">Orbit</td>
             <td>Tap and drag</td>
           </tr>
           <tr>
@@ -58,16 +64,11 @@
             <td class="leftcol">Reveal</td>
             <td>Long tap + drag</td>
           </tr>
-          <tr>
-            <td>
-              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="ref.html">Reference</a>
-            </td>
-          </tr>
         </table>
       </div>
     </div>
   </div>
 
-  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

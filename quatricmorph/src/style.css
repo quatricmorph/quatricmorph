@@ -1,150 +1,234 @@
+:root {
+  --bg: #12141a;
+  --panel: #1a1d24;
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #8ab4f8;
+  --danger: #f28b82;
+  --frame: #3c4043;
+}
+
 body {
-      margin: 0;
-      background-color: #000;
-      color: #fff;
-      /* font-family: Monospace; */
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      font-size: 13px;
-      line-height: 24px;
-      overscroll-behavior: none;
-    }
+  margin: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at 20% 0%, #1c2030 0%, transparent 55%),
+    radial-gradient(ellipse 100% 70% at 90% 100%, #181c22 0%, transparent 50%),
+    var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  overscroll-behavior: none;
+}
 
-    canvas {
-      display: block;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-    }
+canvas {
+  display: block;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
 
-    #info {
-      position: absolute;
-      top: 0px;
-      left: 25vw;
-      right: 25vw;
-      padding: 10px;
-      box-sizing: border-box;
-      text-align: center;
-      font-size: 15px;
-      -moz-user-select: none;
-      -webkit-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-      pointer-events: none;
-      z-index: 1;
-    }
+#brand {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 2;
+  pointer-events: none;
+  max-width: min(42vw, 320px);
+}
 
-    /* menu */
+.brand-name {
+  font-family: "IBM Plex Serif", "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  line-height: 1.15;
+}
 
-    .lil-gui {
-      --folder-indent: 12px;
-      --title-background-color: #555;
-    }
+.brand-tag {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-    .lil-gui.autoPlace {
-      right: 0;
-    }
+#info {
+  position: absolute;
+  top: 14px;
+  left: 28vw;
+  right: 28vw;
+  padding: 8px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--accent);
+}
 
-    .lil-gui .title {
-      background-color: #555;
-    }
+#validation {
+  display: none;
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(90vw, 520px);
+  padding: 8px 12px;
+  background: rgba(40, 20, 20, 0.92);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  z-index: 3;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
 
-    .lil-gui .lil-gui>.children {
-      margin-left: var(--folder-indent);
-    }
+#hover-info {
+  display: none;
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  margin: 0;
+  padding: 10px 12px;
+  background: rgba(26, 29, 36, 0.92);
+  border: 1px solid var(--frame);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "Source Code Pro", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 2;
+  pointer-events: none;
+  white-space: pre;
+}
 
-    .lil-gui .allow-touch-styles {
-      border-left: 1px solid var(--widget-color);
-    }
+/* menu */
 
-    .lil-gui .lil-gui .lil-gui>.children {
-      margin-left: var(--folder-indent);
-      border-left: none;
-    }
+.lil-gui {
+  --folder-indent: 12px;
+  --title-background-color: #2a2e36;
+  --background-color: var(--panel);
+  --widget-color: #3c4048;
+  --focus-color: var(--accent);
+  --text-color: var(--text);
+}
 
-    /* instructions */
+.lil-gui.autoPlace {
+  right: 0;
+}
 
-    .instructions-modal {
-      display: none;
-      position: fixed;
-      z-index: 1;
-      left: 0;
-      top: 0;
-      padding: 10px;
-      background-color: rgb(0, 0, 0);
-      background-color: rgba(0, 0, 0, 0.3);
-    }
+.lil-gui .title {
+  background-color: #2a2e36;
+}
 
-    .instructions-content,
-    .minimized-content {
-      position: relative;
-      background-color: rgba(0, 0, 0, 0.3);
-      border: 1px solid #333;
-      box-sizing: border-box;
-      color: #ccc;
-    }
+.lil-gui .lil-gui>.children {
+  margin-left: var(--folder-indent);
+}
 
-    .instructions-content {
-      padding: 16px;
-      padding-top: 30px;
-      padding-bottom: 20px;
-      padding-right: 40px;
-    }
+.lil-gui .allow-touch-styles {
+  border-left: 1px solid var(--widget-color);
+}
 
-    .minimized-content {
-      padding-left: 30px;
-      padding-bottom: 20px;
-      padding: 2px;
-      width: 36px;
-      height: 40px;
-    }
+.lil-gui .lil-gui .lil-gui>.children {
+  margin-left: var(--folder-indent);
+  border-left: none;
+}
 
-    .control-btn {
-      position: absolute;
-      font-family: Monospaced;
-      color: #fff;
-      top: 4px;
-      left: 25px;
-      font-size: 24px;
-    }
+/* instructions */
 
-    .control-btn:hover,
-    .control-btn:focus {
-      text-decoration: none;
-      cursor: pointer;
-    }
+.instructions-modal {
+  display: none;
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.3);
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+.instructions-content,
+.minimized-content {
+  position: relative;
+  background-color: rgba(18, 20, 26, 0.85);
+  border: 1px solid var(--frame);
+  box-sizing: border-box;
+  color: var(--muted);
+}
 
-    .leftcol {
-      color: #fff;
-    }
+.instructions-content {
+  padding: 16px;
+  padding-top: 30px;
+  padding-bottom: 20px;
+  padding-right: 40px;
+}
 
-    table,
-    th,
-    td {
-      border: 1px solid black;
-      padding: 6px;
-      text-align: left;
-    }
+.minimized-content {
+  padding-left: 30px;
+  padding-bottom: 20px;
+  padding: 2px;
+  width: 36px;
+  height: 40px;
+}
 
-    th {
-      background-color: #f2f2f2;
-    }
+.control-btn {
+  position: absolute;
+  font-family: monospace;
+  color: #fff;
+  top: 4px;
+  left: 25px;
+  font-size: 24px;
+}
 
-    #mobile-instructions {
-      display: none;
-    }
+.control-btn:hover,
+.control-btn:focus {
+  text-decoration: none;
+  cursor: pointer;
+}
 
-    @media screen and (max-width: 600px) {
-      #laptop-instructions {
-        display: none;
-      }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
 
-      #mobile-instructions {
-        display: block;
-      }
-    }
+.leftcol {
+  color: var(--text);
+}
+
+table,
+th,
+td {
+  border: 1px solid #222;
+  padding: 6px;
+  text-align: left;
+}
+
+#mobile-instructions {
+  display: none;
+}
+
+@media screen and (max-width: 600px) {
+  #brand {
+    max-width: 55vw;
+  }
+
+  #info {
+    left: 8vw;
+    right: 8vw;
+    top: 64px;
+    font-size: 13px;
+  }
+
+  #laptop-instructions {
+    display: none;
+  }
+
+  #mobile-instructions {
+    display: block;
+  }
+}

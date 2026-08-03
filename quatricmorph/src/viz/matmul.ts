@@ -7,6 +7,8 @@ import { getInitFunc } from './init.js'
 import { applyInPlaceEpilog_, POINTWISE } from './epilog.js'
 import { setElemScale, grid } from './sizing.js'
 import { ensureChildCounts } from './constants.js'
+import { validateMatmulDims } from '../math/validate.js'
+import { gridRuledLinesFromParams, placeOperands } from '../layout/grid-ruled-lines.js'
 
 export class MatMul {
 
@@ -26,8 +28,10 @@ export class MatMul {
     this.D = width(params.left)
     this.W = width(params.right)
 
-    if (this.D != height(params.right)) {
-      console.log(`HEY left width ${this.D} != right height ${height(params.right)}`)
+    const dimCheck = validateMatmulDims(this.H, this.D, height(params.right), this.W)
+    if (!dimCheck.ok) {
+      // VIZ-01: fail before any leaf/Three objects are created
+      throw new Error(dimCheck.message)
     }
 
     this.initLeft()
@@ -232,47 +236,43 @@ export class MatMul {
     this.setRowGuides()
   }
 
+  /** Shared GridRuledLines3D placement for A/B/C planes (VIZ-03 / VIZ-04). */
+  getPlanePlacement() {
+    const gridCfg = gridRuledLinesFromParams({
+      gap: this.params.layout.gap,
+      cellSize: this.params.layout.cellSize ?? 1,
+    })
+    return placeOperands(this.H, this.D, this.W, gridCfg, {
+      polarity: this.params.layout.polarity.startsWith('positive') ? 'positive' : 'negative',
+      leftPlacement: this.params.layout['left placement'].startsWith('left') ? 'left' : 'right',
+      rightPlacement: this.params.layout['right placement'].startsWith('top') ? 'top' : 'bottom',
+      resultPlacement: this.params.layout['result placement'].startsWith('front') ? 'front' : 'back',
+      leftScatter: this.getLeftScatter(),
+      rightScatter: this.getRightScatter(),
+    })
+  }
+
   initLeftViz() {
     this.left.initViz()
-    if (this.params.layout.polarity.startsWith('positive')) {
-      this.left.group.rotation.y = -Math.PI / 2
-      this.left.group.position.x = this.params.layout['left placement'].startsWith('left') ?
-        -this.getLeftScatter() :
-        this.getExtent().x + this.left.getExtent().z + this.getLeftScatter()
-    } else { // negative
-      this.left.group.rotation.y = Math.PI / 2
-      this.left.group.position.z = this.getExtent().z
-      this.left.group.position.x = this.params.layout['left placement'].startsWith('left') ?
-        -(this.left.getExtent().z + this.getLeftScatter()) :
-        this.getExtent().x + this.getLeftScatter()
-    }
+    const { A } = this.getPlanePlacement()
+    util.updateProps(this.left.group.position, A.position)
+    util.updateProps(this.left.group.rotation, A.rotation)
     this.group.add(this.left.group)
   }
 
   initRightViz() {
     this.right.initViz()
-    if (this.params.layout.polarity.startsWith('positive')) {
-      this.right.group.rotation.x = Math.PI / 2
-      this.right.group.position.y = this.params.layout['right placement'].startsWith('top') ?
-        -this.getRightScatter() :
-        this.getExtent().y + this.right.getExtent().z + this.getRightScatter()
-    } else { // negative
-      this.right.group.rotation.x = -Math.PI / 2
-      this.right.group.position.z = this.getExtent().z
-      this.right.group.position.y =
-        this.params.layout['right placement'].startsWith('top') ?
-          -(this.right.getExtent().z + this.getRightScatter()) :
-          this.getExtent().y + this.getRightScatter()
-    }
+    const { B } = this.getPlanePlacement()
+    util.updateProps(this.right.group.position, B.position)
+    util.updateProps(this.right.group.rotation, B.rotation)
     this.group.add(this.right.group)
   }
 
   initResultViz() {
     this.result.initViz()
-    this.result.group.position.z =
-      this.params.layout['result placement'].startsWith('back') ?
-        this.getExtent().z :
-        0
+    const { C } = this.getPlanePlacement()
+    util.updateProps(this.result.group.position, C.position)
+    util.updateProps(this.result.group.rotation, C.rotation)
     this.group.add(this.result.group)
   }
 

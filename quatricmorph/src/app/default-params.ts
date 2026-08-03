@@ -1,17 +1,17 @@
 // @ts-nocheck
 import * as viz from '../viz.js'
 
-/** Initial visualization params (single-mm default). */
+/** Initial visualization params — Quatricmorph MVP default example. */
 export function createDefaultParams() {
   return {
-    expr: 'L @ R',
-    name: 'L @ R',
+    expr: 'A @ B',
+    name: 'C',
     epilog: viz.default_epilog,
     left: viz.defaultLeft(),
     right: viz.defaultRight(),
     anim: {
       fuse: 'none',
-      speed: 20,
+      speed: 12,
       'hide inputs': false,
       alg: 'none',
       spin: 0,
@@ -20,6 +20,7 @@ export function createDefaultParams() {
     layout: {
       scheme: 'blocks',
       gap: 4,
+      cellSize: 1,
       scatter: 0,
       molecule: 1,
       blast: 0,
@@ -35,6 +36,12 @@ export function createDefaultParams() {
       'magnification': 7,
       'interior spotlight': false,
       axes: false,
+      'show values': true,
+      'show frames': true,
+      'show minor grid': true,
+      'show major grid': true,
+      'show axis labels': true,
+      'show mul guides': true,
     },
     viz: {
       sensitivity: 'global',
@@ -46,8 +53,9 @@ export function createDefaultParams() {
       'hue gap': 0.74,
       'hue spread': 0.04,
     },
-    diag: {
-      url: '',
+    mvp: {
+      syncBk: true,
+      cameraPreset: 'volume',
     },
     cam: viz.defaultCam(),
   }

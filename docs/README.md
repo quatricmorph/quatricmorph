@@ -4,7 +4,8 @@
 | --- | --- |
 | [PRODUCT_BRIEF.md](PRODUCT_BRIEF.md) | Short product thesis |
 | [PRODUCT_ARCHITECTURE_v1.md](PRODUCT_ARCHITECTURE_v1.md) | Full platform architecture |
-| [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) | Visualization MVP system architecture |
+| [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) | Visualization MVP system architecture (detailed) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Implemented viz MVP architecture (data flow, modules) |
 | [ROADMAP.md](ROADMAP.md) | Phased delivery |
 | [TESTING.md](TESTING.md) | Test commands and layers |
 | [requirements/PREREQUISITES.md](requirements/PREREQUISITES.md) | Gate before autonomous coding |

@@ -27,7 +27,7 @@ Status legend: `[ ]` open · `[x]` done · `[~]` partial
 
 - [x] Vitest installed and `npm test` script present
 - [x] Seed tests for pure viz math (`Array2D`, `genExpr` / defaults)
-- [ ] Seed tests for URL param compress/round-trip (`util/params`)
+- [x] Seed tests for URL param compress/round-trip (`util/params`)
 - [ ] Golden fixture policy documented for sample matrices
 - [ ] Visual/smoke checklist for manual Three.js verification
 - [x] `npm test` and `npm run build` both green on scaffold
@@ -38,9 +38,9 @@ Pick **one** active track. Do not mix platform Rust work with viz MVP unless exp
 
 ### Track A — Visualization MVP (recommended next)
 
-- [ ] Requirement IDs in `VIZ_MVP.md` prioritized for sprint
-- [ ] MarginGrid3D / frame contracts agreed (from `prompts.md`)
-- [ ] Out-of-scope list enforced (no attention/LoRA/model loading in UI)
+- [x] Requirement IDs in `VIZ_MVP.md` prioritized for sprint
+- [x] GridRuledLines3D / frame contracts agreed (from `prompts.md`)
+- [x] Out-of-scope list enforced (no attention/LoRA/model loading in UI)
 
 ### Track B — Platform Phase 1 Inspect (later)
 

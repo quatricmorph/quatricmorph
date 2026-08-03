@@ -36,5 +36,9 @@ npm run build      # tsc && vite build
 
 - `src/viz/__tests__/array2d.test.ts`
 - `src/viz/__tests__/expr.test.ts`
+- `src/math/__tests__/matmul.test.ts`
+- `src/layout/__tests__/grid-ruled-lines.test.ts`
+- `src/interaction/__tests__/interaction.test.ts`
+- `src/util/__tests__/params.test.ts`
 
 Expand before large refactors of `Mat` / `MatMul`.

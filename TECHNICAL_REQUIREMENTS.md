@@ -67,7 +67,7 @@ Row Vector @ Matrix → Row Vector
 Row Vector @ Column Vector → Scalar
 ```
 
-The defining feature of the MVP is a shared **3D margin grid**.
+The defining feature of the MVP is shared **3D grid ruled lines**.
 
 Every matrix, vector, scalar, tensor frame, value marker, label, multiplication guide, and result must align to this shared spatial grid.
 
@@ -184,7 +184,7 @@ Describe:
 * The first MVP
 * The source project being transformed
 * The value of spatial matrix visualization
-* The role of the 3D margin grid
+* The role of the 3D grid ruled lines
 * The primary user workflow
 * The intended learning and inspection use cases
 
@@ -201,7 +201,7 @@ At minimum include:
 * Correct matrix multiplication
 * Spatially consistent visualization
 * Matrix, vector, and scalar support
-* Shared 3D margin-grid alignment
+* Shared 3D grid-ruled-lines alignment
 * Interactive calculation exploration
 * Deterministic animation
 * Shareable application state
@@ -455,12 +455,12 @@ Do not allow different modules to define conflicting coordinate conventions.
 
 ---
 
-## 11. 3D Margin-Grid Requirements
+## 11. 3D Grid-Ruled-Lines Requirements
 
 Define a reusable spatial-layout abstraction named conceptually:
 
 ```text
-MarginGrid3D
+GridRuledLines3D
 ```
 
 It must control:
@@ -494,7 +494,7 @@ Define requirements for:
 * Grid geometry disposal
 * Camera-fit bounds
 
-Every visible mathematical object must derive its world position from the margin-grid system.
+Every visible mathematical object must derive its world position from the grid-ruled-lines system.
 
 Prohibit arbitrary per-shape placement constants outside the layout subsystem.
 
@@ -1013,7 +1013,7 @@ src/
 
   layout/
     coordinate-system.js
-    margin-grid-3d.js
+    grid-ruled-lines-3d.js
     tensor-layout.js
     matmul-layout.js
 
@@ -1366,7 +1366,7 @@ Use prefixes such as:
 ```text
 QM-FR-001    Functional Requirement
 QM-MATH-001  Mathematical Requirement
-QM-GRID-001  Margin-Grid Requirement
+QM-GRID-001  Grid-Ruled-Lines Requirement
 QM-REN-001   Rendering Requirement
 QM-INT-001   Interaction Requirement
 QM-ANI-001   Animation Requirement
@@ -1485,7 +1485,7 @@ At minimum require that:
 3. Compatible matrices can be entered and visualized.
 4. Invalid dimensions produce a clear error.
 5. Matrix, vector, and scalar outputs render correctly.
-6. Every tensor aligns with the shared 3D margin grid.
+6. Every tensor aligns with shared 3D grid ruled lines.
 7. `I`, `J`, and `K` dimensions align consistently.
 8. Tensor frames and labels remain attached.
 9. Hover metadata is correct.
@@ -1562,7 +1562,7 @@ Canonical Tensor State
     ↓
 Matrix Multiplication
     ↓
-Margin-Grid Layout
+Grid-Ruled-Lines Layout
     ↓
 Three.js Scene Construction
     ↓

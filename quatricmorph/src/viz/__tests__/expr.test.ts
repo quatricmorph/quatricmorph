@@ -6,9 +6,10 @@ describe('defaults', () => {
   it('keeps left/right contraction dimension aligned', () => {
     const left = defaultLeft()
     const right = defaultRight()
-    expect(left.w).toBe(default_dims.j)
-    expect(right.h).toBe(default_dims.j)
     expect(left.w).toBe(right.h)
+    expect(left.name).toBe('A')
+    expect(right.name).toBe('B')
+    expect(default_dims.i).toBe(2)
   })
 })
 
@@ -29,5 +30,14 @@ describe('genExpr', () => {
       right: { name: 'R', matmul: false },
     })
     expect(expr).toBe('out = L @ R')
+  })
+
+  it('renders MVP C = A @ B', () => {
+    const expr = genExpr({
+      name: 'C',
+      left: { name: 'A', matmul: false },
+      right: { name: 'B', matmul: false },
+    })
+    expect(expr).toBe('C = A @ B')
   })
 })

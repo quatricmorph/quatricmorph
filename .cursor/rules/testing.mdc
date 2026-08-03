@@ -8,7 +8,7 @@ alwaysApply: false
 
 - Unit tests: Vitest under `src/**/__tests__/` or `*.test.ts`.
 - No network in default unit tests.
-- Prefer testing `Array2D`, expr, params compress/round-trip, and future MarginGrid math.
+- Prefer testing `Array2D`, expr, params compress/round-trip, and future GridRuledLines math.
 - Name cases with requirement IDs when useful (`VIZ-02`).
 - Commands from `quatricmorph/`: `npm test`, `npm run test:watch`, `npm run build`.
 - Do not require WebGL in unit tests.

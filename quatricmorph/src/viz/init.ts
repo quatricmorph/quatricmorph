@@ -29,7 +29,7 @@ export const INIT_FUNCS = {
   diff: (i, j) => i == j ? 1 : i == j + 1 ? -1 : 0,
 }
 
-export const INITS = Object.keys(INIT_FUNCS).concat(['url', 'expr'])
+export const INITS = Object.keys(INIT_FUNCS).concat(['url', 'expr', 'values'])
 
 const USE_RANGE = ['rows', 'cols', 'row major', 'col major', 'uniform', 'gaussian']
 const USE_DROPOUT = USE_RANGE.concat(['pt linear'])
@@ -77,10 +77,24 @@ function tryEvalInitExpr(expr) {
 }
 
 export function getInitFunc(init_params) {
-  const { init, min, max, dropout, url, expr } = init_params
+  const { init, min, max, dropout, url, expr, valuesText } = init_params
+  let valuesInit = null
+  if (init == 'values') {
+    // Prefer valuesText (URL/copyTree-safe string). Fallback: values 2D/flat.
+    const { parseMatrixText } = requireValuesParse()
+    let rows = null
+    if (typeof valuesText === 'string' && valuesText.trim()) {
+      const parsed = parseMatrixText(valuesText)
+      if (parsed.ok) rows = parsed.data
+    } else if (init_params.values) {
+      rows = coerceValuesGrid(init_params.values, init_params.h, init_params.w)
+    }
+    valuesInit = (i, j) => (rows && rows[i] && rows[i][j] !== undefined ? +rows[i][j] : 0)
+  }
   const f = INIT_FUNCS[init] ||
     (init == 'url' && tryURLInit(url)) ||
-    (init == 'expr' && tryEvalInitExpr(expr))
+    (init == 'expr' && tryEvalInitExpr(expr)) ||
+    valuesInit
   if (!f) {
     console.log(init == 'url' ?
       `'can't load from URL '${url}'` :
@@ -94,6 +108,47 @@ export function getInitFunc(init_params) {
     (i, j, h, w) => Math.random() > dropout ? scaled(i, j, h, w) : 0 :
     scaled
   return sparse
+}
+
+function requireValuesParse() {
+  // Lazy import-free helpers duplicated lightly to avoid circular deps in @ts-nocheck module
+  return {
+    parseMatrixText(text) {
+      const raw = String(text).trim()
+      if (!raw) return { ok: false }
+      const lines = raw.split(/\r?\n|;/).map(l => l.trim()).filter(Boolean)
+      const data = []
+      let cols = -1
+      for (const line of lines) {
+        const parts = line.split(/[,\s]+/).filter(Boolean)
+        const nums = parts.map(Number)
+        if (nums.some(n => !Number.isFinite(n))) return { ok: false }
+        if (cols < 0) cols = nums.length
+        else if (nums.length !== cols) return { ok: false }
+        data.push(nums)
+      }
+      return { ok: true, data }
+    },
+  }
+}
+
+function coerceValuesGrid(values, h, w) {
+  if (!values) return null
+  if (Array.isArray(values) && Array.isArray(values[0])) return values
+  // array-like object from unflatten, or flat array
+  const rows = []
+  for (let i = 0; i < h; i++) {
+    const row = []
+    for (let j = 0; j < w; j++) {
+      if (Array.isArray(values[0]) || (values[i] && typeof values[i] === 'object')) {
+        row.push(+(values[i]?.[j] ?? 0))
+      } else {
+        row.push(+(values[i * w + j] ?? values[String(i * w + j)] ?? 0))
+      }
+    }
+    rows.push(row)
+  }
+  return rows
 }
 
 // pointwise funcs

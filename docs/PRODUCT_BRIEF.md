@@ -46,7 +46,7 @@ Before the full SafeTensors platform, this repository’s **active coding target
 A @ B = C
 ```
 
-in a shared 3D margin-grid coordinate system, built on the migrated `mm` / Three.js app under `quatricmorph/`.
+in a shared 3D grid-ruled-lines coordinate system, built on the migrated `mm` / Three.js app under `quatricmorph/`.
 
 See [requirements/VIZ_MVP.md](requirements/VIZ_MVP.md) and root `prompts.md`.
 
