@@ -1,0 +1,15 @@
+[package]
+name = "q-cuda"
+description = "CUDA compute backend (interface only; hardware-unverified)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-gpu = { workspace = true }
+q-tensor-runtime = { workspace = true }
+serde = { workspace = true }

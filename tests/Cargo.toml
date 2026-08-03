@@ -1,0 +1,33 @@
+[package]
+name = "quatricmorph-integration-tests"
+description = "Cross-crate integration tests, including the Section 7 vertical slice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+q-source = { workspace = true }
+q-safetensors = { workspace = true }
+q-nsir = { workspace = true }
+q-architecture = { workspace = true }
+q-catalog = { workspace = true }
+q-weightql = { workspace = true }
+q-statistics = { workspace = true }
+q-tiles = { workspace = true }
+q-cache = { workspace = true }
+q-gpu = { workspace = true }
+q-cuda = { workspace = true }
+q-tensor-runtime = { workspace = true }
+q-tileset = { workspace = true }
+q-gltf = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

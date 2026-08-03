@@ -18,6 +18,7 @@ members = [
     "crates/q-cuda",
     "crates/q-daemon",
     "crates/q-cli",
+    "tests",
 ]
 
 [workspace.package]

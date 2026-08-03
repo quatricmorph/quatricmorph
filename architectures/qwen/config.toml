@@ -1,9 +1,0 @@
-[model]
-name = "qwen"
-version = "1.0"
-description = "Configuration for qwen architecture"
-
-[layers]
-attention = true
-feed_forward = true
-layer_norm = true

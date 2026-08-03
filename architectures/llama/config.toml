@@ -1,9 +1,0 @@
-[model]
-name = "llama"
-version = "1.0"
-description = "Configuration for llama architecture"
-
-[layers]
-attention = true
-feed_forward = true
-layer_norm = true

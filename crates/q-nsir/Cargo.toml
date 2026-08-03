@@ -1,0 +1,15 @@
+[package]
+name = "q-nsir"
+description = "Metadata Plane: NSIR canonical semantic normalization and address grammar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-architecture = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

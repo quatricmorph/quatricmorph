@@ -1,0 +1,22 @@
+[package]
+name = "q-weightql"
+description = "Metadata Plane: WeightQL tokenizer, parser, resolver, shape checker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-expression = { workspace = true }
+q-nsir = { workspace = true }
+q-catalog = { workspace = true }
+q-safetensors = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -1,0 +1,27 @@
+# Qwen-family transformer — DECLARED, NOT IMPLEMENTED.
+#
+# ARCHITECTURE.md §4.2 lists this family, but only `generic` and `llama` are
+# implemented in this pass (see STATUS.md, requirement NSIR-006). This file
+# exists so that adding the family is a contained addition — fill in [[aliases]]
+# and [[rules]] following architectures/llama/plugin.toml, then flip
+# `implemented` to true.
+#
+# Until then the registry reports this plugin as declared-but-unimplemented and
+# falls back to `generic`, which returns role `unknown` for anything it has not
+# been taught. It never guesses.
+
+[plugin]
+id = "qwen"
+display_name = "Qwen-family transformer"
+priority = 100
+implemented = false
+nsir_version = 1
+notes = "Rule table not written. NSIR-006."
+
+[match]
+model_types = ["qwen2", "qwen3"]
+architectures = ["Qwen2ForCausalLM", "Qwen3ForCausalLM"]
+
+[naming]
+stack = "language"
+layer_segment = "layers"

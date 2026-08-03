@@ -1,9 +1,0 @@
-[model]
-name = "kimi"
-version = "1.0"
-description = "Configuration for kimi architecture"
-
-[layers]
-attention = true
-feed_forward = true
-layer_norm = true

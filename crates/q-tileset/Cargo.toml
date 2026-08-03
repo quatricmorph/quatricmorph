@@ -1,0 +1,15 @@
+[package]
+name = "q-tileset"
+description = "Visualization Plane: 3D Tiles tileset.json generation (interface only)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-tensor-runtime = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

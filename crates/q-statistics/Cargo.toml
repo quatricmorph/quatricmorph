@@ -1,0 +1,13 @@
+[package]
+name = "q-statistics"
+description = "Tensor Tile Plane: CPU reference statistics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+serde = { workspace = true }

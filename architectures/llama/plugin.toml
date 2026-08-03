@@ -1,0 +1,292 @@
+# Llama-family resolver — ARCHITECTURE.md §4.2.
+#
+# This is the one named architecture implemented in this pass. It extends the
+# generic convention with: attention/MLP biases, MoE expert addressing, rotary
+# buffers, and the contextual aliases of ARCHITECTURE.md §6.2 (`Q`, `K`, `V`,
+# `O`, `MLP.down`, `Expert[l,e].up`, and the deliberately ambiguous `Att`).
+#
+# Adding another family is a contained addition: copy this file, change
+# [plugin].id, [match], and the rule table. No Rust changes are required unless
+# the family needs a structural concept this schema cannot express.
+
+[plugin]
+id = "llama"
+display_name = "Llama-family transformer"
+priority = 100
+implemented = true
+nsir_version = 1
+
+[match]
+model_types = ["llama"]
+architectures = ["LlamaForCausalLM", "LlamaModel"]
+
+[naming]
+stack = "language"
+layer_segment = "layers"
+expert_segment = "experts"
+
+# --- aliases (ARCHITECTURE.md §6.2) ------------------------------------------
+# `roles` with more than one entry is an *ambiguous* alias: resolution returns
+# the candidate list rather than silently choosing.
+
+[[aliases]]
+alias = "Q"
+roles = ["attention_query_projection"]
+
+[[aliases]]
+alias = "K"
+roles = ["attention_key_projection"]
+
+[[aliases]]
+alias = "V"
+roles = ["attention_value_projection"]
+
+[[aliases]]
+alias = "O"
+roles = ["attention_output_projection"]
+
+[[aliases]]
+alias = "Att"
+roles = [
+  "attention_query_projection",
+  "attention_key_projection",
+  "attention_value_projection",
+  "attention_output_projection",
+]
+
+[[aliases]]
+alias = "Attn"
+roles = [
+  "attention_query_projection",
+  "attention_key_projection",
+  "attention_value_projection",
+  "attention_output_projection",
+]
+
+[[aliases]]
+alias = "MLP.gate"
+roles = ["mlp_gate_projection"]
+
+[[aliases]]
+alias = "MLP.up"
+roles = ["mlp_up_projection"]
+
+[[aliases]]
+alias = "MLP.down"
+roles = ["mlp_down_projection"]
+
+[[aliases]]
+alias = "MLP"
+roles = ["mlp_gate_projection", "mlp_up_projection", "mlp_down_projection"]
+
+[[aliases]]
+alias = "Expert.gate"
+roles = ["moe_expert_gate_projection"]
+
+[[aliases]]
+alias = "Expert.up"
+roles = ["moe_expert_up_projection"]
+
+[[aliases]]
+alias = "Expert.down"
+roles = ["moe_expert_down_projection"]
+
+[[aliases]]
+alias = "Norm"
+roles = ["input_layernorm", "post_attention_layernorm"]
+
+[[aliases]]
+alias = "Embed"
+roles = ["token_embedding"]
+
+[[aliases]]
+alias = "Head"
+roles = ["lm_head"]
+
+# --- rules -------------------------------------------------------------------
+
+[[rules]]
+name = "model.embed_tokens.weight"
+match_kind = "exact"
+role = "token_embedding"
+operation = "token_embedding"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "model.norm.weight"
+match_kind = "exact"
+role = "final_norm"
+operation = "final_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+[[rules]]
+name = "lm_head.weight"
+match_kind = "exact"
+role = "lm_head"
+operation = "output_projection"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "self_attn.q_proj.weight"
+match_kind = "suffix"
+role = "attention_query_projection"
+component = "attention"
+operation = "query_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.q_proj.bias"
+match_kind = "suffix"
+role = "attention_query_projection"
+component = "attention"
+operation = "query_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.k_proj.weight"
+match_kind = "suffix"
+role = "attention_key_projection"
+component = "attention"
+operation = "key_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.k_proj.bias"
+match_kind = "suffix"
+role = "attention_key_projection"
+component = "attention"
+operation = "key_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.v_proj.weight"
+match_kind = "suffix"
+role = "attention_value_projection"
+component = "attention"
+operation = "value_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.v_proj.bias"
+match_kind = "suffix"
+role = "attention_value_projection"
+component = "attention"
+operation = "value_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.o_proj.weight"
+match_kind = "suffix"
+role = "attention_output_projection"
+component = "attention"
+operation = "output_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.q_norm.weight"
+match_kind = "suffix"
+role = "attention_query_norm"
+component = "attention"
+operation = "query_normalization"
+parameter = "weight"
+axes = ["head_channel"]
+
+[[rules]]
+name = "self_attn.k_norm.weight"
+match_kind = "suffix"
+role = "attention_key_norm"
+component = "attention"
+operation = "key_normalization"
+parameter = "weight"
+axes = ["head_channel"]
+
+[[rules]]
+name = "mlp.gate_proj.weight"
+match_kind = "suffix"
+role = "mlp_gate_projection"
+component = "mlp"
+operation = "gate_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.up_proj.weight"
+match_kind = "suffix"
+role = "mlp_up_projection"
+component = "mlp"
+operation = "up_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.down_proj.weight"
+match_kind = "suffix"
+role = "mlp_down_projection"
+component = "mlp"
+operation = "down_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.gate.weight"
+match_kind = "suffix"
+role = "moe_router"
+component = "router"
+operation = "expert_routing"
+parameter = "weight"
+axes = ["expert", "hidden_channel"]
+
+[[rules]]
+name = "gate_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_gate_projection"
+component = "moe"
+operation = "gate_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "up_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_up_projection"
+component = "moe"
+operation = "up_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "down_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_down_projection"
+component = "moe"
+operation = "down_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "input_layernorm.weight"
+match_kind = "suffix"
+role = "input_layernorm"
+component = "normalization"
+operation = "input_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+[[rules]]
+name = "post_attention_layernorm.weight"
+match_kind = "suffix"
+role = "post_attention_layernorm"
+component = "normalization"
+operation = "post_attention_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]

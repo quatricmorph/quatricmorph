@@ -1,0 +1,137 @@
+# Generic transformer resolver — ARCHITECTURE.md §4.2.
+#
+# This plugin recognises the *HuggingFace transformers naming convention* and
+# nothing beyond it. It is the fallback when no named architecture matches.
+#
+# It is explicitly allowed — and expected — to return `unknown`. A name this
+# table does not list resolves to role `unknown`, never to a guess. Nothing here
+# or in q-nsir infers a role from a tensor's shape.
+
+[plugin]
+id = "generic"
+display_name = "Generic transformer (HuggingFace naming convention)"
+# Lowest priority: any named architecture that matches wins over this one.
+priority = 0
+implemented = true
+nsir_version = 1
+notes = "Structural resolution only. Family-specific naming needs its own plugin."
+
+[match]
+# The generic plugin is the fallback and matches nothing by name; the registry
+# selects it when no other plugin claims the model.
+model_types = []
+architectures = []
+
+[naming]
+stack = "language"
+# Segment that introduces a repeated layer stack, e.g. `model.layers.10.`
+layer_segment = "layers"
+
+# --- rules -------------------------------------------------------------------
+# `suffix` is matched against the tensor name after the layer prefix is stripped
+# (or against the whole name for non-layer tensors).
+
+[[rules]]
+name = "model.embed_tokens.weight"
+match_kind = "exact"
+role = "token_embedding"
+operation = "token_embedding"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "model.norm.weight"
+match_kind = "exact"
+role = "final_norm"
+operation = "final_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+[[rules]]
+name = "lm_head.weight"
+match_kind = "exact"
+role = "lm_head"
+operation = "output_projection"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "self_attn.q_proj.weight"
+match_kind = "suffix"
+role = "attention_query_projection"
+component = "attention"
+operation = "query_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.k_proj.weight"
+match_kind = "suffix"
+role = "attention_key_projection"
+component = "attention"
+operation = "key_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.v_proj.weight"
+match_kind = "suffix"
+role = "attention_value_projection"
+component = "attention"
+operation = "value_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.o_proj.weight"
+match_kind = "suffix"
+role = "attention_output_projection"
+component = "attention"
+operation = "output_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.gate_proj.weight"
+match_kind = "suffix"
+role = "mlp_gate_projection"
+component = "mlp"
+operation = "gate_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.up_proj.weight"
+match_kind = "suffix"
+role = "mlp_up_projection"
+component = "mlp"
+operation = "up_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.down_proj.weight"
+match_kind = "suffix"
+role = "mlp_down_projection"
+component = "mlp"
+operation = "down_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "input_layernorm.weight"
+match_kind = "suffix"
+role = "input_layernorm"
+component = "normalization"
+operation = "input_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+[[rules]]
+name = "post_attention_layernorm.weight"
+match_kind = "suffix"
+role = "post_attention_layernorm"
+component = "normalization"
+operation = "post_attention_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
