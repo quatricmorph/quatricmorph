@@ -211,7 +211,7 @@ fn trillion_parameter_manifest_indexes_and_queries_within_a_bounded_budget() {
         TensorRole::MoeExpertDownProjection
     );
 
-    let mut catalog = Catalog::open_in_memory().unwrap();
+    let catalog = Catalog::open_in_memory().unwrap();
     let row = catalog
         .upsert_resolved(
             model_id,

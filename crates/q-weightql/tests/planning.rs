@@ -33,7 +33,7 @@ fn catalog() -> (Catalog, String) {
         out.descriptors.clone(),
     )
     .unwrap();
-    let mut cat = Catalog::open_in_memory().unwrap();
+    let cat = Catalog::open_in_memory().unwrap();
     cat.upsert_resolved(
         out.model_id,
         &out.manifest.root_uri,

@@ -1,8 +1,35 @@
 [package]
 name = "q-daemon"
+description = "Local HTTP API over the Quatricmorph query layer"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-safetensors = { workspace = true }
+q-nsir = { workspace = true }
+q-catalog = { workspace = true }
+q-weightql = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lib]
+name = "q_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "q-daemon"
+path = "src/main.rs"

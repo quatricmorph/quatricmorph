@@ -1,8 +1,26 @@
 [package]
 name = "q-cli"
+description = "Quatricmorph command-line interface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+q-safetensors = { workspace = true }
+q-nsir = { workspace = true }
+q-catalog = { workspace = true }
+q-weightql = { workspace = true }
+q-gpu = { workspace = true }
+q-tensor-runtime = { workspace = true }
+q-cuda = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[bin]]
+name = "q"
+path = "src/main.rs"

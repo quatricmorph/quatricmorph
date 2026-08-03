@@ -36,6 +36,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use schema::{now_unix, sql_err};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
 pub use job::{ConversionJob, JobKind, JobState};
 pub use schema::{migrate, CURRENT_SCHEMA_VERSION};
@@ -119,8 +120,15 @@ pub struct TensorFilter {
 }
 
 /// The metadata catalog.
+///
+/// The connection lives behind a `Mutex` so that `&Catalog` is `Sync`.
+/// `rusqlite::Connection` is `Send` but not `Sync` — it has interior
+/// mutability with no internal locking — and the daemon needs to share one
+/// catalog across concurrently-served requests. Serializing catalog access is
+/// the right trade here: every query is metadata-scale (microseconds), and the
+/// expensive work (byte-range reads) happens outside the lock.
 pub struct Catalog {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl Catalog {
@@ -141,11 +149,20 @@ impl Catalog {
         )
         .map_err(sql_err)?;
         migrate(&conn)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    fn conn(&self) -> MutexGuard<'_, Connection> {
+        // Poisoning would mean a prior catalog operation panicked mid-query.
+        // Recovering the guard is correct here: SQLite's own state is
+        // transactional, so a panicked reader cannot have left it inconsistent.
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn schema_version(&self) -> Result<u32> {
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
                 [],
@@ -163,7 +180,7 @@ impl Catalog {
     /// 10^5 round trips.
     #[allow(clippy::too_many_arguments)]
     pub fn upsert_model(
-        &mut self,
+        &self,
         model_id: ModelId,
         source_uri: &str,
         source_key: &str,
@@ -197,7 +214,8 @@ impl Catalog {
             imported_at: now_unix(),
         };
 
-        let tx = self.conn.transaction().map_err(sql_err)?;
+        let mut guard = self.conn();
+        let tx = guard.transaction().map_err(sql_err)?;
         tx.execute(
             "INSERT INTO models (model_id, source_uri, source_key, source_revision, source_hash,
                                  architecture, resolver_id, parameter_count, layer_count,
@@ -282,7 +300,7 @@ impl Catalog {
     /// Persist an NSIR-resolved model.
     #[allow(clippy::too_many_arguments)]
     pub fn upsert_resolved(
-        &mut self,
+        &self,
         model_id: ModelId,
         source_uri: &str,
         source_key: &str,
@@ -308,8 +326,8 @@ impl Catalog {
     // --- reads --------------------------------------------------------------
 
     pub fn list_models(&self) -> Result<Vec<ModelRow>> {
-        let mut stmt = self
-            .conn
+        let guard = self.conn();
+        let mut stmt = guard
             .prepare("SELECT * FROM models ORDER BY imported_at DESC, model_id")
             .map_err(sql_err)?;
         let rows = stmt
@@ -321,7 +339,7 @@ impl Catalog {
     }
 
     pub fn get_model(&self, model_id: &str) -> Result<Option<ModelRow>> {
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT * FROM models WHERE model_id = ?1",
                 params![model_id],
@@ -333,8 +351,8 @@ impl Catalog {
 
     /// Model → layer summaries. The hierarchy browse of ARCHITECTURE.md §9.
     pub fn list_layers(&self, model_id: &str) -> Result<Vec<LayerSummary>> {
-        let mut stmt = self
-            .conn
+        let guard = self.conn();
+        let mut stmt = guard
             .prepare(
                 "SELECT layer_index, COUNT(*), SUM(parameter_count), SUM(byte_length)
                  FROM tensors
@@ -359,7 +377,7 @@ impl Catalog {
     }
 
     pub fn get_tensor(&self, tensor_id: &str) -> Result<Option<TensorRow>> {
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT * FROM tensors WHERE tensor_id = ?1",
                 params![tensor_id],
@@ -378,8 +396,7 @@ impl Catalog {
         model_id: &str,
         canonical_name: &str,
     ) -> Result<Option<TensorRow>> {
-        let found = self
-            .conn
+        let found = self.conn()
             .query_row(
                 "SELECT * FROM tensors WHERE model_id = ?1 AND canonical_name = ?2",
                 params![model_id, canonical_name],
@@ -390,7 +407,7 @@ impl Catalog {
         if found.is_some() {
             return Ok(found);
         }
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT * FROM tensors WHERE model_id = ?1 AND raw_name = ?2",
                 params![model_id, canonical_name],
@@ -408,8 +425,8 @@ impl Catalog {
         role: TensorRole,
         layer_index: Option<u32>,
     ) -> Result<Vec<TensorRow>> {
-        let mut stmt = self
-            .conn
+        let guard = self.conn();
+        let mut stmt = guard
             .prepare(
                 "SELECT * FROM tensors
                  WHERE model_id = ?1 AND role = ?2
@@ -456,7 +473,8 @@ impl Catalog {
         if let Some(n) = filter.limit {
             sql.push_str(&format!(" LIMIT {n}"));
         }
-        let mut stmt = self.conn.prepare(&sql).map_err(sql_err)?;
+        let guard = self.conn();
+        let mut stmt = guard.prepare(&sql).map_err(sql_err)?;
         let rows = match filter.layer_index {
             Some(layer) => stmt
                 .query_map(params![model_id, layer], tensor_from_row)
@@ -489,7 +507,7 @@ impl Catalog {
     }
 
     pub fn tensor_count(&self, model_id: &str) -> Result<u64> {
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT COUNT(*) FROM tensors WHERE model_id = ?1",
                 params![model_id],
@@ -499,7 +517,7 @@ impl Catalog {
     }
 
     pub fn unresolved_count(&self, model_id: &str) -> Result<u64> {
-        self.conn
+        self.conn()
             .query_row(
                 "SELECT COUNT(*) FROM tensors WHERE model_id = ?1 AND resolved = 0",
                 params![model_id],
@@ -511,7 +529,7 @@ impl Catalog {
     // --- jobs ---------------------------------------------------------------
 
     pub fn insert_job(&self, job: &ConversionJob) -> Result<()> {
-        self.conn
+        self.conn()
             .execute(
                 "INSERT INTO conversion_jobs (job_id, model_id, kind, state, created_at,
                      updated_at, units_total, units_done, resume_token, error_message, requirement)
@@ -535,8 +553,7 @@ impl Catalog {
     }
 
     pub fn update_job(&self, job: &ConversionJob) -> Result<()> {
-        let n = self
-            .conn
+        let n = self.conn()
             .execute(
                 "UPDATE conversion_jobs SET state=?2, updated_at=?3, units_total=?4,
                      units_done=?5, resume_token=?6, error_message=?7, requirement=?8
@@ -560,8 +577,7 @@ impl Catalog {
     }
 
     pub fn get_job(&self, job_id: &str) -> Result<Option<ConversionJob>> {
-        let raw = self
-            .conn
+        let raw = self.conn()
             .query_row(
                 "SELECT * FROM conversion_jobs WHERE job_id = ?1",
                 params![job_id],
@@ -573,8 +589,8 @@ impl Catalog {
     }
 
     pub fn list_jobs(&self, model_id: &str) -> Result<Vec<ConversionJob>> {
-        let mut stmt = self
-            .conn
+        let guard = self.conn();
+        let mut stmt = guard
             .prepare("SELECT * FROM conversion_jobs WHERE model_id = ?1 ORDER BY created_at")
             .map_err(sql_err)?;
         let rows: Vec<Result<ConversionJob>> = stmt
@@ -702,7 +718,7 @@ mod tests {
 
         let resolved = ResolvedModel::build(&reg, Some("llama"), None, ds).unwrap();
         let model_id = ModelId::derive("local:test", "", "fp");
-        let mut cat = Catalog::open_in_memory().unwrap();
+        let cat = Catalog::open_in_memory().unwrap();
         cat.upsert_resolved(
             model_id,
             "/models/test",
@@ -943,7 +959,7 @@ mod tests {
                 8,
             )];
             let resolved = ResolvedModel::build(&reg, Some("llama"), None, ds).unwrap();
-            let mut cat = Catalog::open(&path).unwrap();
+            let cat = Catalog::open(&path).unwrap();
             cat.upsert_resolved(model_id, "/x", "local:x", "", "fp", "llama", None, &resolved)
                 .unwrap();
         }
