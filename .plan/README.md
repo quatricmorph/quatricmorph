@@ -1,0 +1,194 @@
+# `.plan/` — Quatricmorph MVP implementation plan
+
+## Purpose
+
+`.plan/` is the execution plan that takes Quatricmorph from **the repository as it
+stands today** to **the first working MVP** defined in `ARCHITECTURE.md` §18 and in
+the MVP acceptance criteria recorded in [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md).
+
+It is a **delta plan**, not a greenfield plan. The repository already contains a
+17-crate Rust workspace, three web applications, four JSON schemas, checked-in
+SafeTensors fixtures, eight ADRs, and a requirement-traceability document built
+from real test output. A plan that ignored that would be fiction. Every task in
+`tasks/` therefore starts from a cited file, symbol, or test that exists now.
+
+**This directory contains no code and mandates no change outside `.plan/`.**
+Where the plan concludes that a file outside `.plan/` is wrong — including
+`ARCHITECTURE.md` and `STATUS.md` — the correction is written as a *task*, not
+performed here.
+
+## Authoritative documents
+
+Precedence, highest first. Where two disagree, the higher one wins and the lower
+one gets a task to fix it.
+
+| Rank | Document | Authority |
+| --- | --- | --- |
+| 1 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Implementation architecture. Single source of truth. Untouched by this plan. |
+| 2 | [`../STATUS.md`](../STATUS.md) | What is actually built and tested. The factual baseline. |
+| 3 | [`MASTER_PLAN.md`](MASTER_PLAN.md) | Scope, phases, critical path, release criteria |
+| 4 | [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | MVP / extension point / future / non-goal boundary |
+| 5 | The remaining `.plan/*.md` architecture documents | Per-subsystem design |
+| 6 | `phases/*/README.md` | Phase entry and exit conditions |
+| 7 | `tasks/QM-XXXX-*/TASK.md` | Executable unit of work |
+
+`decisions/ADR-CANDIDATE-*.md` are **not** authoritative. They are proposals with
+a recommended default and a decision deadline. A task that depends on an
+undecided ADR candidate says so in its `Dependencies` section.
+
+## Document map
+
+| Document | Answers |
+| --- | --- |
+| [`MASTER_PLAN.md`](MASTER_PLAN.md) | What is the MVP, in what order, and when is it done |
+| [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | What is deliberately *not* in the MVP |
+| [`REPOSITORY_ANALYSIS.md`](REPOSITORY_ANALYSIS.md) | What the repository actually contains, verified |
+| [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) | How today's code is put together, and where it diverges from `ARCHITECTURE.md` |
+| [`TARGET_ARCHITECTURE.md`](TARGET_ARCHITECTURE.md) | The program boundaries the MVP must end with |
+| [`DATA_ARCHITECTURE.md`](DATA_ARCHITECTURE.md) | Four planes, IDs, cache keys, exactness, versioning |
+| [`GRID_ARCHITECTURE.md`](GRID_ARCHITECTURE.md) | The shared 3D grid ruler, N-D extension, sphere-block cells |
+| [`TILING_ARCHITECTURE.md`](TILING_ARCHITECTURE.md) | LOD ladder, block layout, `.qtile`, GLB, `tileset.json` |
+| [`CUDA_ARCHITECTURE.md`](CUDA_ARCHITECTURE.md) | RTX 3090 targeting, memory budgets, CPU fallback, determinism |
+| [`CESIUM_VIEWER_ARCHITECTURE.md`](CESIUM_VIEWER_ARCHITECTURE.md) | Viewer components, picking, exactness display, error states |
+| [`MATRIX_WORKSPACE_ARCHITECTURE.md`](MATRIX_WORKSPACE_ARCHITECTURE.md) | `mm` reuse, grid alignment, real-block matmul, state separation |
+| [`WEIGHTQL_ARCHITECTURE.md`](WEIGHTQL_ARCHITECTURE.md) | Grammar, AST, aliases, cost planning, execution tiers |
+| [`QUERY_UI_ARCHITECTURE.md`](QUERY_UI_ARCHITECTURE.md) | Chat, KaTeX, candidates, cost confirmation, cancellation |
+| [`API_CONTRACTS.md`](API_CONTRACTS.md) | Daemon routes, payloads, status codes, progress transport |
+| [`SCHEMA_PLAN.md`](SCHEMA_PLAN.md) | The four JSON schemas, `.qtile` binary format, versioning and migration |
+| [`MEMORY_BUDGET.md`](MEMORY_BUDGET.md) | Every buffer, as a formula with a configuration variable |
+| [`PERFORMANCE_PLAN.md`](PERFORMANCE_PLAN.md) | Benchmarks, budgets, and what is measured versus asserted |
+| [`SECURITY_MODEL.md`](SECURITY_MODEL.md) | File access, parsing, resource limits, sanitization, origin policy |
+| [`TEST_STRATEGY.md`](TEST_STRATEGY.md) | What is tested where, and which tests need which hardware |
+| [`MIGRATION_STRATEGY.md`](MIGRATION_STRATEGY.md) | Moving from today's layout to the target without breaking the baseline |
+| [`RISK_REGISTER.md`](RISK_REGISTER.md) | Ranked risks with owners, triggers, and mitigations |
+| [`REQUIREMENT_TRACEABILITY.md`](REQUIREMENT_TRACEABILITY.md) | Every requirement → tasks → verification |
+| [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md) | Task dependency edges, shared-file risk, integration gates |
+| [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) | Critical path, parallel lanes, hardware gating |
+| [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) | The 46 MVP acceptance criteria and their evidence |
+
+## Task numbering
+
+```text
+QM-XXXX-short-name/TASK.md
+```
+
+`XXXX` is a stable four-digit number. Numbers are allocated in blocks of ten per
+phase and are **never reused or renumbered** — a task that is abandoned becomes
+`Superseded` and keeps its number, because task IDs appear in commit messages,
+branch names, and `Dependencies` lists elsewhere in this plan.
+
+| Block | Phase |
+| --- | --- |
+| `QM-0001`–`QM-0009` | Phase 00 — Repository baseline and shared contracts |
+| `QM-0010`–`QM-0019` | Phase 01 — SafeTensors ingestion completion |
+| `QM-0020`–`QM-0029` | Phase 02 — Catalog and NSIR completion |
+| `QM-0030`–`QM-0039` | Phase 03 — Block runtime and compute |
+| `QM-0040`–`QM-0049` | Phase 04 — Tensor tiles, GLB, and tileset |
+| `QM-0050`–`QM-0059` | Phase 05 — Cesium model viewer |
+| `QM-0060`–`QM-0069` | Phase 06 — Grid matrix workspace |
+| `QM-0070`–`QM-0079` | Phase 07 — WeightQL and chat |
+| `QM-0080`–`QM-0089` | Phase 08 — Integration and performance |
+| `QM-0090`–`QM-0099` | Phase 09 — Documentation and release |
+
+## Status vocabulary
+
+Task status is recorded in the `## Status` section of each `TASK.md`.
+
+| Status | Meaning |
+| --- | --- |
+| `Undefined` | The task exists as a placeholder; its scope is not yet written |
+| `Ready` | Dependencies are `Complete`; an agent may start now |
+| `In Progress` | Claimed and being worked |
+| `Blocked` | A dependency, an ADR decision, or hardware is missing. The blocker must be named |
+| `Implemented` | Code exists and the acceptance criteria are believed met; verification has not run |
+| `Verified` | The verification plan ran and passed; evidence is recorded |
+| `Complete` | `Implemented` **and** `Verified`, and `STATUS.md` has been updated |
+| `Superseded` | Replaced by another task, which must be named |
+
+**A task is not `Complete` until it is both implemented and verified.** This
+mirrors the distinction `STATUS.md` already enforces between `Implemented` and
+`Verified`, and the reason is the same: this repository's credibility rests on
+never claiming a capability it has not exercised.
+
+**`Ready` is derived.** A `Blocked` task becomes `Ready` when every task ID in
+its `Dependencies` section has reached `Complete` and any ADR or hardware it
+names is available. The `## Status` field records the **current** state, not the
+transition — it always holds exactly one of the eight values above, on its own
+line, so it can be parsed. Any blocker is named on the line *below* the value.
+At the start of the plan, `QM-0001`, `QM-0002`, and `QM-0003` are `Ready`; every
+other task is `Blocked`.
+
+`Hardware-Unverified` is not a task status. It is a *requirement* status in
+`STATUS.md`, and it is what a CUDA task's requirement stays at when the task's
+code is written but no RTX 3090 has run it. Such a task sits at `Implemented`,
+never at `Verified`.
+
+## Dependency conventions
+
+* `Dependencies` lists task IDs that must reach `Complete` first. Not "should" —
+  must.
+* `Blocks` lists the inverse. The two must agree; [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md)
+  is generated by reading both directions and is the place where a disagreement
+  shows up.
+* A dependency on an **ADR candidate** is written as
+  `ADR-CANDIDATE-0XX (decision required)` and blocks the task at `Blocked` until
+  the ADR is promoted to `docs/decisions/ADR-0XX-*.md`.
+* A dependency on **hardware** is written as `Requires: RTX 3090` or
+  `Requires: Apple M-series GPU` in the `Parallelization` section.
+* Cross-phase dependencies are allowed and expected. Phases are a reading aid and
+  an integration gate, not a barrier.
+
+## How an autonomous agent selects the next task
+
+1. Read [`../STATUS.md`](../STATUS.md) first. It, not this plan, is the record of
+   what is built. If it disagrees with a task's `Repository Evidence`, stop and
+   raise the discrepancy — the plan is stale, and fixing the plan is the task.
+2. Read [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) and take the earliest task on
+   the critical path whose status is `Ready`.
+3. If no critical-path task is `Ready`, take any `Ready` task from a parallel
+   lane whose `Parallelization` section does not name a file already being edited
+   by another in-progress task.
+4. If a task requires hardware that is unavailable, do not start it. Set it
+   `Blocked` with the reason, and pick from the CUDA-free lane listed in
+   [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md).
+5. Before writing code, confirm every path in `Files Expected to Change` still
+   exists. If one does not, the plan is stale — fix the plan first.
+6. Follow [`../AGENTS.md`](../AGENTS.md). Its non-negotiable rules — notably
+   architecture §19 and "never claim semantic understanding of weights" — outrank
+   any convenience this plan might seem to offer.
+
+## How verification evidence is recorded
+
+Each `TASK.md` ends with `## Completion Evidence`. Before a task moves to
+`Verified`, that section must be filled in **in the task file itself** with:
+
+* the exact command that was run, copy-pasteable;
+* its output, or the decisive excerpt — test counts, benchmark numbers, byte
+  sizes;
+* the commit SHA the run was made against;
+* for anything visual, a file path to a screenshot or generated artifact;
+* for anything hardware-dependent, the device name and driver version.
+
+"Tests pass" is not evidence. `290 passed; 0 failed` with the command above it
+is. This is the standard `STATUS.md` already holds itself to, and tasks inherit
+it.
+
+When a task reaches `Complete`, its requirement rows in `../STATUS.md` are
+updated in the same pull request. A task that changes behaviour without updating
+`STATUS.md` is not `Complete`.
+
+## How plans are updated when repository facts change
+
+This plan cites line numbers, symbol names, and test names. Those drift.
+
+* **A citation that no longer resolves is a bug in this plan**, and fixing it
+  takes precedence over the task that discovered it.
+* When a task changes a file another task cites, the changing task updates the
+  citation as part of its own pull request. `DEPENDENCY_GRAPH.md` lists the
+  high-traffic files where this is most likely.
+* When `ARCHITECTURE.md` and this plan disagree, `ARCHITECTURE.md` wins and this
+  plan is corrected — **except** where a divergence has been deliberately
+  recorded in [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §"Recorded
+  divergences" with an ADR candidate attached. Those are open questions awaiting
+  a decision, not plan errors.
+* Adding a task is cheap and expected. Renumbering is forbidden.
