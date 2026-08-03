@@ -1,0 +1,422 @@
+// @ts-nocheck
+import * as THREE from 'three'
+import * as viz from '../viz.js'
+import * as util from '../util.js'
+import * as gui from '../gui.js'
+import { createDefaultParams } from './default-params.js'
+import { createUrlInfo, saveUrl as persistUrl, saveUrlInfo } from './url.js'
+import { createScene } from './scene.js'
+import { setupInstructions } from './instructions.js'
+
+/**
+ * Wire scene, params, input, animation, and GUI into a running mm viewer.
+ */
+export function createApp() {
+  const params = createDefaultParams()
+  const default_params = (() => {
+    const p = util.copyTree(params)
+    delete p.cam
+    return p
+  })()
+
+  function resetParams() {
+    Object.entries(util.copyTree(default_params)).forEach(([k, v]) => params[k] = v)
+    params.cam = viz.defaultCam()
+  }
+
+  function updateTitle() {
+    document.getElementById('info').innerHTML = viz.genExpr(params)
+  }
+
+  const url_info = createUrlInfo()
+  const saveUrl = () => persistUrl(params, url_info)
+
+  const {
+    aspect, fov, camera, pointer, raycaster, scene, renderer,
+    render_info, getContext, orbit, viewState,
+  } = createScene()
+
+  let obj
+  const getObj = () => obj
+
+  let cam_changing = false
+  let spin_stash = 0
+  let view_stash
+  let mag
+  let clientX = 0
+  let clientY = 0
+  let last_anim_alg = params.anim.alg
+  let last_anim_spin = params.anim.spin
+  let anim_pause = false
+  let anim_step = false
+
+  function animPause(p) {
+    anim_pause = p
+  }
+
+  function animStep() {
+    if (anim_pause) {
+      anim_step = true
+    }
+  }
+
+  const axes = util.axes()
+  function initAxes(enabled) {
+    if (enabled) {
+      scene.add(axes)
+    } else {
+      scene.remove(axes)
+    }
+  }
+
+  let camera_save_pending = false
+  let last_camera_save_request = 0
+  const requestCameraPositionSave = () => {
+    last_camera_save_request = performance.now()
+    if (!camera_save_pending) {
+      camera_save_pending = true
+      setTimeout(() => {
+        camera_save_pending = false
+        const t = performance.now()
+        if (t - last_camera_save_request > 250) {
+          saveUrl()
+        } else {
+          requestCameraPositionSave()
+        }
+      }, 250)
+    }
+  }
+
+  const updateSpotlight = () => {
+    if (!obj) {
+      return
+    }
+    if (mag) {
+      const mag_pointer = pointer.clone()
+      mag_pointer.y += params.deco['lens size'] / params.deco.magnification
+      raycaster.setFromCamera(mag_pointer, camera)
+      raycaster.far = Infinity
+    } else {
+      raycaster.far = 0
+    }
+    obj.updateLabels()
+  }
+
+  let label_update_pending = false
+  const requestLabelUpdate = (legends_only = false) => {
+    if (!label_update_pending) {
+      label_update_pending = true
+      setTimeout(() => {
+        label_update_pending = false
+        if (!obj) {
+          return
+        }
+        raycaster.setFromCamera(pointer, camera)
+        obj.setLegends()
+        if (!legends_only) {
+          updateSpotlight()
+        }
+      }, 10)
+    }
+  }
+
+  function initObj() {
+    let oldmag
+    if (obj) {
+      const oldsz = util.bbhwd(obj.getBoundingBox())
+      oldmag = oldsz.h + oldsz.w + oldsz.d
+      scene.remove(obj.group)
+      obj.disposeAll()
+    }
+
+    obj = new viz.MatMul(params, getContext())
+    obj.group.rotation.x = Math.PI
+    obj.center()
+
+    if (oldmag) {
+      const newsz = util.bbhwd(obj.getBoundingBox())
+      const newmag = newsz.h + newsz.w + newsz.d
+      const ratio = newmag / oldmag
+      if (ratio != 1) {
+        console.log(`HEY ratio ${ratio}`)
+        camera.position.set(camera.position.x * ratio, camera.position.y * ratio, camera.position.z * ratio)
+        orbit.update()
+        requestCameraPositionSave()
+      }
+    }
+
+    obj.setLegends()
+    obj.initAnimation()
+    scene.add(obj.group)
+    updateTitle()
+  }
+
+  orbit.addEventListener('start', () => {
+    spin_stash = params.anim.spin
+    view_stash = viewState()
+    params.anim.spin = 0
+    cam_changing = true
+  })
+
+  orbit.addEventListener('change', () => {
+    params.cam = viewState()
+  }, false)
+
+  orbit.addEventListener('end', () => {
+    params.anim.spin = spin_stash
+    cam_changing = false
+    requestLabelUpdate()
+    if (JSON.stringify(view_stash) != JSON.stringify(viewState())) {
+      requestCameraPositionSave()
+    }
+  })
+
+  function initFromParams(save = true) {
+    save && saveUrlInfo(params, url_info)
+    camera.position.set(params.cam.x, params.cam.y, params.cam.z)
+    params.cam.target && util.updateProps(orbit.target, params.cam.target)
+    orbit.update()
+    initAxes(params.deco.axes)
+    initObj()
+
+    const callbacks = { initObj, getObj, saveUrl, updateTitle, animPause, animStep }
+    const info = { url_info, render_info }
+    gui.initGui(params, callbacks, info)
+  }
+
+  function initFromSearchParams() {
+    const searchParams = new URL(window.location.href).searchParams
+    if (searchParams.size > 0) {
+      util.updateObjectFromSearchParams(params, searchParams)
+    } else {
+      resetParams()
+    }
+    if (params.sync_expr !== undefined) {
+      delete params.sync_expr
+    }
+    params.expr = viz.genExpr(params)
+    initFromParams(false)
+  }
+
+  window.addEventListener('popstate', initFromSearchParams, false)
+
+  window.addEventListener('resize', () => {
+    camera.fov = fov()
+    camera.aspect = aspect()
+    camera.updateProjectionMatrix()
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    syncVizToRenderer(true)
+  })
+
+  let pointer_moved
+  let pointer_move_timeout
+
+  window.addEventListener('pointermove', e => {
+    clientX = e.clientX
+    clientY = e.clientY
+    pointer.x = e.clientX / window.innerWidth * 2 - 1
+    pointer.y = -(e.clientY / window.innerHeight * 2 - 1)
+    pointer_moved = true
+    if (!cam_changing) {
+      requestLabelUpdate()
+    }
+  })
+
+  window.addEventListener('pointerdown', e => {
+    clientX = e.clientX
+    clientY = e.clientY
+    pointer.x = e.clientX / window.innerWidth * 2 - 1
+    pointer.y = -(e.clientY / window.innerHeight * 2 - 1)
+    pointer_moved = false
+    pointer_move_timeout = setTimeout(() => {
+      if (!pointer_moved && e.target === renderer.domElement) {
+        mag = true
+        orbit.enabled = false
+        cam_changing = false
+        updateSpotlight()
+      }
+    }, 500)
+  })
+
+  window.addEventListener('pointerup', () => {
+    clearTimeout(pointer_move_timeout)
+    mag = false
+    orbit.enabled = true
+    updateSpotlight()
+  })
+
+  const key_funcs = {
+    Space: () => {
+      let init = false
+      if (params.anim.alg == 'none') {
+        params.anim.alg = last_anim_alg
+        init = true
+      } else if (anim_pause) {
+        animPause(false)
+      } else {
+        last_anim_alg = params.anim.alg
+        params.anim.alg = 'none'
+        init = true
+      }
+      if (params.anim.spin == 0) {
+        params.anim.spin = last_anim_spin
+        init = true
+      } else {
+        last_anim_spin = params.anim.spin
+        params.anim.spin = 0
+        init = true
+      }
+      init && initObj()
+    },
+    ArrowUp: () => {
+      orbit.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 1 }))
+    },
+    ArrowDown: () => {
+      orbit.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: -1 }))
+    },
+    KeyP: () => {
+      if (params.anim.alg != 'none') {
+        animPause(!anim_pause)
+      }
+    },
+    KeyS: () => {
+      if (params.anim.alg != 'none') {
+        animPause(true)
+        animStep()
+      }
+    },
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey) {
+      mag = true
+      updateSpotlight()
+      return
+    }
+    const kf = key_funcs[e.code]
+    kf && kf(e)
+  })
+
+  window.addEventListener('keyup', () => {
+    if (mag) {
+      mag = false
+      updateSpotlight()
+    }
+  })
+
+  let messageEvent
+  const RESPONDERS = {
+    getUrlInfo: () => {
+      ;(messageEvent?.source)?.postMessage({ url_info }, messageEvent.origin)
+    },
+    getParams: () => {
+      ;(messageEvent?.source)?.postMessage({ params }, messageEvent.origin)
+    },
+    setParams: ({ props = {}, reset = false } = {}) => {
+      console.log(`HEY setParams called props ${JSON.stringify(props)} reset ${reset}`)
+      reset && resetParams()
+      if (props.sync_expr) {
+        params.expr = props.expr
+        viz.syncExpr(params)
+        delete props.sync_expr
+      }
+      util.updatePropsRec(params, props)
+      params.expr = viz.genExpr(params)
+      if (props.layout?.scheme) {
+        viz.setLayoutScheme(params)
+      }
+      initFromParams()
+    },
+  }
+
+  window.addEventListener('message', (event) => {
+    messageEvent = event
+    Object.entries(event.data).forEach(([k, v]) => {
+      const r = RESPONDERS[k]
+      r && r(v)
+    })
+  })
+
+  const display_info = { x: 0, y: 0, z: 0, devicePixelRatio: 0 }
+
+  function syncVizToRenderer(reinit = false) {
+    renderer.setPixelRatio(window.devicePixelRatio)
+    const size = renderer.getSize(new THREE.Vector3())
+    viz.setElemSize(size, window.devicePixelRatio)
+    util.updateProps(display_info, size)
+    display_info.devicePixelRatio = window.devicePixelRatio
+    reinit && initObj()
+  }
+
+  syncVizToRenderer()
+
+  const pixel_ratio_watcher = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+  pixel_ratio_watcher.addEventListener('change', () => syncVizToRenderer(true))
+
+  let last_render = 0
+  let last_anim = 0
+
+  function animate() {
+    const t = performance.now()
+    if (obj && params.anim.alg != 'none' &&
+      (anim_step || !anim_pause) &&
+      (t - last_render) > (1000 / params.anim.speed)) {
+      obj.bump()
+      last_render = t
+      anim_step = false
+    }
+
+    if (params.anim.spin != 0) {
+      const rad = (last_anim - t) * params.anim.spin / 20000
+      const [cos, sin] = [Math.cos(rad), Math.sin(rad)]
+      const { x, z } = camera.position
+      util.updateProps(camera.position, { x: cos * x + sin * z, z: cos * z - sin * x })
+      camera.lookAt(orbit.target.x, orbit.target.y, orbit.target.z)
+      requestLabelUpdate(true)
+    }
+
+    last_anim = t
+
+    util.updateProps(render_info, renderer.info.memory)
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight)
+    renderer.render(scene, camera)
+
+    if (mag) {
+      const m = params.deco.magnification
+      const size = window.innerHeight * params.deco['lens size']
+      const x = clientX - size / 2
+      const y = window.innerHeight - clientY
+      const offsetX = clientX - size / 2 / m
+      const offsetY = clientY - size / m
+
+      const mag_camera = camera.clone()
+      mag_camera.setViewOffset(
+        window.innerWidth,
+        window.innerHeight,
+        offsetX,
+        offsetY,
+        size / m,
+        size / m
+      )
+
+      renderer.setViewport(x, y, size, size)
+      renderer.setScissorTest(true)
+      renderer.setScissor(x, y, size, size)
+
+      viz.MATERIAL.uniforms.mag.value = m
+      renderer.render(scene, mag_camera)
+      viz.MATERIAL.uniforms.mag.value = 1.0
+
+      renderer.setScissorTest(false)
+    }
+
+    requestAnimationFrame(animate)
+  }
+
+  window.onload = setupInstructions
+
+  initFromSearchParams()
+  animate()
+
+  return { params, scene, camera, renderer, getObj }
+}

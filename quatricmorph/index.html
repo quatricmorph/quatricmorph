@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>mm</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+<body>
+  <div id="info">loading</div>
+  <div id="container"></div>
+  <div id="instructions" class="instructions-modal">
+    <div id="minimized" class="minimized-content">
+      <span id="maximize" class="control-btn">&gt;</span>
+    </div>
+    <div id="instructions-content" class="instructions-content">
+      <span id="minimize" class="control-btn">&lt;</span>
+      <div id="laptop-instructions">
+        <table>
+          <tr>
+            <td class="leftcol">Zoom</td>
+            <td>Two finger swipe</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Spin</td>
+            <td>Click + drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Pan</td>
+            <td>Cmd-click + drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Reveal</td>
+            <td>Long click + drag</td>
+          </tr>
+          <tr>
+            <td>
+              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="ref.html">Reference</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div id="mobile-instructions">
+        <table>
+          <tr>
+            <td class="leftcol">Zoom</td>
+            <td>Pinch</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Spin</td>
+            <td>Tap and drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Pan</td>
+            <td>Two-finger drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Reveal</td>
+            <td>Long tap + drag</td>
+          </tr>
+          <tr>
+            <td>
+              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="ref.html">Reference</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

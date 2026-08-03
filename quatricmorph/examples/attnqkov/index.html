@@ -1,0 +1,76 @@
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>NanoGPT GPT2 attention heads</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    #header {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 0;
+      align-items: center;
+      height: 50px;
+      background-color: #f0f0f0;
+    }
+
+    #header label {
+      display: inline-block;
+      font-style: italic;
+      width: auto;
+      margin: 0 10px;
+    }
+
+    #header select {
+      width: 50px;
+      margin: 0 10px;
+    }
+
+    #header input {
+      margin: 0 10px;
+    }
+
+    #mm {
+      width: 100%;
+      height: calc(100% - 50px);
+      border: none;
+    }
+
+    .upper-right {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <form id="header">
+    <label for="input">Sample Input</label>
+    <select id="input" required></select>
+    <label for="layer">Layer</label>
+    <select id="layer" required></select>
+    <label for="head">Attention head</label>
+    <select id="head" required></select>
+    <label for="anim">Animate</label>
+    <select id="anim" style="min-width: 140px;" required>
+      <option value="none">none</option>
+      <option value="attn @ V @ wO">attn @ V @ wO</option>
+      <option value="Q @ K @ V @ wO">Q @ K @ V @ wO</option>
+      <option value="input @ wQ @ K @ V @ wO">input @ wQ @ K @ V @ wO</option>
+    </select>
+    <label for="path">Data path</label>
+    <input type="text" id="path" name="path" value="https://viz.nyc3.digitaloceanspaces.com/testdata/weights/gpt2/" />
+    <a href="javascript:popout();" class="upper-right">open&#x2197;</a>
+  </form>
+  <iframe id="mm" src="/index.html"></iframe>
+
+  <script type="module" src="/src/examples/attnqkov.js"></script>
+
+
+</html>
