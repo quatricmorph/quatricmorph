@@ -1,5 +1,5 @@
-import type { GridRuledLinesConfig, Vec3 } from './grid-ruled-lines.js'
-import { localTensorExtent } from './grid-ruled-lines.js'
+import type { GridRuledLinesConfig, Vec3 } from './grid-ruler.js'
+import { localTensorExtent } from './grid-ruler.js'
 
 /**
  * TensorMarginFrame metrics — outer frame, title/shape label margins (VIZ-05).

@@ -2,12 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quatricmorph Viewer</title>
+    <title>Quatricmorph — matrix workspace</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <!-- Mounted by src/app/create-app.ts. The ids below are the contract
+         between this page and the app modules; see src/app/scene.ts and
+         src/app/instructions.ts. -->
+    <div id="info">loading</div>
+    <div id="validation"></div>
+    <div id="hover-info"></div>
+    <div id="container"></div>
+    <div id="instructions" class="instructions-modal">
+      <div id="minimized" class="minimized-content">
+        <span id="maximize" class="control-btn">&gt;</span>
+      </div>
+      <div id="instructions-content" class="instructions-content">
+        <span id="minimize" class="control-btn">&lt;</span>
+        <table>
+          <tr><td class="leftcol">Zoom</td><td>Two finger swipe</td></tr>
+          <tr><td class="leftcol">Spin</td><td>Click + drag</td></tr>
+          <tr><td class="leftcol">Pan</td><td>Cmd-click + drag</td></tr>
+          <tr><td class="leftcol">Reveal</td><td>Long click + drag</td></tr>
+        </table>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

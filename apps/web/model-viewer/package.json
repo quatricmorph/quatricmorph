@@ -1,0 +1,17 @@
+{
+  "name": "quatricmorph-model-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CesiumJS model browser — app shell only; tileset rendering is not built (CESIUM-001)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
+}

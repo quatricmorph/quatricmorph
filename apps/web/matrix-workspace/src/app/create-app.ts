@@ -8,7 +8,7 @@ import { createUrlInfo, saveUrl as persistUrl, saveUrlInfo } from './url.js'
 import { createScene } from './scene.js'
 import { setupInstructions } from './instructions.js'
 import { validateMatmulDims } from '../math/validate.js'
-import { cameraPresetPose, gridRuledLinesFromParams, mulVolumeExtent } from '../layout/grid-ruled-lines.js'
+import { cameraPresetPose, gridRulerFromParams, mulVolumeExtent } from '../layout/grid-ruler.js'
 import { selectOutput, clearSelection as emptySelection, pathFromSelection } from '../interaction/selection.js'
 
 /**
@@ -120,7 +120,7 @@ export function createApp() {
   }
 
   function setCameraPreset(presetName) {
-    const gridCfg = gridRuledLinesFromParams(params.layout)
+    const gridCfg = gridRulerFromParams(params.layout)
     const extent = mulVolumeExtent(
       params.left.h,
       params.left.w,

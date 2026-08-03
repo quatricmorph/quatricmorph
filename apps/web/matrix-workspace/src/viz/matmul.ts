@@ -5,10 +5,11 @@ import { Array2D } from './array2d.js'
 import { Mat } from './mat.js'
 import { getInitFunc } from './init.js'
 import { applyInPlaceEpilog_, POINTWISE } from './epilog.js'
-import { setElemScale, grid } from './sizing.js'
+import { setElemScale } from './sizing.js'
+import { blockInfo, gridIterate, scatterFromCount } from '../math/blocking.js'
 import { ensureChildCounts } from './constants.js'
 import { validateMatmulDims } from '../math/validate.js'
-import { gridRuledLinesFromParams, placeOperands } from '../layout/grid-ruled-lines.js'
+import { gridRulerFromParams, placeOperands } from '../layout/grid-ruler.js'
 
 export class MatMul {
 
@@ -238,7 +239,7 @@ export class MatMul {
 
   /** Shared GridRuledLines3D placement for A/B/C planes (VIZ-03 / VIZ-04). */
   getPlanePlacement() {
-    const gridCfg = gridRuledLinesFromParams({
+    const gridCfg = gridRulerFromParams({
       gap: this.params.layout.gap,
       cellSize: this.params.layout.cellSize ?? 1,
     })
@@ -314,11 +315,7 @@ export class MatMul {
   }
 
   scatterFromCount(count) {
-    const { scatter, molecule, blast } = this.params.layout
-    const mult = count < molecule ? 0 :
-      blast >= 0 ? count ** blast :
-        (this.params.total - count) ** -blast
-    return scatter * mult
+    return scatterFromCount(count, this.params.total, this.params.layout)
   }
 
   getLeftScatter() {
@@ -494,19 +491,19 @@ export class MatMul {
     start()
   }
 
+  // Decomposition and iteration are delegated to `math/blocking.ts`: the
+  // arithmetic is identical, but it now lives somewhere that can be tested
+  // without a scene and reused by the tile compiler.
   getBlockInfo() {
-    const ni = Math.min(this.params.block['i blocks'], this.H)
-    const nk = Math.min(this.params.block['k blocks'], this.D)
-    const nj = Math.min(this.params.block['j blocks'], this.W)
-    return {
-      i: { n: ni, size: Math.ceil(this.H / ni), max: this.H },
-      k: { n: nk, size: Math.ceil(this.D / nk), max: this.D },
-      j: { n: nj, size: Math.ceil(this.W / nj), max: this.W },
-    }
+    return blockInfo(this.H, this.D, this.W, {
+      i: this.params.block['i blocks'],
+      k: this.params.block['k blocks'],
+      j: this.params.block['j blocks'],
+    })
   }
 
   grid(dims, f) {
-    grid(this.getBlockInfo(), dims, f)
+    gridIterate(this.getBlockInfo(), dims, f)
   }
 
   getAnimIntermediateParams(name) {

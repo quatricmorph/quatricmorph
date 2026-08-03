@@ -71,3 +71,67 @@ describe('VIZ-03 / VIZ-04 GridRuledLines3D', () => {
     }
   })
 })
+
+// --- GridRuler3D bound API (GRID-001) ---------------------------------------
+
+import { GridRuler3D, GRID_SNAP_TOLERANCE } from '../grid-ruler.js'
+
+describe('GRID-001 GridRuler3D', () => {
+  it('exposes every layout parameter the workspace needs', () => {
+    const r = new GridRuler3D()
+    for (const key of [
+      'cellSize',
+      'minorGridSpacing',
+      'majorGridInterval',
+      'tensorPadding',
+      'labelMargin',
+      'framePadding',
+      'operandGap',
+      'axisMargin',
+      'depthSpacing',
+      'origin',
+    ] as const) {
+      expect(r.config[key]).toBeDefined()
+    }
+  })
+
+  it('snaps positions to cellSize multiples', () => {
+    const r = new GridRuler3D({ ...new GridRuler3D().config, cellSize: 2 })
+    expect(r.snap(3.4)).toBe(4)
+    expect(r.snap(2.9)).toBe(2)
+    expect(r.isSnapped(4)).toBe(true)
+    expect(r.isSnapped(3)).toBe(false)
+  })
+
+  it('tolerates float accumulation within the documented tolerance', () => {
+    const r = new GridRuler3D()
+    // 0.1 summed ten times is 0.9999999999999999, not 1.
+    let acc = 0
+    for (let n = 0; n < 10; n++) acc += 0.1
+    expect(acc).not.toBe(1)
+    expect(r.isSnapped(acc)).toBe(true)
+    expect(GRID_SNAP_TOLERANCE).toBe(1e-6)
+  })
+
+  it('assertSnapped names the offending value', () => {
+    const r = new GridRuler3D()
+    expect(() => r.assertSnapped(0.5, 'A.position.x')).toThrow(/A.position.x 0.5/)
+    expect(r.assertSnapped(3)).toBe(3)
+  })
+
+  it('every operand placement it produces is on-grid', () => {
+    const r = new GridRuler3D()
+    const { A, B, C } = r.place(6, 4, 5)
+    for (const [name, t] of [['A', A], ['B', B], ['C', C]] as const) {
+      expect(() => r.assertVecSnapped(t.position, `${name}.position`)).not.toThrow()
+    }
+  })
+
+  it('cell centres advance by exactly one cell', () => {
+    const r = new GridRuler3D()
+    const a = r.cellCenter(0, 0)
+    const b = r.cellCenter(0, 1)
+    expect(b.x - a.x).toBeCloseTo(r.cellSize, 12)
+    expect(r.cellCenter(1, 0).y - a.y).toBeCloseTo(r.cellSize, 12)
+  })
+})

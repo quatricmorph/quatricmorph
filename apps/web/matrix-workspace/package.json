@@ -1,23 +1,23 @@
 {
-  "name": "quatricmorph-web",
+  "name": "quatricmorph-matrix-workspace",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
+  "description": "Matrix multiplication workspace, derived from Meta's mm (see NOTICE.md)",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx"
+    "test": "vitest run"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "three": "^r128"
+    "three": "^0.185.1",
+    "lil-gui": "^0.19.2"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.0.0",
     "typescript": "^5.0.0",
-    "vite": "^4.0.0"
+    "vite": "^7.1.14",
+    "vitest": "^4.1.10"
   }
 }

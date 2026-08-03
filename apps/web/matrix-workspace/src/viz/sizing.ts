@@ -2,21 +2,10 @@
 import * as THREE from 'three'
 import { MATERIAL } from './material.js'
 
-export function grid(info, dims, f) {
-  const infos = Array.from(dims).map(d => info[d])
-  const loop = (args, infos, f) => infos.length == 0 ?
-    f(...args) :
-    [...Array(infos[0].n).keys()].map(index => {
-      const { size, max } = infos[0]
-      const start = index * size
-      if (start < max) {  // dead final block when size * n - max > size
-        const end = Math.min(start + size, max)
-        const extent = end - start
-        loop([...args, { index, start, end, extent }], infos.slice(1), f)
-      }
-    })
-  loop([], infos, f)
-}
+// Block iteration lives in `math/blocking.ts` — pure index arithmetic with no
+// Three.js dependency, so it can be tested without a WebGL context and reused
+// by the tile compiler. Re-exported here to keep the legacy import path working.
+export { gridIterate as grid } from '../math/blocking.js'
 
 export let elem_scale = 1.25
 export let elem_size = elem_scale

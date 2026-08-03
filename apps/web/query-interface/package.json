@@ -1,0 +1,10 @@
+{
+  "name": "quatricmorph-query-interface",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WeightQL input with KaTeX preview — parser-backed only; no chat layer (CHAT-001)",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "quatricmorph-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Quatricmorph web applications: matrix workspace, model viewer, query interface",
+  "workspaces": [
+    "matrix-workspace",
+    "model-viewer",
+    "query-interface"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:matrix-workspace": "npm run build --workspace matrix-workspace"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.10"
+  }
+}

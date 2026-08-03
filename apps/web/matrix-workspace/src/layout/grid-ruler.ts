@@ -1,13 +1,28 @@
 /**
- * GridRuledLines3D — shared spatial layout authority (VIZ-03, VIZ-04).
+ * GridRuler3D — the single spatial layout authority (`GRID-001`).
+ *
+ * Every tensor, frame, label, and guide in the workspace is positioned through
+ * this module. That is the point: one ruler means a cell drawn at world
+ * position p corresponds to exactly one logical index, so clicking it can
+ * return a canonical tensor address (ARCHITECTURE.md §18 AC-004).
  *
  * World axes: X → J (output cols), Y → I (output rows), Z → K (contraction).
- * Planes: A on I×K, B on K×J, C on I×J. Positions snap to cellSize multiples.
+ * Planes: A on I×K, B on K×J, C on I×J.
+ *
+ * **Grid invariant:** every position this module produces is an integer
+ * multiple of `cellSize`, within {@link GRID_SNAP_TOLERANCE}. Off-grid
+ * positions accumulate into visible drift between a tensor's cells and its
+ * frame, and — worse — into a mis-addressed click. {@link GridRuler3D.assertSnapped}
+ * turns that from a rendering artefact into an error.
+ *
+ * `GridRuledLines3D` and `MarginGrid3D` are the previous names for this module
+ * and remain as aliases at the bottom of the file so existing imports keep
+ * working. New code should use `GridRuler3D`.
  */
 
 export type Vec3 = { x: number; y: number; z: number }
 
-export type GridRuledLinesConfig = {
+export type GridRuler3DConfig = {
   cellSize: number
   minorGridSpacing: number
   majorGridInterval: number
@@ -45,7 +60,7 @@ export type TensorExtents = {
   z: number
 }
 
-export const DEFAULT_GRID_RULED_LINES: GridRuledLinesConfig = {
+export const DEFAULT_GRID_RULER: GridRuler3DConfig = {
   cellSize: 1,
   minorGridSpacing: 1,
   majorGridInterval: 5,
@@ -74,7 +89,7 @@ export function isGridSnapped(value: number, cellSize: number, tol = 1e-6): bool
 export function cellCenterLocal(
   i: number,
   j: number,
-  config: GridRuledLinesConfig,
+  config: GridRuler3DConfig,
 ): Vec3 {
   const { cellSize, tensorPadding } = config
   return {
@@ -88,7 +103,7 @@ export function cellCenterLocal(
 export function localTensorExtent(
   rows: number,
   cols: number,
-  config: GridRuledLinesConfig,
+  config: GridRuler3DConfig,
 ): TensorExtents {
   const { cellSize, tensorPadding, framePadding } = config
   const pad = tensorPadding + framePadding
@@ -107,7 +122,7 @@ export function mulVolumeExtent(
   m: number,
   k: number,
   n: number,
-  config: GridRuledLinesConfig,
+  config: GridRuler3DConfig,
 ): Vec3 {
   const gap = config.operandGap
   const cs = config.cellSize
@@ -126,7 +141,7 @@ export function placeOperands(
   m: number,
   k: number,
   n: number,
-  config: GridRuledLinesConfig = DEFAULT_GRID_RULED_LINES,
+  config: GridRuler3DConfig = DEFAULT_GRID_RULER,
   hints: PlacementHints = {
     polarity: 'negative',
     leftPlacement: 'left',
@@ -244,19 +259,97 @@ export function cameraPresetPose(
 }
 
 /** Build GridRuledLinesConfig from legacy layout params. */
-export function gridRuledLinesFromParams(layout: {
+export function gridRulerFromParams(layout: {
   gap?: number
   cellSize?: number
-}): GridRuledLinesConfig {
+}): GridRuler3DConfig {
   return {
-    ...DEFAULT_GRID_RULED_LINES,
-    operandGap: layout.gap ?? DEFAULT_GRID_RULED_LINES.operandGap,
-    cellSize: layout.cellSize ?? DEFAULT_GRID_RULED_LINES.cellSize,
+    ...DEFAULT_GRID_RULER,
+    operandGap: layout.gap ?? DEFAULT_GRID_RULER.operandGap,
+    cellSize: layout.cellSize ?? DEFAULT_GRID_RULER.cellSize,
   }
 }
 
-/** Product alias: MarginGrid3D ≡ GridRuledLines3D (VIZ-03). */
-export type MarginGridConfig = GridRuledLinesConfig
-export const DEFAULT_MARGIN_GRID = DEFAULT_GRID_RULED_LINES
-export const marginGridFromParams = gridRuledLinesFromParams
+/**
+ * Documented snap tolerance.
+ *
+ * Positions are built by repeated addition of `cellSize`, so f64 rounding can
+ * leave a residue on the order of 1e-15 per operation. 1e-6 of a cell is well
+ * above that and far below anything visible at any zoom level.
+ */
+export const GRID_SNAP_TOLERANCE = 1e-6
+
+/**
+ * A bound ruler: a config plus the operations that respect it.
+ *
+ * Prefer this over the free functions when several calls share one config —
+ * it makes it impossible to snap against one cell size and place against
+ * another.
+ */
+export class GridRuler3D {
+  constructor(readonly config: GridRuler3DConfig = DEFAULT_GRID_RULER) {}
+
+  static fromParams(layout: { gap?: number; cellSize?: number }): GridRuler3D {
+    return new GridRuler3D(gridRulerFromParams(layout))
+  }
+
+  get cellSize(): number {
+    return this.config.cellSize
+  }
+
+  snap(value: number): number {
+    return snapToGrid(value, this.config.cellSize)
+  }
+
+  isSnapped(value: number, tol = GRID_SNAP_TOLERANCE): boolean {
+    return isGridSnapped(value, this.config.cellSize, tol)
+  }
+
+  /** Throw if `value` is off-grid. Used at layout boundaries, not per cell. */
+  assertSnapped(value: number, what = 'position'): number {
+    if (!this.isSnapped(value)) {
+      throw new Error(
+        `${what} ${value} is not a multiple of cellSize ${this.config.cellSize} ` +
+          `(tolerance ${GRID_SNAP_TOLERANCE})`,
+      )
+    }
+    return value
+  }
+
+  /** Throw if any component of `v` is off-grid. */
+  assertVecSnapped(v: Vec3, what = 'position'): Vec3 {
+    this.assertSnapped(v.x, `${what}.x`)
+    this.assertSnapped(v.y, `${what}.y`)
+    this.assertSnapped(v.z, `${what}.z`)
+    return v
+  }
+
+  cellCenter(i: number, j: number): Vec3 {
+    return cellCenterLocal(i, j, this.config)
+  }
+
+  tensorExtent(rows: number, cols: number): TensorExtents {
+    return localTensorExtent(rows, cols, this.config)
+  }
+
+  volumeExtent(m: number, k: number, n: number): Vec3 {
+    return mulVolumeExtent(m, k, n, this.config)
+  }
+
+  place(m: number, k: number, n: number, hints?: PlacementHints) {
+    return hints
+      ? placeOperands(m, k, n, this.config, hints)
+      : placeOperands(m, k, n, this.config)
+  }
+}
+
+// --- back-compatible aliases -------------------------------------------------
+// Previous names for this module. Kept so existing imports keep working; new
+// code should use `GridRuler3D` / `GridRuler3DConfig` / `DEFAULT_GRID_RULER`.
+export type GridRuledLinesConfig = GridRuler3DConfig
+export type MarginGridConfig = GridRuler3DConfig
+export const DEFAULT_GRID_RULED_LINES = DEFAULT_GRID_RULER
+export const DEFAULT_MARGIN_GRID = DEFAULT_GRID_RULER
+export const gridRuledLinesFromParams = gridRulerFromParams
+export const marginGridFromParams = gridRulerFromParams
 
