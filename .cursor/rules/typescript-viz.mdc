@@ -1,0 +1,15 @@
+---
+description: TypeScript visualization conventions for quatricmorph/
+globs: quatricmorph/src/**/*.ts
+alwaysApply: false
+---
+
+# quatricmorph TypeScript viz
+
+- Keep modules focused: `viz/`, `util/`, `app/`, `gui/`.
+- Prefer importing from specific modules (`viz/array2d.js`) over god-files when editing.
+- Barrel files (`viz.ts`, `util.ts`) are compatibility shims — do not grow them with logic.
+- Pure math/layout belongs in testable modules; avoid putting multiply logic only inside Three.js classes.
+- Preserve GLSL1 on custom shaders unless migrating shaders deliberately.
+- MVP UI must not promote attention/LoRA/nested expr/model loading (`VIZ-09`).
+- After structural splits, verify cross-module exports (`toRange`, textures, etc.) still resolve.

@@ -1,3 +1,31 @@
-# QuatricMorph
+# Quatricmorph
 
-QuatricMorph (元方变) is a revolutionary programmable matter system that brings to life the vision of robotic "particles" capable of self-organizing into any physical entity. The system is comprised of millions of millimeter-scale cubic units (8–12mm) embedded with microprocessors and 8-way electromagnetic arrays, operating through dynamic attraction-repulsion mechanisms rather than traditional mechanical joints. Orchestrated by GPU-based parallel algorithms, these millions of units can reorient, connect, and reconfigure in real-time to form complex 3D structures with high-fidelity resolution and immense structural integrity. Beyond mere shape-shifting, QuatricMorph serves as an AI-driven smart material capable of adapting its stiffness and functionality on demand, unlocking infinite possibilities for flexible manufacturing, adaptive healthcare, and intelligent architecture on a global scale.
+Local-first platform for inspecting, querying, morphing, and verifying open-weight models.
+
+## Start here
+
+- Agent guide: [AGENTS.md](AGENTS.md)
+- Docs index: [docs/README.md](docs/README.md)
+- Prerequisites gate: [docs/requirements/PREREQUISITES.md](docs/requirements/PREREQUISITES.md)
+- Active viz MVP: [docs/requirements/VIZ_MVP.md](docs/requirements/VIZ_MVP.md)
+- Full architecture: [docs/PRODUCT_ARCHITECTURE_v1.md](docs/PRODUCT_ARCHITECTURE_v1.md)
+
+## App (`quatricmorph/`)
+
+```bash
+cd quatricmorph
+npm install
+npm run dev      # http://127.0.0.1:5173
+npm test
+npm run build
+```
+
+## Layout
+
+```text
+quatricmorph/   Vite + TypeScript Three.js visualizer
+mm/             Original mm reference (do not delete)
+docs/           Product, requirements, agent charter
+.cursor/rules/  Cursor agent rules
+prompts.md      Visualization MVP engineering brief
+```

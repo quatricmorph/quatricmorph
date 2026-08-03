@@ -1,0 +1,14 @@
+---
+description: Autonomous agent workflow for Quatricmorph tasks
+alwaysApply: true
+---
+
+# Autonomous agent workflow
+
+1. Bind work to a requirement ID (`VIZ-*` or `PLAT-P0-*`).
+2. Read the matching requirement doc before editing.
+3. For deterministic behavior, add/update a Vitest test first when practical.
+4. After changes in `quatricmorph/`, run `npm test` and `npm run build`.
+5. Report: requirement ID, files changed, test/build result, remaining checklist items.
+6. Never mark platform P0 complete based only on Three.js viz work.
+7. Do not download large model weights in automated flows without an allowlisted fixture policy.

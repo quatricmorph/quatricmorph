@@ -1,0 +1,14 @@
+---
+description: Core Quatricmorph product and agent constraints
+alwaysApply: true
+---
+
+# Quatricmorph core
+
+- Canonical vision: `docs/PRODUCT_ARCHITECTURE_v1.md`; short form: `docs/PRODUCT_BRIEF.md`.
+- Active coding track by default: visualization MVP (`docs/requirements/VIZ_MVP.md`, `prompts.md`) in `quatricmorph/`.
+- Treat `mm/` as read-only reference. Do not delete it.
+- Follow `AGENTS.md` and `docs/agent/CHARTER.md`.
+- Check `docs/requirements/PREREQUISITES.md` before large features.
+- Axioms: validate before success; no semantic claims without evidence; local-first; visualization backed by shared query/math substrate.
+- Prefer small diffs. Do not invent Rust/Python platform code unless the task explicitly starts Track B.
