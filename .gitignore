@@ -14,3 +14,4 @@ __pycache__/
 
 # Local scratch caches produced by q-cache L2 tests
 /.q-cache/
+prompts/
