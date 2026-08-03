@@ -2,3 +2,15 @@ node_modules
 dist
 .env
 .DS_Store
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local scratch caches produced by q-cache L2 tests
+/.q-cache/

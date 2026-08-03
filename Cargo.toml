@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/q-source",
+    "crates/q-safetensors",
+    "crates/q-architecture",
+    "crates/q-nsir",
+    "crates/q-catalog",
+    "crates/q-tensor-runtime",
+    "crates/q-statistics",
+    "crates/q-weightql",
+    "crates/q-expression",
+    "crates/q-tiles",
+    "crates/q-gltf",
+    "crates/q-tileset",
+    "crates/q-cache",
+    "crates/q-gpu",
+    "crates/q-cuda",
+    "crates/q-daemon",
+    "crates/q-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+authors = ["Quatricmorph Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/quatricmorph/quatricmorph"
+
+[workspace.dependencies]
+q-source = { path = "crates/q-source" }
+q-safetensors = { path = "crates/q-safetensors" }
+q-architecture = { path = "crates/q-architecture" }
+q-nsir = { path = "crates/q-nsir" }
+q-catalog = { path = "crates/q-catalog" }
+q-tensor-runtime = { path = "crates/q-tensor-runtime" }
+q-statistics = { path = "crates/q-statistics" }
+q-weightql = { path = "crates/q-weightql" }
+q-expression = { path = "crates/q-expression" }
+q-tiles = { path = "crates/q-tiles" }
+q-gltf = { path = "crates/q-gltf" }
+q-tileset = { path = "crates/q-tileset" }
+q-cache = { path = "crates/q-cache" }
+q-gpu = { path = "crates/q-gpu" }
+q-cuda = { path = "crates/q-cuda" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+memmap2 = "0.9"
+blake3 = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+lru = "0.12"
+tempfile = "3"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "signal"] }
+axum = "0.7"
+tower = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.dev]
+# Fixture round-trips decode ~1 MB of f32; unoptimized debug builds are still
+# fast enough, but bumping opt-level for deps keeps `cargo test` responsive.
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 2
