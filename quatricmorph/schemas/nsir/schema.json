@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NSIR Format",
+  "description": "Neural Source Intermediate Representation",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "layers": {
+      "type": "array"
+    }
+  }
+}

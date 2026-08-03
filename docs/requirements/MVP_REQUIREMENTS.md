@@ -1,44 +1,53 @@
 # Platform MVP Requirements (P0 / P1)
 
-Derived from architecture §26–§27. Use IDs in commits and agent reports.
+Aligned to [`ARCHITECTURE.md`](../../ARCHITECTURE.md) Phases 1–2 and product acceptance themes. Phase 0 spike uses `TILE-*` in [VIZ_MVP.md](VIZ_MVP.md). Use IDs in commits and agent reports.
 
-## P0 — Must ship for platform MVP acceptance
+**Authority:** root `ARCHITECTURE.md` wins on ingestion, LOD, tiles, WeightQL, renderers, APIs, and “what not to do.”
+
+## P0 — Must ship for dense browser + query foundation
 
 | ID | Area | Requirement | Validation |
 | --- | --- | --- | --- |
-| PLAT-P0-INGEST | Ingestion | Local SafeTensors + sharded checkpoints; HF config/tokenizer metadata; mmap/streaming | Fixture import tests; no unsafe remote code |
-| PLAT-P0-ADAPTER | Ontology | Adapters for Llama-/Mistral-/Qwen-/Gemma-like dense decoders → NSIR | Round-trip / invariant tests; unresolved mapping warnings |
-| PLAT-P0-CATALOG | Catalog | NSIR tensor catalog, architecture map, global + block stats, fingerprints, index cache | Deterministic stats across runs |
-| PLAT-P0-COMPARE | Compare | Aligned two-model numerical comparison without full RAM residency (7B–70B class) | Bytes-read metrics; checksum fixtures |
-| PLAT-P0-TILES | Tiles | Tensor Tiles Level 0–2 + heatmap / diff / layer ranking | Aggregation checksums |
-| PLAT-P0-MIR | Morph | Virtual Model DAG; interpolation; task-vector arithmetic; layer coeffs; include/exclude | Canonical hash; dry-run resource estimate |
-| PLAT-P0-EXPORT | Export | Streaming SafeTensors export + manifest + hashes | Byte-valid ST; reproducible hash on 2nd machine |
-| PLAT-P0-VERIFY | Verify | Integrity, tokenizer identity, non-finite, numerical scorecard, sampled forward | Injected NaN/shape/tokenizer/missing-tensor caught |
-| PLAT-P0-UX | Interfaces | Desktop shell + CLI + Python result access + local daemon | Core workflow without notebook |
+| PLAT-P0-INGEST | Ingestion | Local SafeTensors + sharded checkpoints; HF config/tokenizer metadata; range/mmap reads; no full-RAM load | Fixture import; cancel/resume metadata |
+| PLAT-P0-ADAPTER | Ontology | Architecture plugins (generic, llama, qwen, …) → NSIR; may return `unknown`; never guess role from shape alone | Invariant tests; unresolved warnings |
+| PLAT-P0-CATALOG | Catalog | Models/tensors/blocks/statistics tables (architecture §5); DuckDB/Parquet | Deterministic stats across runs |
+| PLAT-P0-TILES | Tiles | LOD 0–5 pipeline; `.qtile` sidecar; GLB for viz only; tileset.json | Aggregation checksums; no cube-per-weight |
+| PLAT-P0-LOOKUP | Exact I/O | Canonical address + exact scalar/slice via range read; match Python SafeTensors reference | Golden index fixtures |
+| PLAT-P0-CACHE | Cache | Content-addressed L1/L2 keys (architecture §13); reopen reuse | Cache-hit metrics |
+| PLAT-P0-API | Local API | Metadata / block / value / visualization endpoints (architecture §14) | Contract tests |
+| PLAT-P0-UX | Interfaces | CesiumJS browser for hierarchy LOD; CLI/daemon as needed for ingest | Core browse without notebook |
 
-## P1 — First public release stretch
+## P1 — WeightQL and expression visualization
 
 | ID | Area | Requirement |
 | --- | --- | --- |
-| PLAT-P1-WQL | WeightQL | Metadata SELECT, semantic filters, aggregates, explain plan |
-| PLAT-P1-TILES | Tiles | Advanced progressive tiles |
-| PLAT-P1-EVAL | Eval | Optional small perplexity dataset gate |
-| PLAT-P1-LORA | Morph | Simple LoRA application in MIR |
+| PLAT-P1-WQL | WeightQL | Scalar, slice, statistical queries; aliases resolve or return candidates |
+| PLAT-P1-EXPR | Expressions | Plan `(A @ B) @ C`; shape-check before execute; cost estimate; exact/sampled/approx labels |
+| PLAT-P1-MATMUL-VIZ | Viz | Block-mode matmul animation (Concept / Tensor Block; Full Compute only with cost gate) |
+| PLAT-P1-CHAT | Chat | Assistant calls WeightQL planner only; never raw weight bytes |
 
-## Explicit exclusions (do not implement in MVP)
+## Later (do not treat as Phase 0–1 done)
 
-- Arbitrary architecture conversion
-- Different-tokenizer merging
-- MoE Expert Atlas / semantic expert labeling
-- Enterprise governance / signing marketplace
-- General training platform
+Morph (MIR / Virtual Models), streaming SafeTensors export, and full Verify gates remain product-vision items from [PRODUCT_ARCHITECTURE_v1.md](../PRODUCT_ARCHITECTURE_v1.md). Implement only when explicitly tasked; they must still obey validation-before-success and root architecture constraints.
 
-## Acceptance criteria (architecture §27.5)
+## Explicit exclusions
 
-1. Import ≥4 supported architecture families from public fixtures.
-2. Compare two related 7B–70B checkpoints without full RAM residency.
-3. Deterministic statistics and diffs across repeated runs.
-4. Create Virtual Model and export byte-valid SafeTensors.
-5. Detect injected NaN, shape, tokenizer, and missing-tensor failures.
-6. Reproduce export hash from the same manifest on another machine (same deterministic backend).
-7. Complete core workflow without a notebook.
+- One cube GLB per weight; absolute positions per scalar
+- Sending entire tensors to the browser
+- Cesium as compute engine
+- Chat without plan + I/O estimate
+- Semantic claims from color patterns alone
+- Arbitrary architecture conversion; different-tokenizer merging without contract
+- Hosted public model marketplace
+
+## Acceptance criteria (dense browser + query)
+
+1. Do not load the entire checkpoint into RAM.
+2. Successfully parse sharded SafeTensors.
+3. Metadata import can be cancelled and resumed.
+4. Clicking a visual cell returns the correct tensor address.
+5. Exact scalar matches Python SafeTensors reference.
+6. Zooming out does not load exact values; zooming in range-reads only needed bytes.
+7. Cache reused after reopening.
+8. Shape-mismatched expression rejected before execution.
+9. UI clearly indicates exact, sampled, or approximate results.

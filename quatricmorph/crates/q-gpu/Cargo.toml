@@ -1,0 +1,19 @@
+[package]
+name = "q-gpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+wgpu = { version = "0.19", optional = true }
+
+[features]
+wgpu = ["dep:wgpu"]
+cuda = []
+metal = []
+
+[lib]
+path = "src/lib.rs"

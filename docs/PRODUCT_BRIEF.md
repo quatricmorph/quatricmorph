@@ -1,29 +1,55 @@
 # Quatricmorph Product Brief
 
-Condensed from [PRODUCT_ARCHITECTURE_v1.md](PRODUCT_ARCHITECTURE_v1.md). Prefer the full doc for schemas and deep design.
+Condensed product thesis. **Implementation architecture source of truth:** [`../ARCHITECTURE.md`](../ARCHITECTURE.md). Broader product narrative: [PRODUCT_ARCHITECTURE_v1.md](PRODUCT_ARCHITECTURE_v1.md) (subordinate where it conflicts).
 
 ## One-sentence definition
 
 > Quatricmorph is a tensor-native analytical database, model debugger, and controlled transformation runtime for open-weight neural networks.
 
-## Core verbs
+## Core thesis
 
 ```text
-Inspect → Query → Morph → Verify
+SafeTensors
+→ semantic tensor address space
+→ queryable block hierarchy
+→ procedural multiresolution visualization
+→ exact on-demand computation
 ```
 
-## Strategic wedge (platform MVP)
+The tensor database and virtual computational objects are the core layer; visualization is one projection of the same data and query substrate.
+
+## Four data planes
+
+1. **Artifact** — original SafeTensors, tokenizer, config, shard indexes  
+2. **Metadata** — model / layer / tensor / block catalog (DuckDB, Arrow, Parquet)  
+3. **Tensor Tile** — summaries, samples, exact blocks (`.qtile`)  
+4. **Visualization** — tileset.json, GLB, GPU buffers, labels, camera state  
+
+## Strategic wedge (platform)
 
 ```text
-Open two compatible SafeTensors checkpoints
-→ index them locally
-→ inspect architecture and tensor statistics
-→ query and visualize differences
-→ define a layer-aware morph recipe
-→ preview as a virtual model
-→ run structural + lightweight behavioral validation
-→ export a reproducible SafeTensors artifact
+Open SafeTensors (HF or local)
+→ index without full RAM residency
+→ browse model → layer → tensor → block → scalar
+→ query via WeightQL
+→ visualize with CesiumJS LOD, then custom WebGPU
+→ (later) morph + verify with validation before success
 ```
+
+## Immediate engineering wedge (now)
+
+**Phase 0 — Tensor Tiling Spike** ([ARCHITECTURE.md](../ARCHITECTURE.md) §17–§18):
+
+```text
+Open one SafeTensors file
+→ select one 4096 × 4096 tensor
+→ create five LOD levels
+→ generate tileset.json
+→ visualize in CesiumJS
+→ click a cell and retrieve the exact value
+```
+
+Viewer stack for the spike: React or Svelte + CesiumJS + 3D Tiles 1.1 + GLB + `.qtile` sidecars. Full-model support is out of scope for Phase 0.
 
 ## Product axioms (must not violate)
 
@@ -38,31 +64,22 @@ Open two compatible SafeTensors checkpoints
 9. Visualization is generated from the same query/lineage substrate as automation.
 10. Open formats and reproducible recipes beat proprietary containers.
 
-## Immediate engineering wedge (this repo, now)
+## Explicit non-goals (architecture §19 + platform MVP)
 
-Before the full SafeTensors platform, this repository’s **active coding target** is the browser visualization MVP:
-
-```text
-A @ B = C
-```
-
-in a shared 3D grid-ruled-lines coordinate system, built on the migrated `mm` / Three.js app under `quatricmorph/`.
-
-See [requirements/VIZ_MVP.md](requirements/VIZ_MVP.md) and root `prompts.md`.
-
-## Explicit non-goals (platform MVP)
-
-- Arbitrary architecture conversion
-- Different-tokenizer merging without a contract
-- Trillion-parameter distributed infra first
-- MoE transplantation / semantic expert labeling without experiments
+- One cube GLB per weight; absolute positions per scalar
+- Sending entire tensors into the browser
+- Cesium as a compute engine; chat executing unbounded expressions
+- Treating weight color patterns as semantic proof
+- Arbitrary architecture conversion; different-tokenizer merging without a contract
+- Trillion-parameter distributed infra as Phase 0
 - Hosted public model marketplace
 
-## Recommended stacks (from architecture)
+## Recommended stacks
 
-| Layer | Language |
+| Layer | Stack |
 | --- | --- |
-| Tensor IO, catalog, planner, export integrity | Rust |
-| PyTorch / eval / research plugins | Python |
-| Desktop/web UI, viz | TypeScript |
-| Interactive tiles | WebGPU (not authoritative for export) |
+| Ingestion, NSIR, catalog, WeightQL, tiles, daemon | Rust crates (`q-*`) |
+| Research / eval plugins | Python |
+| Prototype viewer | CesiumJS + 3D Tiles + TypeScript |
+| Native tensor renderer | Tauri + wgpu / WGSL |
+| Large compute plugins | CUDA, Metal Performance Shaders, CPU BLAS |

@@ -6,6 +6,14 @@
 **Product category:** Open-weight model infrastructure  
 **Primary wedge:** Local-first checkpoint inspection, tensor querying, reproducible model comparison, and controlled model morphing
 
+### Authority
+
+**Implementation architecture source of truth:** [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+
+This document is the broader product vision (Inspect → Query → Morph → Verify). Where it conflicts with root `ARCHITECTURE.md` on ingestion, four data planes, LOD/tiles, WeightQL, CesiumJS vs custom WebGPU renderers, APIs, repository layout, roadmap phases 0–6, MVP acceptance, or “what not to do,” **follow `ARCHITECTURE.md`** and treat this file as subordinate product narrative.
+
+Immediate engineering work is Phase 0 (Tensor Tiling Spike), not the full morph/export wedge below.
+
 ---
 
 ## 1. Executive Summary
@@ -53,20 +61,17 @@ Quatricmorph should not compete as another model viewer. Visualization is an int
 7. evaluation integrated with lineage and export;
 8. governance for model artifacts.
 
-The recommended initial product is narrower than the complete vision:
+The recommended **implementation** starting point is root [`ARCHITECTURE.md`](../ARCHITECTURE.md) Phase 0–1:
 
 ```text
-Open two compatible SafeTensors checkpoints
-→ index them locally
-→ inspect architecture and tensor statistics
-→ query and visualize differences
-→ define a layer-aware morph recipe
-→ preview it as a virtual model
-→ run structural and lightweight behavioral validation
-→ export a reproducible SafeTensors artifact
+Open SafeTensors (single file → then sharded)
+→ NSIR + metadata catalog without full RAM residency
+→ multiresolution Tensor Tiles (.qtile) + tileset.json
+→ CesiumJS LOD browse: model → layer → tensor → block → scalar
+→ WeightQL / exact on-demand reads
 ```
 
-This wedge is technically feasible for a small team, useful without speculative interpretability claims, and extensible toward MoE analysis, quantization engineering, runtime observability, and enterprise model governance.
+The longer product wedge (compare → morph → verify → export) remains valid product vision but is **not** the Phase 0 coding target and must obey architecture §19 (no cube-per-weight GLBs; visualization is a projection of the same query substrate).
 
 ---
 
@@ -2573,6 +2578,8 @@ The notebook should reference daemon-managed artifacts rather than duplicate mod
 
 ## 27. MVP Scope
 
+> **Supersession:** For the concrete Phase 0 spike and acceptance criteria, use [`ARCHITECTURE.md`](../ARCHITECTURE.md) §17–§18 and [`requirements/VIZ_MVP.md`](requirements/VIZ_MVP.md). The morph/export-oriented MVP below is longer-horizon product scope, not the active engineering gate.
+
 ### 27.1 MVP objective
 
 Prove that Quatricmorph can replace custom scripts for a common, valuable workflow:
@@ -2693,6 +2700,8 @@ A credible small team:
 ---
 
 ## 28. Development Roadmap
+
+> **Supersession:** Active delivery phases are **0–6** in [`ARCHITECTURE.md`](../ARCHITECTURE.md) §17 (tiling spike → dense browser → WeightQL → WebGPU → native GPU → runtime observability → distributed). The Inspect → Query → Morph → Verify headings below are product-verb groupings and must not override those phases.
 
 ### Phase 1 — Inspect
 

@@ -1,15 +1,15 @@
 ---
-description: TypeScript visualization conventions for quatricmorph/
-globs: quatricmorph/src/**/*.ts
+description: Viewer and tile conventions (Cesium / WebGPU path)
+globs: "{apps,crates,schemas,architectures}/**/*.{ts,tsx,js,rs,wgsl}"
 alwaysApply: false
 ---
 
-# quatricmorph TypeScript viz
+# Visualization & tiles
 
-- Keep modules focused: `viz/`, `util/`, `app/`, `gui/`.
-- Prefer importing from specific modules (`viz/array2d.js`) over god-files when editing.
-- Barrel files (`viz.ts`, `util.ts`) are compatibility shims — do not grow them with logic.
-- Pure math/layout belongs in testable modules; avoid putting multiply logic only inside Three.js classes.
-- Preserve GLSL1 on custom shaders unless migrating shaders deliberately.
-- MVP UI must not promote attention/LoRA/nested expr/model loading (`VIZ-09`).
-- After structural splits, verify cross-module exports (`toRange`, textures, etc.) still resolve.
+- Follow root `ARCHITECTURE.md`: four planes (Artifact, Metadata, Tensor Tile, Visualization).
+- GLB is not a tensor database — geometry, instances, quantized visual attrs, feature IDs only.
+- Tensor payloads belong in `.qtile` (or exact range reads), not duplicated FP16 weights in GLB.
+- CesiumJS is tile traversal / LOD / picking for the prototype; not a compute engine.
+- Procedural cell positions: tile origin + logical index / Morton decode — do not store absolute XYZ per scalar.
+- Results must be labeled exact, sampled, or approximate.
+- Prefer `apps/web` Cesium spike and `crates/q-*` over expanding legacy `quatricmorph/` Three.js.

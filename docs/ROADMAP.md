@@ -1,30 +1,49 @@
 # Roadmap
 
-From architecture §28. This repo currently executes **Phase 0 / Track A** (viz) in parallel with documentation for Phase 1+.
+Derived from [`ARCHITECTURE.md`](../ARCHITECTURE.md) §17–§18. That document is authoritative if this file drifts.
 
-## Phase 0 — Visualization foundation (now)
+## Phase 0 — Tensor Tiling Spike (now)
 
-- Migrate `mm` → Vite TypeScript (`quatricmorph/`) — done
-- Modularize viz modules — done
-- Grid-ruled-lines MVP (`A @ B = C`) — in progress
-- Unit tests for pure math — scaffolding
+```text
+Open one SafeTensors file
+→ select one 4096 × 4096 tensor
+→ create five LOD levels
+→ generate tileset.json
+→ visualize in CesiumJS
+→ click a cell and retrieve the exact value
+```
 
-## Phase 1 — Inspect
+Full-model support is out of scope. Requirements: [requirements/VIZ_MVP.md](requirements/VIZ_MVP.md).
 
-SafeTensors ingestion, shard resolver, NSIR ontology, architecture plugins, metadata catalog, global statistics, architecture/tensor browser.
+## Phase 1 — Dense Model Browser
 
-**Deps:** Rust core, fixture library, local daemon, desktop shell.
+Sharded SafeTensors, architecture resolver, model/layer/tensor hierarchy, tensor statistics, Cesium LOD, exact weight lookup, local cache.
 
-## Phase 2 — Query
+```text
+Open a Qwen/Llama-like model
+→ zoom model → layer → tensor → block → scalar
+```
 
-WeightQL subset, planner, derived indexes, block engine, Tensor Tiles, query editor, Python/Rust APIs.
+## Phase 2 — Mathematical Query Engine
 
-## Phase 3 — Morph
+Tensor aliases, slices, transpose, reshape, addition, multiplication, reduction, query plans, visual expression graph. Goal: visualize `(A @ B) @ C` on real tensor blocks via WeightQL.
 
-MIR / Virtual Models, interpolation, task arithmetic, TIES/DARE later, LoRA composition, dry-run, streaming export.
+## Phase 3 — Custom WebGPU Renderer
 
-## Phase 4 — Verify & govern
+Replace detailed GLBs with GPU storage buffers, procedural cells, compute culling, indirect drawing, data-driven shaders. Cesium remains overview-only or is replaced in the tensor workspace.
 
-Evaluation manifests, sampled forward / perplexity, policy gates, later enterprise registry.
+## Phase 4 — Native GPU Desktop
 
-Do not skip validation gates when implementing Morph.
+Tauri, wgpu, Metal / Vulkan / DX12, CUDA compute plugin, GPU memory scheduler, multi-GPU jobs.
+
+## Phase 5 — Runtime Neural Observability
+
+Hidden states, Q/K/V activations, attention probabilities, residual stream, MoE routing, token-conditioned visualization, matmul from real prompts.
+
+## Phase 6 — Trillion-Scale Remote Execution
+
+Object storage, distributed block workers, Arrow transfer, server-side tile generation, query result streaming, shared workspaces, CDN-published visualization summaries.
+
+## Later product verbs (from product vision)
+
+Inspect → Query → Morph → Verify remain the long-term product verbs. Morph/Verify work must not mark Phase 0–2 complete, and must keep validation-before-success and root architecture constraints (no cube-per-weight, out-of-core first).

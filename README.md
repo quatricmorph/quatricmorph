@@ -1,75 +1,73 @@
 # Quatricmorph
 
-Local-first platform for inspecting, querying, morphing, and verifying open-weight models.
+Local-first tensor-native platform for inspecting, querying, and visualizing open-weight models from SafeTensors — without loading entire checkpoints into RAM.
 
-**Active MVP (Track A):** browser visualization of a single multiplication `A @ B = C` in a shared 3D margin grid (`quatricmorph/`).
+**Canonical architecture (source of truth):** [ARCHITECTURE.md](ARCHITECTURE.md)
+
+**Active MVP:** Phase 0 — Tensor Tiling Spike (SafeTensors → LOD tiles → CesiumJS → exact scalar lookup). See [docs/requirements/VIZ_MVP.md](docs/requirements/VIZ_MVP.md).
 
 ## Start here
 
-- Agent guide: [AGENTS.md](AGENTS.md)
-- Docs index: [docs/README.md](docs/README.md)
-- Visualization architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Prerequisites gate: [docs/requirements/PREREQUISITES.md](docs/requirements/PREREQUISITES.md)
-- Active viz MVP: [docs/requirements/VIZ_MVP.md](docs/requirements/VIZ_MVP.md)
-- Full product architecture: [docs/PRODUCT_ARCHITECTURE_v1.md](docs/PRODUCT_ARCHITECTURE_v1.md)
-
-## Visualization MVP (`quatricmorph/`)
-
-Spatial Matrix Multiplication — enter compatible matrices, see planes A (I×K), B (K×J), C (I×J) on a shared 3D grid, orbit, hover values, select a result path, animate the output-cell dot product, and share a URL.
-
-### Preview / develop / build
-
-```bash
-cd quatricmorph
-npm install
-npm run dev      # http://127.0.0.1:5173
-npm test
-npm run build
-npm run preview
-```
-
-### Input format
-
-Paste A/B values as comma- or space-separated rows (newlines or `;`):
-
-```text
-1, 2, 3
-4, 5, 6
-```
-
-Presets: Random, Identity, Sequential, Zeros, Ones, Small Example (default `[[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] → [[58,64],[139,154]]`).
-
-B rows sync to A columns by default (optional unlock).
-
-### Operations
-
-| Control | Action |
+| Doc | Purpose |
 | --- | --- |
-| Play / Pause / Step / Reset Calculation | Output-cell dot-product animation |
-| Reset View / Fit View / Camera preset | Orbit camera |
-| Copy Share Link | URL with A/B values, display, camera |
-| Click C cell | Highlight A row / B column / C cell |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **Root source of truth** — implementation architecture |
+| [AGENTS.md](AGENTS.md) | Autonomous agent guide |
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/PRODUCT_BRIEF.md](docs/PRODUCT_BRIEF.md) | Condensed product thesis |
+| [docs/requirements/PREREQUISITES.md](docs/requirements/PREREQUISITES.md) | Gate before large implementation |
+| [docs/requirements/VIZ_MVP.md](docs/requirements/VIZ_MVP.md) | Phase 0 acceptance criteria |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phases 0–6 from architecture |
 
-### Share links
-
-State is encoded in the query string (JSON or compressed flatten). Invalid URLs fall back to defaults with a validation message. Transient animation timers and Three.js objects are not serialized.
-
-### Scope / limitations
-
-- One expression: `A @ B = C` (matrix/vector/scalar shapes).
-- No attention/QKV/LoRA, nested trees, broadcasting, batching, PyTorch import, or backends in the MVP UI.
-- Interactive target ~32×32; point-sprite markers; research `mm` examples remain under `examples/` but are not the product surface.
-
-### Attribution & licenses
-
-Visualization core adapted from [mm](https://github.com/bhosmer/mm) (Meta Platforms, MIT — see `mm/LICENSE`). Retain that notice for derived Three.js visualization code. Quatricmorph product docs and new modules in this repository follow the project’s licensing.
-
-## Layout
+## Target flow
 
 ```text
-quatricmorph/   Vite + TypeScript Three.js visualizer (MVP)
-mm/             Original mm reference (read-only — do not delete)
-docs/           Product, requirements, agent charter, architecture
-.cursor/rules/  Cursor agent rules
-prompts.md      Visualization MVP engineering brief
+SafeTensors
+→ NSIR semantic model
+→ tensor-native block database
+→ multiresolution Tensor Tiles (.qtile + tileset.json / GLB)
+→ WeightQL and mathematical expressions
+→ CesiumJS overview + custom WebGPU tensor renderer
+→ Metal / CUDA acceleration
+→ runtime activations and model morphing
 ```
+
+## Concrete MVP (Phase 0)
+
+From [ARCHITECTURE.md](ARCHITECTURE.md) §18:
+
+```text
+Model: 0.5B–7B SafeTensors (Qwen or Llama-like)
+Tensor: Q projection or MLP down projection
+Viewer: CesiumJS
+LOD: model → layer → tensor → block
+Query: exact scalar and tensor slice
+Math: one A @ B visualization on a real block
+```
+
+Do **not** start from full trillion-scale models or one-cube-per-weight GLBs.
+
+## Repository layout (target)
+
+Per architecture §16. Current tree may still contain legacy reference code; new work follows this structure:
+
+```text
+ARCHITECTURE.md     Canonical implementation architecture (immutable SoT)
+crates/             Rust: SafeTensors, NSIR, catalog, WeightQL, tiles, …
+apps/web/           CesiumJS / WebGPU viewer
+apps/desktop/       Tauri + wgpu (later phases)
+architectures/      Family resolvers (llama, qwen, …)
+schemas/            NSIR, qtile, WeightQL, visualization
+fixtures/           Small allowlisted SafeTensors fixtures
+docs/               Product, requirements, agent charter
+mm/                 Historical matrix-viz reference (read-only; not product)
+quatricmorph/       Legacy Three.js experiment (not architecture target)
+```
+
+## Non-goals (architecture §19)
+
+- One cube GLB per weight
+- Storing absolute positions for every scalar
+- Sending entire tensors into the browser
+- Using Cesium as a tensor compute engine
+- Letting chat freely execute terabyte-scale expressions
+- Treating color patterns as semantic proof of model concepts

@@ -1,52 +1,69 @@
-# Visualization MVP Requirements (Track A)
+# Phase 0 — Tensor Tiling Spike Requirements
 
-Active coding target for `quatricmorph/`. Full engineering brief: root [`prompts.md`](../../prompts.md).
+Active coding target. Source: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §17–§18. Requirement IDs for commits and agent reports: `TILE-*`.
 
 ## Goal
 
-Visualize a single multiplication:
-
 ```text
-A @ B = C
+Open one SafeTensors file
+→ select one 4096 × 4096 tensor
+→ create five LOD levels
+→ generate tileset.json (+ GLB / .qtile as needed)
+→ visualize in CesiumJS
+→ click a cell and retrieve the exact value
 ```
 
-aligned to shared **3D grid ruled lines** (MarginGrid3D concept). Visualization is an interface; math and layout contracts are the product.
+Concrete MVP profile:
 
-## Supported shapes
-
-| Case | Result |
+| Choice | Value |
 | --- | --- |
-| Matrix @ Matrix | Matrix |
-| Matrix @ Column | Column |
-| Row @ Matrix | Row |
-| Row @ Column | Scalar |
+| Model | 0.5B–7B SafeTensors, Qwen or Llama-like |
+| Tensor | Q projection or MLP down projection |
+| Viewer | CesiumJS (3D Tiles 1.1) |
+| LOD | model → layer → tensor → block (→ scalar on select) |
+| Query | exact scalar and tensor slice |
+| Math | one `A @ B` visualization on a real block (not full-matrix animation by default) |
 
-Types are shape-inferred (`m×n`, `n×1`, `1×n`, `1×1`). Same cell/frame/value systems for all.
+## LOD levels (architecture §9)
+
+| LOD | Object | Data |
+| --- | --- | --- |
+| 0 | Model | parameter count, bytes, global distributions |
+| 1 | Subsystem | layer ranges, aggregate norms |
+| 2 | Layer | tensor count, mean norm, anomaly score |
+| 3 | Tensor | shape, dtype, histogram, spectrum summary |
+| 4 | Block | block statistics, quantized samples |
+| 5 | Scalar region | exact or sampled weight values |
 
 ## Requirement IDs
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| VIZ-00 | Repo builds (`npm run build`) and unit tests pass | [x] |
-| VIZ-01 | Validate `A.cols === B.rows` before multiply; clear error; no partial Three.js leaks | [x] |
-| VIZ-02 | Deterministic `C[i,j] = Σ A[i,k]*B[k,j]` for fixed inputs | [x] |
-| VIZ-03 | Shared GridRuledLines3D / MarginGrid3D params (`cellSize`, gaps, margins, origin) drive placement | [x] |
-| VIZ-04 | World axes: X→J, Y→I, Z→K; planes A(I×K), B(K×J), C(I×J) aligned | [x] |
-| VIZ-05 | Tensor margin frames for A/B/C with consistent padding/labels | [x] |
-| VIZ-06 | Value→size and value→color mapping consistent across tensors | [x] |
-| VIZ-07 | Orbit camera + hover/spotlight labels without breaking layout | [x] |
-| VIZ-08 | URL/param serialization for reproducible scenes | [x] |
-| VIZ-09 | MVP UI hides attention/LoRA/nested expr/model loading | [x] |
-| VIZ-10 | Unit tests cover Array2D multiply path + genExpr/defaults used by MVP | [x] |
+| TILE-00 | Architecture docs defer to root `ARCHITECTURE.md`; conflicting Three.js-as-product docs removed/redirected | [x] |
+| TILE-01 | Do not load the entire checkpoint into RAM | [ ] |
+| TILE-02 | Parse SafeTensors header / shape / byte ranges (single file first; shards in Phase 1) | [ ] |
+| TILE-03 | Metadata import can be cancelled and resumed | [ ] |
+| TILE-04 | Build multiresolution tiles (summaries → blocks); GLB holds geometry/instances only; tensor payload in `.qtile` | [ ] |
+| TILE-05 | Emit `tileset.json` and load it in CesiumJS with view-based LOD | [ ] |
+| TILE-06 | Clicking a visual cell returns the correct canonical tensor address | [ ] |
+| TILE-07 | Exact scalar matches a Python SafeTensors reference for the same index | [ ] |
+| TILE-08 | Zooming out does not load exact values; zooming in only range-reads needed bytes | [ ] |
+| TILE-09 | Cache reused after reopening (content-addressed key per architecture §13) | [ ] |
+| TILE-10 | Shape-mismatched expression rejected before GPU execution; UI labels exact / sampled / approximate | [ ] |
+| TILE-11 | One block-mode `A @ B` visualization (planes A:XY, B:YZ, C:XZ) without multiplying entire matrices by default | [ ] |
 
-## Out of scope (do not surface in MVP UI)
+## Out of scope (Phase 0)
 
-Attention heads, QKV/softmax pipelines, LoRA viz, nested matmul trees, transformers/MLP blocks, broadcasting/batches, sparse tensors, PyTorch/model weight import, notebooks, accounts, backends.
-
-Existing advanced `mm` code may remain internally if removal is destabilizing, but must not appear as primary MVP UX. Attention example pages remain under `quatricmorph/examples/` but are not linked from the MVP shell.
+- Full-model / trillion-scale ingestion
+- One cube GLB per weight
+- Cesium as tensor compute engine
+- Chat freely executing large expressions
+- Morph/export platform features (`PLAT-P0-MIR`, export)
+- Replacing Cesium with custom WebGPU (Phase 3)
+- Treating `mm/` or legacy `quatricmorph/` Three.js UI as the product surface
 
 ## Done when
 
-- [x] All VIZ-01…VIZ-09 checked
-- [x] `npm test` and `npm run build` green
-- [x] Manual smoke: load app, multiply small matrices, orbit, hover values, reload URL restores scene
+- [ ] TILE-01…TILE-11 checked
+- [ ] Automated tests for deterministic addressing / scalar equality vs fixture
+- [ ] Manual smoke: open fixture → zoom LOD → click cell → exact value matches reference

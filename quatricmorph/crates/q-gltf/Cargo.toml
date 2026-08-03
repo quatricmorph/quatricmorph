@@ -1,0 +1,13 @@
+[package]
+name = "q-gltf"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+gltf = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+
+[lib]
+path = "src/lib.rs"

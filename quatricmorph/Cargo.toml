@@ -1,0 +1,28 @@
+[workspace]
+members = [
+    "crates/q-source",
+    "crates/q-safetensors",
+    "crates/q-architecture",
+    "crates/q-nsir",
+    "crates/q-catalog",
+    "crates/q-tensor-runtime",
+    "crates/q-statistics",
+    "crates/q-weightql",
+    "crates/q-expression",
+    "crates/q-tiles",
+    "crates/q-gltf",
+    "crates/q-tileset",
+    "crates/q-cache",
+    "crates/q-gpu",
+    "crates/q-daemon",
+    "crates/q-cli",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Quatricmorph Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/quatricmorph/quatricmorph"

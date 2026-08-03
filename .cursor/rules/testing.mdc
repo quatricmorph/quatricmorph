@@ -1,14 +1,13 @@
 ---
 description: Testing conventions for Quatricmorph
-globs: quatricmorph/**/*.{ts,tsx}
 alwaysApply: false
 ---
 
 # Testing
 
-- Unit tests: Vitest under `src/**/__tests__/` or `*.test.ts`.
-- No network in default unit tests.
-- Prefer testing `Array2D`, expr, params compress/round-trip, and future GridRuledLines math.
-- Name cases with requirement IDs when useful (`VIZ-02`).
-- Commands from `quatricmorph/`: `npm test`, `npm run test:watch`, `npm run build`.
-- Do not require WebGL in unit tests.
+- Prefer tests for SafeTensors range reads, canonical addresses, LOD/tile metadata, and scalar equality vs Python reference (`TILE-*`).
+- Name cases with requirement IDs when useful (`TILE-07`).
+- No network in default unit tests; no large weight downloads without allowlist.
+- Do not require GPU/WebGL/Cesium in unit tests.
+- Legacy `quatricmorph/` Vitest suites are historical only; they do not define architecture acceptance.
+- See `docs/TESTING.md` and root `ARCHITECTURE.md` §18 acceptance criteria.

@@ -1,0 +1,9 @@
+[model]
+name = "deepseek"
+version = "1.0"
+description = "Configuration for deepseek architecture"
+
+[layers]
+attention = true
+feed_forward = true
+layer_norm = true

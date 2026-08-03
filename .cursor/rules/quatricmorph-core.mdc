@@ -5,10 +5,12 @@ alwaysApply: true
 
 # Quatricmorph core
 
-- Canonical vision: `docs/PRODUCT_ARCHITECTURE_v1.md`; short form: `docs/PRODUCT_BRIEF.md`.
-- Active coding track by default: visualization MVP (`docs/requirements/VIZ_MVP.md`, `prompts.md`) in `quatricmorph/`.
-- Treat `mm/` as read-only reference. Do not delete it.
+- Canonical implementation architecture: root `ARCHITECTURE.md` (immutable SoT). Short form: `docs/PRODUCT_BRIEF.md`.
+- Broader product vision: `docs/PRODUCT_ARCHITECTURE_v1.md` — subordinate where it conflicts with `ARCHITECTURE.md`.
+- Active coding track by default: Phase 0 Tensor Tiling Spike (`docs/requirements/VIZ_MVP.md`, `TILE-*`).
+- Treat `mm/` as read-only historical reference. Do not delete it. Do not treat legacy `quatricmorph/` Three.js as the architecture target.
 - Follow `AGENTS.md` and `docs/agent/CHARTER.md`.
 - Check `docs/requirements/PREREQUISITES.md` before large features.
-- Axioms: validate before success; no semantic claims without evidence; local-first; visualization backed by shared query/math substrate.
-- Prefer small diffs. Do not invent Rust/Python platform code unless the task explicitly starts Track B.
+- Axioms: validate before success; no semantic claims without evidence; local-first; visualization backed by shared query/math substrate; distinguish exact/sampled/approximate.
+- Prefer small diffs. New platform code follows architecture §16 (`crates/`, `apps/`, `architectures/`, `schemas/`).
+- Obey architecture §19 (no cube-per-weight GLBs; Cesium is not compute; no full-tensor browser dumps).
