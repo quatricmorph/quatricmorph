@@ -1,14 +1,166 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "WeightQL Format",
-  "description": "Weight Query Language schema",
+  "$id": "https://quatricmorph.dev/schemas/weightql/v1",
+  "title": "WeightQL query and plan",
+  "description": "The request and response shapes of POST /v1/query (ARCHITECTURE.md section 14.5), plus the grammar the parser accepts. Implemented by crates/q-weightql and mirrored client-side by apps/web/query-interface/src/weightql.ts.",
   "type": "object",
-  "properties": {
-    "version": {
-      "type": "string"
+  "definitions": {
+    "grammar": {
+      "$comment": "The grammar implemented in this pass. There is NO production for eval, for a function definition, for shell interpolation, or for raw SQL passthrough — the function set is closed and enforced by q_expression::Expr being a closed enum. See docs/decisions/ADR-006-weightql-no-arbitrary-execution.md.",
+      "const": [
+        "script      := statement (';'? statement)* ';'?",
+        "statement   := assignment | show | select_value | select_slice",
+        "assignment  := IDENT '=' expr",
+        "show        := 'show' expr",
+        "select_value:= 'SELECT' 'value' 'FROM' tensor_call 'AT' '[' int (',' int)* ']'",
+        "select_slice:= 'SELECT' 'slice' 'FROM' tensor_call ['ROWS' range] ['COLUMNS' range]",
+        "expr        := add",
+        "add         := mul (('+'|'-') mul)*",
+        "mul         := postfix ('@' postfix)*",
+        "postfix     := primary ('[' selector ']')*",
+        "primary     := tensor_call | call | IDENT | '(' expr ')'",
+        "tensor_call := 'tensor' '(' STRING ')'",
+        "call        := reduction '(' expr ')' | 'transpose' '(' expr ')' | 'compare' '(' expr ',' expr ')' 'by' METRIC",
+        "reduction   := 'min'|'max'|'mean'|'variance'|'stddev'|'l1_norm'|'l2_norm'|'zero_ratio'",
+        "METRIC      := 'cosine_similarity' | 'relative_l2'",
+        "selector    := term (',' term)*",
+        "term        := int | int ':' int? | ':' int? | ':'"
+      ]
     },
-    "weights": {
-      "type": "array"
+    "request": {
+      "type": "object",
+      "required": ["model", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "description": "32-character hex model_id.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "expression": {
+          "description": "WeightQL source text.",
+          "type": "string",
+          "maxLength": 65536
+        }
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "title": "Executed scalar",
+          "type": "object",
+          "required": [
+            "status",
+            "plan_id",
+            "value",
+            "canonical_name",
+            "fidelity",
+            "bytes_read"
+          ],
+          "properties": {
+            "status": { "const": "scalar" },
+            "plan_id": { "type": "string", "pattern": "^plan:b3:[0-9a-f]{32}$" },
+            "value": { "type": "number" },
+            "canonical_name": { "type": "string" },
+            "fidelity": { "enum": ["exact", "sampled", "approximate"] },
+            "bytes_read": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "title": "Executed slice",
+          "type": "object",
+          "required": [
+            "status",
+            "plan_id",
+            "canonical_name",
+            "rows",
+            "columns",
+            "values",
+            "fidelity",
+            "bytes_read"
+          ],
+          "properties": {
+            "status": { "const": "slice" },
+            "plan_id": { "type": "string" },
+            "canonical_name": { "type": "string" },
+            "rows": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "columns": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "values": { "type": "array", "items": { "type": "number" } },
+            "fidelity": { "enum": ["exact", "sampled", "approximate"] },
+            "bytes_read": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "title": "Validated plan, not executed",
+          "description": "Shapes check out and the I/O estimate is real, but no backend exists to run it. `blocked_by` names the requirement covering the gap. No values are returned — a plan never invents numbers.",
+          "type": "object",
+          "required": [
+            "status",
+            "plan_id",
+            "expression",
+            "output_shape",
+            "estimated_read_bytes",
+            "matmul_count"
+          ],
+          "properties": {
+            "status": { "const": "planned" },
+            "plan_id": { "type": "string" },
+            "expression": { "type": "string" },
+            "output_shape": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0 }
+            },
+            "estimated_read_bytes": { "type": "integer", "minimum": 0 },
+            "matmul_count": { "type": "integer", "minimum": 0 },
+            "blocked_by": { "type": ["string", "null"] },
+            "blocked_reason": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "required": ["error", "message"],
+      "properties": {
+        "error": {
+          "enum": [
+            "not_implemented",
+            "not_found",
+            "forbidden",
+            "ambiguous_alias",
+            "query_rejected",
+            "budget_exceeded",
+            "cancelled",
+            "internal"
+          ]
+        },
+        "message": { "type": "string" },
+        "requirement": {
+          "description": "Present on 501s: the STATUS.md requirement covering the gap.",
+          "type": "string"
+        },
+        "candidates": {
+          "description": "Present on ambiguous_alias: every tensor the alias could mean. ARCHITECTURE.md section 6.2 forbids silently choosing one.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "documentation": { "type": "string" }
+      }
     }
+  },
+  "properties": {
+    "request": { "$ref": "#/definitions/request" },
+    "response": { "$ref": "#/definitions/response" },
+    "error": { "$ref": "#/definitions/error" }
   }
 }

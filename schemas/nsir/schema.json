@@ -1,14 +1,116 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "NSIR Format",
-  "description": "Neural Source Intermediate Representation",
+  "$id": "https://quatricmorph.dev/schemas/nsir/v1",
+  "title": "NSIR record",
+  "description": "Neural Semantic Intermediate Representation — the structured record an architecture resolver produces for one tensor. Implemented by `q_nsir::NsirRecord` (crates/q-nsir/src/record.rs); this schema and that struct must agree. Shape follows ARCHITECTURE.md section 4.2.",
   "type": "object",
+  "required": [
+    "stack",
+    "component",
+    "operation",
+    "parameter",
+    "axes",
+    "role",
+    "resolver_id",
+    "resolved"
+  ],
+  "additionalProperties": false,
   "properties": {
-    "version": {
+    "stack": {
+      "description": "Top-level stack. `Unknown` is a legitimate value, not a failure.",
+      "enum": ["Language", "Vision", "Audio", "Unknown"]
+    },
+    "layer": {
+      "description": "Zero-based index within the repeated layer stack. Absent for non-layer tensors (embeddings, final norm, output head).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "component": {
+      "enum": [
+        "Embedding",
+        "Attention",
+        "Mlp",
+        "MoE",
+        "Normalization",
+        "Router",
+        "OutputHead",
+        "Unknown"
+      ]
+    },
+    "expert": {
+      "description": "MoE expert index. Present only for `component: MoE`.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "operation": {
+      "description": "e.g. `query_projection`, `down_projection`. Empty when the resolver did not recognise the name.",
       "type": "string"
     },
-    "layers": {
-      "type": "array"
+    "parameter": {
+      "description": "`weight`, `bias`, or empty.",
+      "type": "string"
+    },
+    "axes": {
+      "description": "Axis labels in tensor axis order. Empty when unresolved — never invented.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "role": {
+      "description": "Semantic role. `Unknown` means the resolver read the name and did not recognise it; ARCHITECTURE.md section 4.2 forbids guessing a role from shape.",
+      "enum": [
+        "TokenEmbedding",
+        "PositionEmbedding",
+        "AttentionQueryProjection",
+        "AttentionKeyProjection",
+        "AttentionValueProjection",
+        "AttentionOutputProjection",
+        "AttentionQueryNorm",
+        "AttentionKeyNorm",
+        "MlpGateProjection",
+        "MlpUpProjection",
+        "MlpDownProjection",
+        "MoeRouter",
+        "MoeExpertGateProjection",
+        "MoeExpertUpProjection",
+        "MoeExpertDownProjection",
+        "InputLayerNorm",
+        "PostAttentionLayerNorm",
+        "FinalNorm",
+        "LmHead",
+        "Bias",
+        "Unknown"
+      ]
+    },
+    "resolver_id": {
+      "description": "Which architecture plugin produced this record, e.g. `llama`, `generic`.",
+      "type": "string"
+    },
+    "resolved": {
+      "description": "False when the resolver did not recognise the name. Consumers must surface this rather than papering over it.",
+      "type": "boolean"
     }
-  }
+  },
+  "examples": [
+    {
+      "stack": "Language",
+      "layer": 10,
+      "component": "Attention",
+      "operation": "query_projection",
+      "parameter": "weight",
+      "axes": ["output_channel", "input_channel"],
+      "role": "AttentionQueryProjection",
+      "resolver_id": "llama",
+      "resolved": true
+    },
+    {
+      "stack": "Unknown",
+      "component": "Unknown",
+      "operation": "",
+      "parameter": "weight",
+      "axes": [],
+      "role": "Unknown",
+      "resolver_id": "generic",
+      "resolved": false
+    }
+  ]
 }

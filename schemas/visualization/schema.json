@@ -1,14 +1,119 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Visualization Schema",
-  "description": "Schema for visualization data",
+  "$id": "https://quatricmorph.dev/schemas/visualization/v1",
+  "title": "Visualization Plane",
+  "description": "Tileset nodes, GLB tile specs, the visual_tiles catalog row, and the per-cell GPU record (ARCHITECTURE.md sections 5.5, 9, 10, 11). NOTE: tileset.json and GLB generation are NOT implemented in this pass — q_tileset::UnimplementedTilesetBuilder and q_gltf::UnimplementedGlbBuilder return NotImplemented (CESIUM-001, GLB-001). This schema fixes the shapes those builders must produce so the daemon, the catalog, and the viewer cannot drift while the builders are written.",
   "type": "object",
-  "properties": {
-    "type": {
-      "type": "string"
+  "definitions": {
+    "bounding_box": {
+      "description": "3D Tiles `box` form: centre plus three half-axes.",
+      "type": "object",
+      "required": ["center", "half_axes"],
+      "properties": {
+        "center": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "half_axes": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
     },
-    "data": {
-      "type": "object"
+    "visual_tile_row": {
+      "description": "The `visual_tiles` table of ARCHITECTURE.md section 5.5. Implemented in crates/q-catalog/src/schema.rs.",
+      "type": "object",
+      "required": [
+        "tile_id",
+        "model_id",
+        "lod",
+        "bounds",
+        "geometric_error",
+        "child_count"
+      ],
+      "properties": {
+        "tile_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "parent_tile_id": { "type": ["string", "null"] },
+        "model_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "tensor_id": { "type": ["string", "null"] },
+        "lod": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "bounds": { "$ref": "#/definitions/bounding_box" },
+        "geometric_error": { "type": "number", "minimum": 0 },
+        "qtile_uri": {
+          "description": "The .qtile sidecar holding the actual values. Required whenever glb_uri is set: a GLB may never be the only carrier of tensor data (ARCHITECTURE.md section 10.1).",
+          "type": ["string", "null"]
+        },
+        "glb_uri": { "type": ["string", "null"] },
+        "child_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tileset_node": {
+      "description": "One node of the hierarchy q_tileset::TilesetNode emits. Geometric error MUST strictly decrease with depth or the child never refines and its subtree is unreachable — validated by TilesetNode::validate_refinement.",
+      "type": "object",
+      "required": [
+        "tile_id",
+        "lod",
+        "bounding_box",
+        "geometric_error",
+        "children"
+      ],
+      "properties": {
+        "tile_id": { "type": "string" },
+        "lod": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "bounding_box": { "$ref": "#/definitions/bounding_box" },
+        "geometric_error": { "type": "number", "exclusiveMinimum": 0 },
+        "glb_uri": { "type": ["string", "null"] },
+        "qtile_uri": { "type": ["string", "null"] },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/tileset_node" }
+        }
+      }
+    },
+    "glb_tile_spec": {
+      "description": "What a GLB tile may contain (ARCHITECTURE.md section 10.2). It may NOT contain full FP16/BF16 weights, many copies of the same cube mesh, reproducible analysis results, or exact tensor data for the whole model. Implemented as q_gltf::GlbTileSpec.",
+      "type": "object",
+      "required": ["tile_id", "instance_count", "value_encoding", "qtile_uri"],
+      "properties": {
+        "tile_id": { "type": "string" },
+        "instance_count": {
+          "description": "Instance transforms over ONE shared mesh. Capped at 262144: one cube per weight is a data explosion, not a visualization optimization (ARCHITECTURE.md section 19).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "value_encoding": { "enum": [0, 1, 2] },
+        "qtile_uri": { "type": "string", "minLength": 1 },
+        "request_gpu_instancing": {
+          "description": "Request EXT_mesh_gpu_instancing. A request, not an assumption: ARCHITECTURE.md section 10.2 requires checking the renderer's real support level and keeping a fallback.",
+          "type": "boolean"
+        }
+      }
+    },
+    "visual_cell": {
+      "description": "The minimal per-cell GPU record of ARCHITECTURE.md section 11.1. Absolute positions are NOT stored: the shader computes position = tile_origin + decode_morton(morton_coordinate) * cell_spacing. Storing positions per scalar is forbidden by section 19.",
+      "type": "object",
+      "required": ["morton_coordinate", "quantized_value", "flags", "local_id"],
+      "properties": {
+        "morton_coordinate": { "type": "integer", "minimum": 0 },
+        "quantized_value": {
+          "type": "integer",
+          "minimum": -32768,
+          "maximum": 32767
+        },
+        "flags": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "local_id": { "type": "integer", "minimum": 0 }
+      }
     }
+  },
+  "properties": {
+    "visual_tile_row": { "$ref": "#/definitions/visual_tile_row" },
+    "tileset_node": { "$ref": "#/definitions/tileset_node" },
+    "glb_tile_spec": { "$ref": "#/definitions/glb_tile_spec" },
+    "visual_cell": { "$ref": "#/definitions/visual_cell" }
   }
 }

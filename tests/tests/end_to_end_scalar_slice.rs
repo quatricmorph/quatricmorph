@@ -77,7 +77,7 @@ fn open_model() -> (LocalFsSource, Catalog, String) {
     );
 
     // 3. Persist to the catalog.
-    let mut catalog = Catalog::open_in_memory().expect("catalog");
+    let catalog = Catalog::open_in_memory().expect("catalog");
     catalog
         .upsert_resolved(
             ingested.model_id,
