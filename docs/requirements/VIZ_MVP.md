@@ -49,4 +49,4 @@ Existing advanced `mm` code may remain internally if removal is destabilizing, b
 
 - [x] All VIZ-01…VIZ-09 checked
 - [x] `npm test` and `npm run build` green
-- [ ] Manual smoke: load app, multiply small matrices, orbit, hover values, reload URL restores scene
+- [x] Manual smoke: load app, multiply small matrices, orbit, hover values, reload URL restores scene

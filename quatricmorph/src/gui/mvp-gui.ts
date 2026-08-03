@@ -168,13 +168,35 @@ export function initGui(params, callbacks, info) {
 
   const input = gui.addFolder('Input A @ B')
 
-  input.add(state, 'aRows', 1, 32, 1).name('A rows').onFinishChange(applyShapesAndRebuild)
-  input.add(state, 'aCols', 1, 32, 1).name('A columns').onFinishChange(() => {
-    if (!state.unlockBRows) state.bRows = state.aCols
-    applyShapesAndRebuild()
-  })
-  input.add(state, 'bRows', 1, 32, 1).name('B rows').onFinishChange(applyShapesAndRebuild)
-  input.add(state, 'bCols', 1, 32, 1).name('B columns').onFinishChange(applyShapesAndRebuild)
+  /** Live dim check so invalid shapes surface before/without waiting for blur (VIZ-01). */
+  function validateDimsMessage() {
+    const check = validateMatmulDims(
+      Math.max(1, Math.floor(state.aRows)),
+      Math.max(1, Math.floor(state.aCols)),
+      Math.max(1, Math.floor(state.bRows)),
+      Math.max(1, Math.floor(state.bCols)),
+    )
+    setValidationMessage?.(check.ok ? '' : check.message)
+  }
+
+  input.add(state, 'aRows', 1, 32, 1).name('A rows')
+    .onChange(validateDimsMessage)
+    .onFinishChange(applyShapesAndRebuild)
+  input.add(state, 'aCols', 1, 32, 1).name('A columns')
+    .onChange(() => {
+      if (!state.unlockBRows) state.bRows = state.aCols
+      validateDimsMessage()
+    })
+    .onFinishChange(() => {
+      if (!state.unlockBRows) state.bRows = state.aCols
+      applyShapesAndRebuild()
+    })
+  input.add(state, 'bRows', 1, 32, 1).name('B rows')
+    .onChange(validateDimsMessage)
+    .onFinishChange(applyShapesAndRebuild)
+  input.add(state, 'bCols', 1, 32, 1).name('B columns')
+    .onChange(validateDimsMessage)
+    .onFinishChange(applyShapesAndRebuild)
   input.add(state, 'unlockBRows').name('Unlock B rows').onChange((v) => {
     params.mvp = params.mvp || {}
     params.mvp.syncBk = !v
