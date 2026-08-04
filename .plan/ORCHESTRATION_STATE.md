@@ -238,3 +238,34 @@ the durable artifact by the task's own design. Any such trim is recorded as a
 limitation in the final report, and `QM-0101`/`QM-0102` then stay `Blocked` with
 "checkpoint trimmed to reclaim disk" as the named blocker rather than being
 measured against a partial artifact.
+
+## QM-0100 — checkpoint acquired (controller-run download, T+21m)
+
+```
+DONE 2026-08-04T16:24:21Z   (started 2026-08-04T16:09:12Z — 15m09s at ~21.9 MB/s)
+repo Qwen/Qwen1.5-MoE-A2.7B   rev 1a758c50ecb6350748b9ce0a99d2352fd9fc11c9
+8 of 8 shards COMPLETE, each verified against the hub's x-linked-size header
+```
+
+| Check | Result |
+| --- | --- |
+| Shards on disk | 8 of 8, plus `model.safetensors.index.json` |
+| On-disk bytes | `28_632_144_944` |
+| `index.metadata.total_size` | `28_631_568_384` |
+| Delta | `+576_560` — **exactly** the sum of the eight safetensors headers (71368, 83792, 83432, 84456, 84112, 84472, 84112, 816). `total_size` counts payload only. Not corruption; verified by reading each shard's leading u64 header length |
+| Tensors in `weight_map` | 4659 |
+| Expert-keyed tensors | 4320 (`model.layers.N.mlp.experts.K.*`) |
+| dtype | bf16 (`torch_dtype: bfloat16`) — exactly decoded per `SRC-016`, not the fp8 that `SRC-014` refuses |
+| `git status --short models/` | empty — `.gitignore:22:/models/` confirmed via `git check-ignore -v` |
+| sha256 of index.json | `ece1b223efe32f4349d0dfa2a522249ac10bcb89369ed25b222c35175cd90b53` |
+
+**Acquisition is done; the task is not.** `QM-0100` still requires `q-cli inspect`
+against the checkpoint, the bytes-read-during-indexing measurement (< 0.1 % of file
+size), a `/usr/bin/time -l` peak-RSS figure, `fixtures/real-checkpoint-record.json`,
+and a record-consistency test. Those need a Rust worktree and are **held on disk
+headroom** until one of the five in-flight worktrees merges and is cleaned. The
+long-lead item — the download itself — is secured, which was the reason to start it
+in the first minute.
+
+Controller `target/` was `cargo clean`ed at T+20m to free 2.5 GB ahead of the final
+shard. It rebuilds at first merge validation.
