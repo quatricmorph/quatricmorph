@@ -300,3 +300,37 @@ written `.plan/evidence/QM-0006.md`. Before merging I verify the final record
 contains both the implementer's sections and the reviewer's filled-in
 `## Independent review` block; if either was clobbered, the reviewer re-records
 before the merge proceeds.
+
+## Push to `origin` is not available — local `main` is the integration branch
+
+First attempted at the `QM-0006` merge (T+45m). Verbatim results:
+
+```
+$ ssh -T git@github.com
+Hi hmthanh! You've successfully authenticated, but GitHub does not provide shell access.
+  → exit 0. The SSH identity is `hmthanh`, NOT the `gh` token's `MarkdownOfficial`.
+
+$ git push --verbose origin main            # SSH, BatchMode, 60s cap
+Pushing to github.com:quatricmorph/quatricmorph.git
+  → exit 124 (timeout). Authenticates, then hangs on pack upload. No rejection
+    message is ever emitted; the connection simply stalls.
+
+$ git push https://github.com/quatricmorph/quatricmorph.git main
+remote: Permission to quatricmorph/quatricmorph.git denied to MarkdownOfficial.
+fatal: unable to access '...': The requested URL returned error: 403
+  → exit 1, explicit denial.
+
+$ git rev-parse --short main origin/main
+19b7ba0   fe501e5        → local main is 9 commits ahead
+```
+
+**Consequence, per controller §1.** Merges land on the controller's local `main`,
+which is the integration branch for the remainder of the run. Every dependency
+check that reads "on `origin/main`" reads "on the controller's `main`". The final
+report states this plainly. Run 1's probe recorded `git push --dry-run` succeeding
+for a *new branch* (`qm-capability-probe`) — creating a ref is not the same
+permission as updating `main`, so that observation did not predict this, and the
+prompt's expectation that SSH push would work is not borne out.
+
+**No retry beyond once per wave.** The run does not halt, does not ask, and does
+not treat this as a blocker. There is no `BLOCKED_BY_CREDENTIAL` state.

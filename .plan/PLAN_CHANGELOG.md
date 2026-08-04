@@ -158,3 +158,24 @@ content.
 **Dependency impact:** none.
 **Evidence:** `for d in .plan/tasks/*/; do awk '/^## Status/{f=1;next} f&&NF{print;exit}' "$d/TASK.md"; done | sort | uniq -c` →
 before: one `> **Controller correction…` row; after: `36 Blocked / 44 Deferred / 10 Ready`.
+
+## 2026-08-04 — CONTROLLER — `git push origin main` is unavailable; local `main` is the integration branch
+
+**Discovered during:** the `QM-0006` merge (Stage G), first push attempt
+**Defect:** neither available credential can update `main` on the remote. SSH
+authenticates as `hmthanh` and then hangs indefinitely on pack upload (exit 124,
+no rejection message). HTTPS via the `gh` token is explicitly denied: *"Permission
+to quatricmorph/quatricmorph.git denied to MarkdownOfficial"*, HTTP 403. The `gh`
+token reports `permissions.push: false`, consistent with the 403.
+**Correction:** merge path L proceeds against the controller's local `main`, which
+becomes the integration branch. `.plan/README.md`'s requirement that a task's
+`STATUS.md` update land "in the same pull request" was already substituted by an
+evidence record in the same squash commit; this entry records that the *push* half
+of path L is also unavailable, so "reachable from `origin/main`" becomes
+"reachable from the controller's `main`" for every dependency check in this run.
+**Files changed:** `.plan/ORCHESTRATION_STATE.md`, `.plan/PLAN_CHANGELOG.md`
+**Dependency impact:** none — all dependency checks retarget to local `main`.
+**Evidence:** the three commands and their verbatim output are recorded in
+`.plan/ORCHESTRATION_STATE.md` under "Push to `origin` is not available".
+Note that Run 1's `git push --dry-run` success was for creating a *new branch*,
+which is a different permission from updating `main`.
