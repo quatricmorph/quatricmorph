@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when Phases 03–07 reaches `Complete`. **Integration gate G4.**
+Not in v1 — it demonstrates the deferred viewer-and-workspace pipeline; `QM-0161` and `QM-0165` covers v1's need. The task itself is unchanged and returns with the post-v1 **platform release**.
 
 ## Phase
 

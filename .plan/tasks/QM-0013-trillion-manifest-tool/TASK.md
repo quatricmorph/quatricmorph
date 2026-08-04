@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when `QM-0005` reaches `Complete`.
+Not in v1 — `CAT-006` already proves manifest-scale indexing as a test. Promoting the generator to a tool serves the deferred platform demo, not the v1 wedge, whose out-of-core claim is proven on **real** bytes by `QM-0100`/`QM-0101`.
 
 ## Phase
 

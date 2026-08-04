@@ -4,7 +4,9 @@
 
 Blocked
 
-Unblocks when `QM-0080` reaches `Complete`.
+Unblocks when `QM-0152` reaches `Complete`. Scope narrows to the v1 surface and CLI.
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

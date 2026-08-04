@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when `QM-0073` reaches `Complete`.
+Not in v1 — post-v1 **platform release**. See [`STRATEGY_ALIGNMENT.md`](../../STRATEGY_ALIGNMENT.md) and [`PRODUCT_SCOPE.md`](../../PRODUCT_SCOPE.md) §4. The specification below remains correct; only its release has moved.
 
 ## Phase
 

@@ -2,9 +2,11 @@
 
 ## Status
 
-Blocked
+Ready
 
-Unblocks when `QM-0080` reaches `Complete`.
+No longer waits on `QM-0080` (deferred). A licensing audit needs no running pipeline.
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

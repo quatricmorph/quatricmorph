@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when `QM-0034` reaches `Complete`. **Requires: RTX 3090.**
+Not in v1 — post-v1 **CUDA accelerator lane**, requiring an RTX 3090. v1's GPU lane is Metal (`QM-0126`, `QM-0127`). See [`PRODUCT_SCOPE.md`](../../PRODUCT_SCOPE.md) §4.
 
 ## Phase
 

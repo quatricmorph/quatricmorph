@@ -4,7 +4,9 @@
 
 Blocked
 
-Unblocks when `QM-0080` reaches `Complete`.
+Unblocks when `QM-0033` and `QM-0143` reach `Complete`. (Was `QM-0080`, now deferred.)
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

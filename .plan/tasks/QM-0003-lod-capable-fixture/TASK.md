@@ -2,7 +2,9 @@
 
 ## Status
 
-Ready
+Deferred
+
+Not in v1 — it builds an LOD-capable fixture for the deferred tile pipeline; `QM-0100` covers v1's need. The task itself is unchanged and returns with the post-v1 **platform release**.
 
 ## Phase
 

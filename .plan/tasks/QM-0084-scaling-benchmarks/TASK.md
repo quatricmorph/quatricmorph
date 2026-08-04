@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when `QM-0080` reaches `Complete`.
+Not in v1 — it benchmarks the deferred tile pipeline; `QM-0102` covers v1's need. The task itself is unchanged and returns with the post-v1 **platform release**.
 
 ## Phase
 

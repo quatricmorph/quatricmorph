@@ -4,7 +4,9 @@
 
 Blocked
 
-Unblocks when `QM-0003` reaches `Complete`.
+Unblocks when `QM-0100` reaches `Complete`. (Was `QM-0003`, now deferred — v1 streams the **real** checkpoint, not an LOD fixture.)
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

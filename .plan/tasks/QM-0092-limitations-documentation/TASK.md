@@ -4,7 +4,9 @@
 
 Blocked
 
-Unblocks when `QM-0084` reaches `Complete`.
+Unblocks when `QM-0102` reaches `Complete`. Must state the checkpoint-size waiver in [`DEFINITION_OF_DONE.md`](../../DEFINITION_OF_DONE.md) §1 and the CUDA deferral.
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

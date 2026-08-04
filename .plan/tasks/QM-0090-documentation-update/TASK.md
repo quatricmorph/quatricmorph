@@ -4,11 +4,9 @@
 
 Blocked
 
-Unblocks when `QM-0080` reaches `Complete`.
+Unblocks when `QM-0141` and `QM-0152` reach `Complete`. Audits every string against [`PRODUCT_SCOPE.md`](../../PRODUCT_SCOPE.md) §5.2 — the forbidden-claims table.
 
-**The ADR gate is satisfied.** `ADR-CANDIDATE-014` was promoted on 2026-08-04 to
-`docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md`, which accepts
-the code's mapping and assigns the §8.2 correction to this task.
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

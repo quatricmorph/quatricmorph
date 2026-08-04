@@ -1,206 +1,261 @@
-# EXECUTION_ORDER
+# EXECUTION_ORDER — v1
 
 ## 1. How to use this document
 
 An agent picks the earliest `Ready` task on the critical path. If none is
-`Ready`, it takes any `Ready` task from a parallel lane whose
-`Parallelization` section does not name a file another in-progress task is
-editing ([`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md) §4).
+`Ready`, it takes any `Ready` task from a parallel lane whose `Parallelization`
+section does not name a file another in-progress task is editing
+([`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md) §4).
 
-**Read [`../STATUS.md`](../STATUS.md) first.** It, not this plan, is the record
-of what is built.
+**Read [`../STATUS.md`](../STATUS.md) first.** It, not this plan, is the record of
+what is built.
+
+**Never start a `Deferred` task.** Phases 04–07 are deferred wholesale for v1
+(Cesium viewer, tile pyramid, matrix workspace, chat). They are correct work, in
+the wrong release. See [`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md).
 
 ## 2. Wave order
 
 Tasks within a wave may run concurrently. A wave starts when its predecessor
 completes, except where a gate says otherwise.
 
-### Wave 0 — baseline and contracts (5 tasks)
+### Wave 0 — start the clock on the long lead times (4 tasks)
 
 ```text
-parallel:  QM-0001  baseline verification
-           QM-0002  divergence register
-           QM-0003  LOD-capable fixture
-then:      QM-0004  spatial contract        (alone — shared schema)
-then:      QM-0005  conformance tests       ══ GATE G1
+immediately: QM-0100  acquire a real ≥24 GB checkpoint    ← hours of download; start FIRST
+parallel:    QM-0001  baseline verification               (minutes)
+             QM-0002  divergence register + path drift
+             QM-0160  design-partner outreach             ← no code; runs for the whole plan
 ```
 
-**Nothing in Phases 04–06 may start before G1.** Each of those phases would
-otherwise add a fourth copy of the spatial rules.
+`QM-0100` is first in the entire plan because it is the only task whose lead time
+is measured in hours of wall clock the agent cannot compress, and because
+`QM-0101`, `QM-0122`, `QM-0125`, `QM-0161` and every performance number in the
+release all depend on the artifact it produces.
 
-### Wave 1 — ingestion, catalog, and the viewer spike (9 tasks)
+`QM-0160` starts now and never finishes until v1 ships. The strategy's Days 0–30
+instruction is partner conversations, not code, and this is where a solo founder
+most reliably loses two months.
+
+### Wave 1 — residency proof and the streaming spine (4 tasks)
 
 ```text
-Lane A:  QM-0012 → QM-0020 → QM-0021 → QM-0022      (sequential — shared file)
-Lane A:  QM-0030                                     (needs QM-0003)
-Lane B:  QM-0050  viewer spike                       ← EARLY, de-risks R1
-Lane E:  QM-0034  cuda build                         [CUDA toolkit]
-free:    QM-0010 → QM-0011,  QM-0013,  QM-0023
+Lane P:  QM-0101  bounded-residency proof on the real checkpoint   ══ GATE G1
+Lane P:  QM-0030  bounded streaming block reader
+Lane T:  QM-0012  model metadata from config.json
+Lane R:  QM-0140  manifest schema v1                (schema only — no data needed yet)
 ```
 
-`QM-0050` is scheduled here, far ahead of the rest of Phase 05, because it is the
-only task whose failure costs a phase rather than a task.
+`QM-0140` is scheduled here, far ahead of the engine that fills it, because the
+report schema is the contract between the engine, the CLI, the daemon, and the
+surface. Writing it late means writing it four times.
 
-### Wave 2 — compute and the web core (7 tasks)
+### Wave 2 — the engine (6 tasks)
 
 ```text
-Lane A:  QM-0031 → QM-0032 → QM-0033
-Lane A:  QM-0037                                     (needs QM-0034)
-Lane C:  QM-0060  web core                           (alone — both lanes consume it)
-Lane E:  QM-0035 → QM-0036                           [RTX 3090]
+Lane Q:  QM-0120 → QM-0121 → QM-0122                 ══ GATE G2 at QM-0122
+Lane T:  QM-0020  persist statistics
+Lane T:  QM-0010  Qwen resolver                      (v1 target checkpoints are Qwen-family)
+Lane S:  QM-0150  heat-map surface against the schema, with synthetic data
 ```
 
-### Wave 3 — artifacts and workspace foundations (11 tasks)
+Lane S runs against the `QM-0140` schema with synthetic input, so the surface is
+built and reviewable before the engine produces anything. If the surface turns
+out not to be what drives adoption, this is the cheapest possible moment to learn
+it — see [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §5.
+
+### Wave 3 — aggregation, jobs, decisions (6 tasks)
 
 ```text
-Lane A:  QM-0040 → QM-0041 → QM-0042 → QM-0043 → QM-0044 → QM-0045 → QM-0046  ══ G2
-Lane C:  QM-0061,  QM-0062,  QM-0063 → QM-0064
-Lane C:  QM-0065                                     (needs QM-0061, QM-0062)
+Lane Q:  QM-0123 → QM-0125                           (aggregation → ranking + frontier)
+Lane Q:  QM-0124                                     (outlier attribution; parallel to QM-0125)
+Lane P:  QM-0033  job runner                         (checkpoint, atomic, resume, cancel)
+Lane T:  QM-0032  wire the cache into the diagnostic path
+Lane U:  QM-0126  Metal backend build                [Apple GPU — blocks nothing]
 ```
 
-Lane A is a strict chain; Lane C runs beside it.
-
-### Wave 4 — viewer and query (13 tasks)
+### Wave 4 — the artifact and the interface (6 tasks)
 
 ```text
-Lane B:  QM-0051 → QM-0052 → QM-0053                 ══ G3
-Lane B:  QM-0054,  QM-0055,  QM-0056,  QM-0057       (parallel after QM-0051)
-Lane C:  QM-0066 → QM-0067 → QM-0068
-Lane D:  QM-0070 → QM-0071 → QM-0072 → QM-0073       (sequential — shared file)
-Lane D:  QM-0074,  QM-0075                            (parallel after QM-0073)
+Lane R:  QM-0141  deterministic Markdown report      ══ GATE G3
+Lane R:  QM-0142  golden report + diff test
+Lane R:  QM-0143  CLI exit codes and daemon routes
+Lane S:  QM-0151  legibility review with real data   ══ GATE G4
+Lane S:  QM-0152  surface reads a real manifest
+Lane U:  QM-0127  Metal differential verification vs CPU
 ```
 
-### Wave 5 — integration (6 tasks)
+### Wave 5 — validation (5 tasks, mostly not code)
 
 ```text
-           QM-0080  end-to-end demonstration         ══ G4  (alone)
-parallel:  QM-0081  failure injection
-           QM-0082  browser soak
-           QM-0084  benchmarks
-           QM-0085  error and security audit
-Lane E:    QM-0083  cuda soak                        [RTX 3090]
+QM-0161  design-partner run on a checkpoint the founder did not choose
+QM-0162  documented decision-change case             ══ GATE G5
+QM-0163  price probe
+parallel: QM-0102 scaling benchmarks
+          QM-0085 runtime error and security audit
 ```
 
 ### Wave 6 — release (5 tasks)
 
 ```text
-parallel:  QM-0090  documentation      (ADR gate satisfied: ADR-009)
+parallel:  QM-0090  documentation update
            QM-0092  limitations
-           QM-0093  licensing
+           QM-0093  attribution and licensing
+           QM-0167  root-document amendment          (see Phase 14)
 then:      QM-0091  regenerate STATUS.md
-then:      QM-0094  acceptance audit                 ══ G5
+then:      QM-0165  v1 release audit                 ══ RELEASE
 ```
 
 ## 3. Critical path
 
 ```text
-QM-0001 → QM-0004 → QM-0005 → QM-0030 → QM-0031 → QM-0033 → QM-0040 → QM-0041
-        → QM-0042 → QM-0044 → QM-0051 → QM-0053 → QM-0066 → QM-0067 → QM-0080
-        → QM-0094
+QM-0100 → QM-0101 → QM-0030 → QM-0120 → QM-0121 → QM-0122 → QM-0123 → QM-0033
+        → QM-0125 → QM-0140 → QM-0141 → QM-0150 → QM-0161 → QM-0162 → QM-0165
 ```
 
-**Sixteen tasks. Not one requires an NVIDIA GPU.**
+**Fifteen tasks. Not one requires an NVIDIA GPU, a renderer, or a chat
+interface.**
 
-`QM-0003` is a co-prerequisite of `QM-0030` and starts in Wave 0.
+`QM-0140` (manifest schema) is on the path but is schedulable much earlier than
+its position implies — it depends only on the *shape* of the engine's output, not
+its data. Doing it in Wave 1 shortens the path by one wave.
 
-### Why CUDA is not on it
+### Why the shared spatial contract is no longer first
 
-`q_gpu::CpuBackend` is `GPU-002 Verified` and `block_statistics_default` already
-computes what the tile pyramid needs. Routing Phase 04 through the CPU backend
-makes the pipeline buildable on the machine that must build it;
-`docs/decisions/ADR-008-track-b-prerequisite-waiver.md` already waives the RTX
-3090 gate. CUDA replaces a backend behind `q_gpu::Backend` and changes no
-downstream artifact.
+The previous critical path began `QM-0001 → QM-0004 → QM-0005` — a shared spatial
+contract and its conformance tests, so that the Rust tiler, the Cesium viewer and
+the matrix workspace could not drift apart on grid parameters and the LOD ladder.
+That was correct when three consumers existed. **v1 has none of them**: no tiler,
+no Cesium viewer, no workspace. Building the contract now would be building a
+schema for three deferred consumers, and it would be stale by the time they
+arrive.
 
-Had CUDA been on the critical path, the MVP would be unbuildable in its own
-development environment.
+`QM-0004` and `QM-0005` are `Deferred`, not cancelled, and they remain the first
+two tasks of the post-v1 visualization release.
+
+### Why the Metal lane is off the path
+
+`q_gpu::CpuBackend` is `GPU-002 Verified` and is the numerical reference for every
+metric v1 computes (`DIAGNOSTIC_ARCHITECTURE.md` §4.3). A Metal backend makes the
+headline run faster; it changes no output. If Metal slips, v1 ships on CPU with a
+slower benchmark and an honest note. If Metal were on the path, a shader bug
+would block a business milestone.
 
 ## 4. Lanes
 
 | Lane | Tasks | Owns | Unblocked by |
 | --- | --- | --- | --- |
-| **A — artifacts** (critical) | `QM-0030`…`QM-0033`, `QM-0037`, `QM-0040`…`QM-0046`, plus catalog work | `crates/q-tensor-runtime`, `q-statistics`, `q-tiles`, `q-gltf`, `q-tileset`, `q-catalog` | G1 |
-| **B — viewer** | `QM-0050`…`QM-0057` | `apps/web/model-viewer` | G1; G2 for real data |
-| **C — workspace** | `QM-0060`…`QM-0068` | `apps/web/core`, `apps/web/quatricmorph-workspace` | G1 |
-| **D — query** | `QM-0070`…`QM-0075` | `crates/q-weightql`, `q-expression`, `apps/web/query-interface` | `QM-0031`, `QM-0020` |
-| **E — CUDA** | `QM-0034`…`QM-0036`, `QM-0083` | `crates/q-cuda`, `gpu/cuda` | G1. **Blocks nothing** |
+| **P — proof** (critical) | `QM-0100`, `QM-0101`, `QM-0102`, `QM-0030`, `QM-0033` | `crates/q-source`, `q-tensor-runtime`, `fixtures/`, `models/` | — |
+| **Q — engine** (critical) | `QM-0120`…`QM-0127` | `crates/q-quant`, `crates/q-diagnostics`, `crates/q-gpu` | `QM-0030` |
+| **R — report** | `QM-0140`…`QM-0144` | `crates/q-report`, `q-cli`, `q-daemon` | schema: nothing; data: `QM-0123` |
+| **S — surface** | `QM-0150`…`QM-0153` | `apps/web/diagnostics` | `QM-0140` schema |
+| **T — catalog** | `QM-0010`, `QM-0012`, `QM-0020`, `QM-0032` | `crates/q-catalog` | sequential among themselves |
+| **U — Metal** | `QM-0126`, `QM-0127` | `crates/q-gpu`, `gpu/metal/` | `QM-0121`. **Blocks nothing** |
+| **V — validation** | `QM-0160`…`QM-0165` | no code | **nothing — starts on day 1** |
 
-## 5. Runnable without an RTX 3090
+## 5. Runnable on the development machine
 
-**59 of 62 tasks.**
+**Every v1 task.** The machine is an Apple M3 Pro, 36 GB unified memory, 51 GB
+free disk. No task in Phases 10–14 requires NVIDIA hardware, and the Metal lane
+targets the GPU that is present.
 
-Only `QM-0035`, `QM-0036`, and `QM-0083` require the device. `QM-0034` needs a
-CUDA toolkit to compile, not a device, and its acceptance criteria include that
-`cargo build --workspace` keeps working **without** the toolkit.
+The binding constraint is **disk, not compute**: `QM-0100` must fit its checkpoint
+in 51 GB, which caps v1's headline model at roughly 30–40 GB. That cap is
+recorded as a waiver in [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md), not
+papered over.
 
-Consequently 43 of the 46 acceptance criteria are achievable with no NVIDIA
-hardware; `MVP-10`, `MVP-12`, and `MVP-42` are the exceptions and have a defined
-waiver path.
-
-## 6. Requiring an RTX 3090
-
-| Task | What it proves |
-| --- | --- |
-| `QM-0035` | Reduction and histogram kernels match the CPU reference on hardware |
-| `QM-0036` | Quantization, Morton, and matmul match; OOM adaptation works |
-| `QM-0083` | 10 000 block jobs leak no device memory |
-
-Without hardware these stay `Blocked`, `CUDA-001`…`CUDA-005`, `CUDA-008`, and
-`CUDA-009` stay `Hardware-Unverified` in `STATUS.md`, and the documentation
-claims nothing more. That is the honest outcome, not a failure.
-
-## 7. Where concurrency is forbidden
-
-Not every parallel-looking task may actually run in parallel.
+## 6. Where concurrency is forbidden
 
 | Sequence | Reason |
 | --- | --- |
-| `QM-0012` → `QM-0020` → `QM-0021` → `QM-0022` → `QM-0072` | All edit `crates/q-catalog/src/lib.rs` |
-| `QM-0070` → `QM-0071` → `QM-0072` → `QM-0073` | All edit `crates/q-weightql/src/plan.rs` |
-| `QM-0040` → `QM-0041` → `QM-0042` → `QM-0043` → `QM-0044` | Each consumes the previous stage's output |
-| `QM-0063` → `QM-0064` → `QM-0068` | All edit `viz/mat.ts` |
-| `QM-0004` alone | Shared schema; every lane consumes it |
-| `QM-0060` alone | Both web lanes consume it |
-| `QM-0080` alone | It is the integration gate |
+| `QM-0012` → `QM-0020` → `QM-0032` | All edit `crates/q-catalog/src/lib.rs` |
+| `QM-0120` → `QM-0121` → `QM-0122` → `QM-0123` → `QM-0125` | Each consumes the previous stage's output |
+| `QM-0140` before `QM-0141`, `QM-0143`, `QM-0150` | All four consume the manifest schema |
+| `QM-0100` before anything measuring throughput | There is nothing to measure until it lands |
+| `QM-0162` alone | It is the business gate, and it needs a person, not a lane |
 
-## 8. If a gate fails
+## 7. If a gate fails
 
 | Gate | Failure | Response |
 | --- | --- | --- |
-| **G1** | Rust and TypeScript constants disagree | The transcription in `QM-0004` is wrong. Fix it before any consumer exists — this is the cheapest moment in the whole plan |
-| **G2** | External validators reject an artifact | File a task against the emitting builder. **Do not proceed to Phase 05** — the viewer would be debugging our bug through Cesium's error messages |
-| **G3** | A pick resolves to the wrong address | Off-by-one in index composition or feature-ID ordering. Blocks `QM-0080` |
-| **G3** | Cesium cannot render acceptably | `ADR-CANDIDATE-009`'s fallback: Three.js with custom traversal. **The tile format does not change**; only `apps/web/model-viewer` is rewritten |
-| **G4** | The three-way value comparison disagrees | Something between the byte range and the pixel is wrong. Highest-severity possible finding; halt and bisect |
-| **G5** | A criterion has neither evidence nor a waiver | The release is blocked. File the task |
+| **G1** | Peak RSS exceeds the ceiling on a real checkpoint | Something in the path materialises more than a block. **Halt the engine lane** — every downstream claim depends on this. Bisect with `/usr/bin/time -l` per stage |
+| **G1** | The checkpoint will not fit on disk | Fall back to the largest that fits, record the actual size in `DEFINITION_OF_DONE.md`, and state the limitation in the report. Do **not** substitute the synthetic manifest and call it proven |
+| **G2** | A metric disagrees with the Python reference | Highest-severity finding available. The engine is the product; a wrong number is worse than no number. Halt and bisect against the golden tensors |
+| **G3** | Two runs produce different bytes | Non-determinism — usually floating-point reduction order or a timestamp in the body. Fix the ordering; timestamps belong in the run-metadata block only (`REPORT_ARCHITECTURE.md` §3.2) |
+| **G4** | No reader can find the fragile layers unaided | The surface is not the differentiator it was assumed to be. Do not add features; take [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §5's headless pivot seriously |
+| **G5** | No design partner changes a decision | This is the strategy's kill signal, not an engineering bug. Do not respond by building the next module. Re-read `VALIDATION_PLAN.md` §4 |
 
-## 9. Estimated shape
+## 8. Estimated shape
 
-Not a schedule — this plan has no calendar. A shape, for sequencing intuition:
+Not a schedule — this plan has no calendar. A shape, for sequencing intuition,
+against the strategy's 90-day frame:
 
-| Wave | Tasks | Longest chain | Parallelism |
+| Wave | Tasks | Longest chain | Strategy window |
 | --- | --- | --- | --- |
-| 0 | 5 | 3 (`0001`→`0004`→`0005`) | 3 |
-| 1 | 9 | 4 (`0012`→…→`0022`) | 4 lanes |
-| 2 | 7 | 3 (`0031`→`0032`→`0033`) | 3 lanes |
-| 3 | 11 | 7 (`0040`→…→`0046`) | 2 lanes |
-| 4 | 13 | 4 (`0070`→…→`0073`) | 4 lanes |
-| 5 | 6 | 2 (`0080`→ rest) | 5 after `0080` |
-| 6 | 5 | 3 (`0090`→`0091`→`0094`) | 3 |
+| 0 | 4 | 1 (`QM-0100`, wall-clock bound) | Days 0–30 |
+| 1 | 4 | 2 (`0101`→`0030`) | Days 0–30 |
+| 2 | 6 | 3 (`0120`→`0121`→`0122`) | Days 30–60 |
+| 3 | 6 | 2 (`0123`→`0125`) | Days 30–60 |
+| 4 | 6 | 2 (`0141`→`0142`) | Days 30–60 |
+| 5 | 5 | 2 (`0161`→`0162`) | Days 60–90 |
+| 6 | 5 | 3 (`0090`→`0091`→`0165`) | Days 60–90 |
 
-Wave 3 is the longest single chain and the schedule's centre of gravity. Lane C
-and Lane B both have real work available beside it, so the wave is not
-serialized in practice.
+Wave 2 is the centre of gravity and the only wave with genuinely novel code in
+it. Everything before it is plumbing that already mostly exists; everything after
+it is presentation and proof.
 
-## 10. The first three actions
+## 9. Deferred waves
+
+The previous plan's Waves 3–4 (tile pyramid, GLB, tileset, Cesium viewer, matrix
+workspace, chat) are preserved in `phases/phase-04-*` through `phases/phase-07-*`
+and become the post-v1 visualization release. Their execution order is unchanged
+and still correct; only their start condition has moved, from "after G1" to
+"after v1 ships or `VALIDATION_PLAN.md` §5 says to pivot."
+
+## 10. v1 dependency rewiring
+
+Thirteen tasks from Phases 00–09 are in v1 but had dependency edges into tasks
+that are now `Deferred`. Their `## Status` blocks carry the v1 unblock condition;
+their `## Dependencies` sections still record the original edges, which return
+with the platform release. This table is the reconciliation.
+
+| Task | Original edge | v1 edge | Why |
+| --- | --- | --- | --- |
+| `QM-0010` Qwen resolver | `QM-0005` | none — **Ready** | The spatial contract has no bearing on a name resolver |
+| `QM-0012` model metadata | `QM-0005` | none — **Ready** | Feeds the manifest's `model` block |
+| `QM-0030` streaming block reader | `QM-0003` | `QM-0100` | v1 streams the real checkpoint, not an LOD fixture |
+| `QM-0031` CPU statistics pass | `QM-0030`, `QM-0020`, `QM-0022` | `QM-0030`, `QM-0020` | `QM-0022` (block registry) is deferred |
+| `QM-0033` job runner | `QM-0032`, `QM-0022` | `QM-0032` | same |
+| `QM-0037` backend selection | `QM-0034` (CUDA) | `QM-0126` (Metal) | v1's GPU lane is Metal |
+| `QM-0081` failure injection | `QM-0080` | `QM-0033`, `QM-0143` | The v1 pipeline replaces the platform demo |
+| `QM-0082` browser soak | `QM-0080`, `QM-0056`, `QM-0067` | `QM-0152` | Scope narrows to the diagnostics surface |
+| `QM-0085` error/security audit | `QM-0080`, `QM-0075` | `QM-0152` | same |
+| `QM-0090` documentation | `QM-0080` | `QM-0141`, `QM-0152` | Audits the report and the surface |
+| `QM-0091` regenerate STATUS | `QM-0090`, `QM-0080`, `QM-0084` | `QM-0090`, `QM-0102` | `QM-0102` replaces `QM-0084` |
+| `QM-0092` limitations | `QM-0084`, `QM-0035` | `QM-0102`, `QM-0127`/waiver | Metal replaces CUDA as the lane to describe |
+| `QM-0093` licensing | `QM-0080` | none — **Ready** | A licence audit needs no pipeline |
+
+**Forty-four tasks are stamped `Deferred`**: Phases 04–07 in full (30), the CUDA
+lane (`QM-0034`…`QM-0036`, `QM-0083` — 4), and ten others whose purpose v1 either
+does not need or covers elsewhere (`QM-0003`, `QM-0004`, `QM-0005`, `QM-0013`,
+`QM-0021`, `QM-0022`, `QM-0023`, `QM-0080`, `QM-0084`, `QM-0094`). Each names the
+v1 task that covers its purpose, where one exists.
+
+## 11. The first three actions
 
 For an agent starting now, with nothing in progress:
 
-1. **`QM-0001`** — run both suites, record the baseline. Nothing should be built
-   on an unverified baseline, and this takes minutes.
-2. **`QM-0003`** — start the fixture generator in parallel; it gates seven later
-   tasks and needs no decisions.
-3. **`QM-0002`** — validate the plan's own citations before anyone relies on
-   them.
+1. **`QM-0100`** — start the checkpoint download. It is hours long, it blocks the
+   entire proof lane, and nothing else in the plan gets faster by doing it later.
+2. **`QM-0001`** — while that runs, verify the baseline. `cargo test --workspace`
+   and `npx vitest run`. Nothing may be built on an unverified baseline, and it
+   takes minutes.
+3. **`QM-0002`** — validate the plan's own citations, including the
+   `apps/web/matrix-workspace` vs. `apps/web/quatricmorph-workspace` path drift
+   that ten `.plan` documents still get wrong.
 
-Then `QM-0004` alone, then `QM-0005`, and the lanes open.
+Then `QM-0101`, and the lanes open.
+
+**And, in parallel with all three, not after them: `QM-0160`.** Send the first
+design-partner message before the first line of engine code. The strategy is
+explicit that this is the ordering solo founders get wrong.

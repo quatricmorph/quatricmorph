@@ -2,9 +2,11 @@
 
 ## Status
 
-Blocked
+Ready
 
-Unblocks when `QM-0005` reaches `Complete`.
+No longer waits on `QM-0005` (deferred). v1's target checkpoints are Qwen-family, so the resolver is needed early.
+
+**v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
 ## Phase
 

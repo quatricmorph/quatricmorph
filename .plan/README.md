@@ -3,8 +3,16 @@
 ## Purpose
 
 `.plan/` is the execution plan that takes Quatricmorph from **the repository as it
-stands today** to **the first working MVP** defined in `ARCHITECTURE.md` §18 and in
-the MVP acceptance criteria recorded in [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md).
+stands today** to **v1**: one Level-3 diagnostic — out-of-core quantization-error
+forensics on a real open-weight checkpoint — shipped end to end with a shareable
+report, and validated against real design partners.
+
+**v1 is a wedge, not the platform.** The full tensor-visualization platform
+(CesiumJS model viewer, matrix-multiplication workspace, chat) is still the
+long-term architecture and is still designed for in this directory — but it is
+**deferred to post-v1** and no longer sits on the critical path. The reason is
+recorded in [`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md), and the boundary is
+enforced by [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md).
 
 It is a **delta plan**, not a greenfield plan. The repository already contains a
 17-crate Rust workspace, three web applications, four JSON schemas, checked-in
@@ -24,13 +32,24 @@ one gets a task to fix it.
 
 | Rank | Document | Authority |
 | --- | --- | --- |
-| 1 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Implementation architecture. Single source of truth. Untouched by this plan. |
-| 2 | [`../STATUS.md`](../STATUS.md) | What is actually built and tested. The factual baseline. |
-| 3 | [`MASTER_PLAN.md`](MASTER_PLAN.md) | Scope, phases, critical path, release criteria |
-| 4 | [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | MVP / extension point / future / non-goal boundary |
-| 5 | The remaining `.plan/*.md` architecture documents | Per-subsystem design |
-| 6 | `phases/*/README.md` | Phase entry and exit conditions |
-| 7 | `tasks/QM-XXXX-*/TASK.md` | Executable unit of work |
+| 1 | [`../Quatricmorph - Standalone Business, Market, and Technical Strategy.md`](<../Quatricmorph - Standalone Business, Market, and Technical Strategy.md>) | **What to build first and why.** Authoritative on *scope, sequencing, and success criteria* — not on implementation mechanics. Dated August 2026; self-describes as replacing the earlier framing |
+| 2 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Implementation architecture. Authoritative on *how* anything in scope is built. §17 (phase roadmap) and §18 (the 30 MVP criteria) are **superseded for v1** by rank 1 — see the note below |
+| 3 | [`../STATUS.md`](../STATUS.md) | What is actually built and tested. The factual baseline. |
+| 4 | [`MASTER_PLAN.md`](MASTER_PLAN.md) | Scope, phases, critical path, release criteria |
+| 5 | [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | v1 / seam / deferred / non-goal boundary |
+| 6 | The remaining `.plan/*.md` architecture documents | Per-subsystem design |
+| 7 | `phases/*/README.md` | Phase entry and exit conditions |
+| 8 | `tasks/QM-XXXX-*/TASK.md` | Executable unit of work |
+
+**On the rank 1 / rank 2 conflict.** `ARCHITECTURE.md` §17–§18 and
+`MASTER_DOCUMENT.md` §2/§20 define the first MVP as the CesiumJS + matrix-workspace
++ chat platform. The strategy document defines it as a single quantization-error
+diagnostic. They disagree, and the strategy document is newer and explicitly
+supersedes prior framing. This plan follows the strategy document and files
+[`QM-0167`](tasks/QM-0167-root-document-amendment/TASK.md) to amend the root
+documents so that a single source of truth is restored. Until that task is
+`Complete`, treat the disagreement as known and recorded, not as plan drift.
+[`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md) enumerates every affected claim.
 
 `decisions/ADR-CANDIDATE-*.md` are **not** authoritative. They are proposals with
 a recommended default and a decision deadline. A task that depends on an
@@ -40,8 +59,12 @@ undecided ADR candidate says so in its `Dependencies` section.
 
 | Document | Answers |
 | --- | --- |
-| [`MASTER_PLAN.md`](MASTER_PLAN.md) | What is the MVP, in what order, and when is it done |
-| [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | What is deliberately *not* in the MVP |
+| [`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md) | **Read first.** Why v1 is one diagnostic, what moved out of v1, and what that costs |
+| [`MASTER_PLAN.md`](MASTER_PLAN.md) | What v1 is, in what order, and when it is done |
+| [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | What is deliberately *not* in v1 |
+| [`DIAGNOSTIC_ARCHITECTURE.md`](DIAGNOSTIC_ARCHITECTURE.md) | The quantization-error engine: metrics, chunking, mixed-precision frontier, what may never be claimed |
+| [`REPORT_ARCHITECTURE.md`](REPORT_ARCHITECTURE.md) | The Markdown report, the JSON manifest, and the CI/agent interface |
+| [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) | Design partners, PMF signals, kill criteria, pivot criteria, the 90-day sequence |
 | [`REPOSITORY_ANALYSIS.md`](REPOSITORY_ANALYSIS.md) | What the repository actually contains, verified |
 | [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) | How today's code is put together, and where it diverges from `ARCHITECTURE.md` |
 | [`TARGET_ARCHITECTURE.md`](TARGET_ARCHITECTURE.md) | The program boundaries the MVP must end with |
@@ -64,7 +87,7 @@ undecided ADR candidate says so in its `Dependencies` section.
 | [`REQUIREMENT_TRACEABILITY.md`](REQUIREMENT_TRACEABILITY.md) | Every requirement → tasks → verification |
 | [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md) | Task dependency edges, shared-file risk, integration gates |
 | [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) | Critical path, parallel lanes, hardware gating |
-| [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) | The 46 MVP acceptance criteria and their evidence |
+| [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) | The 32 v1 acceptance criteria, and the disposition of the previous 46 |
 
 ## Task numbering
 
@@ -77,18 +100,28 @@ phase and are **never reused or renumbered** — a task that is abandoned become
 `Superseded` and keeps its number, because task IDs appear in commit messages,
 branch names, and `Dependencies` lists elsewhere in this plan.
 
-| Block | Phase |
-| --- | --- |
-| `QM-0001`–`QM-0009` | Phase 00 — Repository baseline and shared contracts |
-| `QM-0010`–`QM-0019` | Phase 01 — SafeTensors ingestion completion |
-| `QM-0020`–`QM-0029` | Phase 02 — Catalog and NSIR completion |
-| `QM-0030`–`QM-0039` | Phase 03 — Block runtime and compute |
-| `QM-0040`–`QM-0049` | Phase 04 — Tensor tiles, GLB, and tileset |
-| `QM-0050`–`QM-0059` | Phase 05 — Cesium model viewer |
-| `QM-0060`–`QM-0069` | Phase 06 — Grid matrix workspace |
-| `QM-0070`–`QM-0079` | Phase 07 — WeightQL and chat |
-| `QM-0080`–`QM-0089` | Phase 08 — Integration and performance |
-| `QM-0090`–`QM-0099` | Phase 09 — Documentation and release |
+| Block | Phase | v1? |
+| --- | --- | --- |
+| `QM-0001`–`QM-0009` | Phase 00 — Repository baseline and shared contracts | Partly |
+| `QM-0010`–`QM-0019` | Phase 01 — SafeTensors ingestion completion | Partly |
+| `QM-0020`–`QM-0029` | Phase 02 — Catalog and NSIR completion | Partly |
+| `QM-0030`–`QM-0039` | Phase 03 — Block runtime and compute | **Yes** |
+| `QM-0040`–`QM-0049` | Phase 04 — Tensor tiles, GLB, and tileset | Deferred |
+| `QM-0050`–`QM-0059` | Phase 05 — Cesium model viewer | Deferred |
+| `QM-0060`–`QM-0069` | Phase 06 — Grid matrix workspace | Deferred |
+| `QM-0070`–`QM-0079` | Phase 07 — WeightQL and chat | Deferred |
+| `QM-0080`–`QM-0089` | Phase 08 — Integration and performance | Partly |
+| `QM-0090`–`QM-0099` | Phase 09 — Documentation and release | Partly |
+| `QM-0100`–`QM-0119` | **Phase 10 — Out-of-core proof on a real checkpoint** | **Yes** |
+| `QM-0120`–`QM-0139` | **Phase 11 — Quantization-error diagnostic engine** | **Yes** |
+| `QM-0140`–`QM-0149` | **Phase 12 — Report, manifest, and CI/agent interface** | **Yes** |
+| `QM-0150`–`QM-0159` | **Phase 13 — Diagnostic surface** | **Yes** |
+| `QM-0160`–`QM-0169` | **Phase 14 — Validation and v1 release** | **Yes** |
+
+Phases 10–14 are the v1 critical path. Phases 00–09 are retained in full: the
+tasks in them that v1 needs are marked `Ready`/`Blocked` as usual, and the ones
+v1 does not need are marked `Deferred` with the phase that will take them up.
+Nothing is deleted and nothing is renumbered.
 
 ## Status vocabulary
 
@@ -103,7 +136,14 @@ Task status is recorded in the `## Status` section of each `TASK.md`.
 | `Implemented` | Code exists and the acceptance criteria are believed met; verification has not run |
 | `Verified` | The verification plan ran and passed; evidence is recorded |
 | `Complete` | `Implemented` **and** `Verified`, and `STATUS.md` has been updated |
+| `Deferred` | Sound work, correctly specified, **not in v1**. The line below the status names the release that takes it up. An agent may not start it |
 | `Superseded` | Replaced by another task, which must be named |
+
+`Deferred` is not `Blocked`. A `Blocked` task is waiting on a dependency and
+becomes `Ready` when that dependency lands. A `Deferred` task is waiting on a
+**product decision** — v1 shipping, or a pivot in [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md)
+§5 — and never becomes `Ready` on its own. Deferral is reversible by editing one
+line; that is the point of recording it this way rather than deleting the task.
 
 **A task is not `Complete` until it is both implemented and verified.** This
 mirrors the distinction `STATUS.md` already enforces between `Implemented` and
@@ -115,8 +155,9 @@ its `Dependencies` section has reached `Complete` and any ADR or hardware it
 names is available. The `## Status` field records the **current** state, not the
 transition — it always holds exactly one of the eight values above, on its own
 line, so it can be parsed. Any blocker is named on the line *below* the value.
-At the start of the plan, `QM-0001`, `QM-0002`, and `QM-0003` are `Ready`; every
-other task is `Blocked`.
+At the start of the v1 plan, `QM-0100`, `QM-0001`, and `QM-0002` are `Ready`;
+every other task is `Blocked` or `Deferred`. See
+[`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) §10.
 
 `Hardware-Unverified` is not a task status. It is a *requirement* status in
 `STATUS.md`, and it is what a CUDA task's requirement stays at when the task's
@@ -151,6 +192,10 @@ never at `Verified`.
 4. If a task requires hardware that is unavailable, do not start it. Set it
    `Blocked` with the reason, and pick from the CUDA-free lane listed in
    [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md).
+4a. **Never start a `Deferred` task.** If a `Deferred` task looks like the
+   obvious next thing to build, that is the deferral working as intended. Moving
+   a task out of `Deferred` is a product decision recorded in
+   [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md), not an engineering judgement call.
 5. Before writing code, confirm every path in `Files Expected to Change` still
    exists. If one does not, the plan is stale — fix the plan first.
 6. Follow [`../AGENTS.md`](../AGENTS.md). Its non-negotiable rules — notably

@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Deferred
 
-Unblocks when `QM-0090`…`QM-0093` reaches `Complete`. **Integration gate G5.**
+Not in v1 — it audits the 46 platform criteria; `QM-0165` covers v1's need. The task itself is unchanged and returns with the post-v1 **platform release**.
 
 ## Phase
 
