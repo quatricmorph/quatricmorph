@@ -179,3 +179,125 @@ of path L is also unavailable, so "reachable from `origin/main`" becomes
 `.plan/ORCHESTRATION_STATE.md` under "Push to `origin` is not available".
 Note that Run 1's `git push --dry-run` success was for creating a *new branch*,
 which is a different permission from updating `main`.
+
+---
+
+# Run 3 — 2026-08-04T23:49:41Z → deadline 2026-08-05T04:49:41Z
+
+## 2026-08-04 — QM-0100 — owner redirected the checkpoint to `models/distilbert-distilgpt2`; three constraint rows are now stale
+
+**Discovered during:** Run 3 restart reconstruction (§18), reading `579107f`.
+**Defect:** The repository owner amended `.plan/MASTER_PLAN.md` §4 and
+`.plan/tasks/QM-0100-real-checkpoint-acquisition/TASK.md` in commit `579107f`
+with an explicit, twice-stated directive:
+
+> "Focus on small and simple version first, please using model already download
+> inside `./models/distilbert-distilgpt2`, and ignore any larger MoE checkpoints"
+
+> "Only using model inside `distilbert-distilgpt2` instead of using large MoE
+> checkpoints is a **temporary** concession to the machine's disk. Only focus on
+> first MVP version to development."
+
+The owner also **deleted the 28.63 GB Qwen1.5-MoE-A2.7B checkpoint from disk**
+(verified: `models/` is 339 MB and holds only `distilbert-distilgpt2`; free disk
+is 21 GB, not the 51 GB the plan assumes) and removed the download's background-job
+record from `.plan/ORCHESTRATION_STATE.md`.
+
+The prose directive is authoritative. But the owner left three rows of QM-0100's
+own constraint table describing the checkpoint that was just abandoned, so the
+task now contradicts itself:
+
+| Stale row | Says | Reality of `models/distilbert-distilgpt2` |
+| --- | --- | --- |
+| Size on disk | "**≥ 24 GB**, using `models/distilbert-distilgpt2/model.safetensors`" | 336 MB — self-contradictory within a single cell |
+| Format | "SafeTensors, **sharded**, with `model.safetensors.index.json`" | Single file, **no index.json**, shard count 1 |
+| Architecture | "Qwen- or Llama-family, ideally with MoE experts" | GPT-2 family, **no experts** |
+
+**Correction:** The prose wins over the stale rows (owner's explicit intent,
+stated twice, and backed by the deletion of the artifact). QM-0100's constraint
+table and `## Test Cases` are rewritten to describe the distilgpt2 reality before
+any agent implements against it.
+
+**Coverage this concession gives up — recorded, not silently dropped:**
+
+* **The sharded read path is no longer exercised by QM-0100.** The task's own
+  stated reason for requiring a sharded checkpoint was that "single-file would
+  not" exercise it. Multi-shard attribution remains covered only by the synthetic
+  fixtures, and v1 must not claim otherwise.
+* **MoE expert-keyed aggregation has no real-checkpoint fixture.** `QM-0123`
+  consumes expert-keyed tensors; under this concession it is provable only against
+  generated fixtures.
+* **Gate G1's ratio changes shape.** `MASTER_PLAN.md` §4 still requires peak RSS
+  ≤ 1.25 × C while streaming a checkpoint N ≥ 100 × larger than C. Against a
+  336 MB file, N ≥ 100 forces C ≤ ~3.4 MB. The structural property survives and is
+  still measurable with `/usr/bin/time -l`; the headline number does not. v1 states
+  the ratio it actually measured, against the file it actually measured.
+
+**Files changed:** `.plan/tasks/QM-0100-real-checkpoint-acquisition/TASK.md`
+**Dependency impact:** QM-0100 stays Lane P / Wave 0 and still gates QM-0101.
+Its previously committed branch is invalidated (see next entry).
+**Evidence:** `git show 579107f`; `du -sh models/` → 339M; `df -h .` → 21Gi avail;
+`find ~/Quatricmorph -name '*.safetensors' -size +100M` returns only distilgpt2.
+
+## 2026-08-04 — QM-0100 — the committed branch is invalid and is discarded
+
+**Discovered during:** Run 3 restart reconstruction (§18).
+**Defect:** `task/qm-0100-real-checkpoint-acquisition` @ `c5743cd` commits
+`fixtures/real-checkpoint-record.json` recording `Qwen1.5-MoE-A2.7B`,
+`bytes_on_disk: 28632144944`, `shard_count: 8`, `tensor_count: 4659`,
+`architecture: qwen2_moe`, `has_experts: true` — **a checkpoint that is no longer
+on disk** — plus a 358-line test asserting against it. The branch is also based at
+`0ef6ec5`, before the owner's amendment, so squash-merging it would **revert
+`579107f`'s edit to QM-0100's TASK.md**. It is the only one of the six in-flight
+branches that touches an owner-amended path.
+
+**Correction:** The branch and its worktree are discarded, not merged. QM-0100 is
+re-implemented from a worktree cut at `579107f` against distilgpt2.
+**Dependency impact:** QM-0101 stays Blocked until the re-implementation merges.
+**Evidence:** `git diff main...task/qm-0100-real-checkpoint-acquisition -- .plan/tasks/QM-0100-real-checkpoint-acquisition/TASK.md`
+shows the `In Progress` → reverted-to-`Ready` conflict; `cat fixtures/real-checkpoint-record.json`
+on that branch names the deleted checkpoint.
+
+## 2026-08-04 — CONTROLLER — Run 3 baseline re-measured; web floor is 115, not STATUS.md's 101
+
+**Discovered during:** §21 step 4, baseline gate on `main` @ `579107f`.
+**Defect:** `STATUS.md` records 290 rust / 101 web at `5ca434d`. Rust still
+measures **290 passed; 0 failed** exactly. Web measures **115 passed across 13
+files**, +14 over the recorded 101.
+**Correction:** 290 / **115** is the Run 3 baseline and the floor QM-0001 must
+write. `STATUS.md`'s 101 is stale and is corrected by QM-0091's regeneration.
+**Dependency impact:** none; QM-0001's floor value changes from 101 to 115.
+**Evidence:**
+```
+$ cargo test --workspace          → sum of "test result: ok." = 290 passed, 0 FAILED, exit 0
+$ cd apps/web && npx vitest run    → Test Files 13 passed (13) / Tests 115 passed (115)
+```
+
+## 2026-08-04 — CONTROLLER — `scripts/baseline.json` does not exist; no floor guard is in force
+
+**Discovered during:** §18 reconstruction.
+**Defect:** Run 2's orchestration record states "QM-0001 is writing
+`scripts/baseline.json` as {rust: 290, web: 115}" and builds a floor-staleness
+rule on top of that. In fact `task/qm-0001-baseline-verification` is at `145257b`,
+an **ancestor of `main`, with zero commits ahead and a clean worktree** — the work
+was never committed. `scripts/` does not exist on `main`.
+**Correction:** QM-0001 is re-cut from `579107f` and scheduled **first**, because
+until it merges there is no floor guard at all. Every task merged before it records
+"no floor guard in force at merge time; counts recorded in evidence only" in its
+evidence record, exactly as §6.1 item 6 requires.
+**Dependency impact:** QM-0001 is promoted ahead of the other Wave 0 tasks.
+**Evidence:** `git log main..task/qm-0001-baseline-verification` is empty;
+`ls scripts` → "No such file or directory".
+
+## 2026-08-04 — CONTROLLER — Run 2's checkpoint/disk facts are superseded; the prompt's 51 GB is stale
+
+**Discovered during:** §21 steps 1–2.
+**Defect:** The controller prompt states ~51 GB free disk and caps the headline
+checkpoint at 30–40 GB. Measured at Run 3 start: **21 GB free, 96% capacity**, with
+14 GB of that already consumed by six worktree `target/` directories.
+**Correction:** The §3.3 disk budget binds harder than the prompt assumed. Concurrent
+Rust-building worktrees are capped at **three**, `df -h .` runs before every worktree
+creation, and completed worktrees are `cargo clean`ed and removed at merge rather
+than at end of run. The distilgpt2 concession removes the checkpoint from the budget
+entirely but does **not** create slack for unbounded concurrency.
+**Evidence:** `df -h .` → `21Gi Avail, 96% Capacity`; `du -sh ../.qm-worktrees` → 14G.
