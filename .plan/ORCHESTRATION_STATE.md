@@ -184,3 +184,28 @@ next up** (`QM-0006`, `QM-0140`, `QM-0012`, `QM-0002`, `QM-0001`, `QM-0010`,
 `QM-0093`, `QM-0160`, `QM-0167` — grepped, zero `ADR-CANDIDATE-` references).
 No promotion is therefore blocking, and none is performed speculatively: a
 promotion sweep would raise task counts without producing verified code.
+
+## v1 set reconciled against the wave table (controller §21 step 7)
+
+Parsed from all 89 `TASK.md` files at `ace7d09`:
+
+| Measure | Value |
+| --- | --- |
+| Task directories | 89 |
+| `Deferred` | 44 |
+| `Blocked` | 36 |
+| `Ready` | 9 (+`QM-0006` added by this run = 10) |
+| v1 set (non-`Deferred`) | **45** |
+| Tasks named in `.plan/EXECUTION_ORDER.md` §2's wave block | 42 |
+| Wave-named tasks that are `Deferred` | 0 |
+
+**Three v1 tasks appear in no wave: `QM-0031` (CPU statistics pass), `QM-0037`
+(backend selection), `QM-0153` (rendering-ceiling degradation).** They are named
+only in §10's rewiring table or a lane range. The wave table is a sequencing aid,
+not an allowlist — these are scheduled by lane and dependencies alone and are not
+stranded. Registered for `QM-0002`; the fix to §2 belongs to that task.
+
+The 44/36/9 distribution matches controller §2 exactly. `.plan/README.md`'s
+"three start `Ready`" is wrong by six, and its "eight values" prose contradicts its
+own nine-row table — both routed to `QM-0002`, both recorded in
+`.plan/PLAN_CHANGELOG.md`.
