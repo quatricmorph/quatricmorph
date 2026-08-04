@@ -92,3 +92,9 @@ the maintenance argument has evidence behind it.
 ## Decision deadline
 
 Before `QM-0074`.
+
+`QM-0071` and `QM-0072` appear earlier in `Tasks affected` but **do not commit**
+(`README.md` §"How a deadline is derived") — both use the two existing parsers
+unchanged. `QM-0074` is the first task that must know whether the answer is a
+shared corpus, a WASM build, or a generator, because it is the task that adds
+`schemas/weightql/conformance.json`.

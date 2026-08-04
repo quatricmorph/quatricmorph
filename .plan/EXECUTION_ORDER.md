@@ -84,7 +84,7 @@ Lane E:    QM-0083  cuda soak                        [RTX 3090]
 ### Wave 6 — release (5 tasks)
 
 ```text
-parallel:  QM-0090  documentation      (blocked on ADR-CANDIDATE-014)
+parallel:  QM-0090  documentation      (ADR gate satisfied: ADR-009)
            QM-0092  limitations
            QM-0093  licensing
 then:      QM-0091  regenerate STATUS.md

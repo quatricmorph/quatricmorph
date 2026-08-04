@@ -86,8 +86,17 @@ Screenshots are archived as CI artifacts and referenced from each task's
 
 ## Tasks affected
 
-`QM-0051`, `QM-0052`, `QM-0053`, `QM-0080`, `QM-0082`, `QM-0085`.
+`QM-0050`, `QM-0051`, `QM-0052`, `QM-0053`, `QM-0080`, `QM-0082`, `QM-0085`.
+
+`QM-0050` was missing from this list. Its Repository Evidence already names this
+candidate (*"`ADR-CANDIDATE-009` (local ENU frame), `010` (no framework), `013`
+(Playwright)"*), and the spike's go/no-go depends on being able to observe
+whether Cesium rendered anything — which is the capability under decision here.
 
 ## Decision deadline
 
-Before `QM-0051`.
+Before **`QM-0050`**, the earliest task in `Tasks affected`.
+
+Corrected from `QM-0051`. `QM-0050` is scheduled in Wave 1, three waves earlier,
+*because* it de-risks R1 — and a spike that cannot measure its own outcome does
+not de-risk anything. See `README.md` §"How a deadline is derived".

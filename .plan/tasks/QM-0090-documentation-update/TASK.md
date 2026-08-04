@@ -4,7 +4,11 @@
 
 Blocked
 
-Unblocks when `QM-0080` reaches `Complete`. **Blocked until `ADR-CANDIDATE-014` is promoted.**
+Unblocks when `QM-0080` reaches `Complete`.
+
+**The ADR gate is satisfied.** `ADR-CANDIDATE-014` was promoted on 2026-08-04 to
+`docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md`, which accepts
+the code's mapping and assigns the §8.2 correction to this task.
 
 ## Phase
 
@@ -33,7 +37,7 @@ correcting `ARCHITECTURE.md` §8.2.
 
 ## Dependencies
 
-`QM-0080`; `ADR-CANDIDATE-014` promoted to `docs/decisions/`.
+`QM-0080`. (`ADR-CANDIDATE-014` → `ADR-009`: satisfied 2026-08-04.)
 
 ## Blocks
 
@@ -108,9 +112,12 @@ None.
 
 ## Implementation Plan
 
-1. Confirm `ADR-CANDIDATE-014` is promoted to `docs/decisions/`.
+1. Confirm `docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md`
+   exists and accepts the code's mapping. (Done 2026-08-04.)
 2. Apply the §8.2 correction with the note.
-3. Add the §16 pointer to `ADR-001`.
+3. ~~Add the §16 pointer to `ADR-001`.~~ **Already applied on 2026-08-04**,
+   alongside pointers at §2.1 and §5 to `ADR-003` and a second §16 pointer to
+   `ADR-007`. Verify they are present and accurate; do not duplicate them.
 4. Rewrite `README.md`'s two status sections from the real state.
 5. Mark completed roadmap phases.
 6. Update `AGENTS.md`'s table with `apps/web/core`.
@@ -126,8 +133,10 @@ None.
 
 ## Acceptance Criteria
 
-1. `ARCHITECTURE.md` §8.2 matches the implementation and cites the ADR.
-2. No other `ARCHITECTURE.md` section is modified — verified by diff.
+1. `ARCHITECTURE.md` §8.2 matches the implementation and cites `ADR-009`.
+2. **§8.2 is the only `ARCHITECTURE.md` section this task modifies** — verified
+   by diff. The departure pointers at §2.1, §5, and §16 were added on 2026-08-04
+   and are part of this task's baseline, not its diff.
 3. `README.md` accurately lists what works, with commands that run.
 4. `README.md`'s "does not work" section lists every remaining `Stub` and
    `Not Started` by requirement ID.
@@ -153,7 +162,7 @@ cargo test --test doc_commands                 # introduced here
 
 | Input | Expected |
 | --- | --- |
-| `git diff ARCHITECTURE.md` | §8.2 + §16 note only |
+| `git diff ARCHITECTURE.md` | §8.2 only |
 | §8.2 text vs `grid.ts` | Agree |
 | Every `README.md` command | Runs, produces documented output |
 | `README.md` "does not work" | Every remaining gap listed by ID |

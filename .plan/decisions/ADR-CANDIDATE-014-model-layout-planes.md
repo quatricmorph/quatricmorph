@@ -2,8 +2,11 @@
 
 ## Status
 
-`Open`. **This candidate resolves a verified contradiction between
-`ARCHITECTURE.md` and the code.**
+`Promoted → ADR-009` (`docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md`,
+2026-08-04). The recommended default below was accepted unchanged.
+
+**This candidate resolved a verified contradiction between `ARCHITECTURE.md` and
+the code.**
 
 ## Context
 
@@ -111,4 +114,10 @@ the document).
 
 ## Decision deadline
 
-Before `QM-0060`.
+**Passed** — was `QM-0002`, the earliest task in `Tasks affected`.
+
+Recorded because the original deadline read `QM-0060`, which named the task that
+*implements* the mapping rather than the task that first *commits* to it.
+`QM-0004` writes `axis_binding.world_axes` into the spatial contract and
+`QM-0005` asserts it from both languages at gate G1 — both in Wave 0, two waves
+ahead of `QM-0060`. See `README.md` §"How a deadline is derived".

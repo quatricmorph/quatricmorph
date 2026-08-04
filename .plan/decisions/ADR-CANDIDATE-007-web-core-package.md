@@ -89,3 +89,9 @@ kept *"so existing imports keep working"*.
 ## Decision deadline
 
 Before `QM-0060`.
+
+`QM-0004` and `QM-0005` appear earlier in `Tasks affected` but **do not commit**,
+so they do not set the deadline (`README.md` §"How a deadline is derived").
+`QM-0004` writes JSON only; `QM-0005` asserts constants in place and puts
+*"Moving constants into `apps/web/core`"* explicitly Out of Scope. `QM-0060` is
+the first task that must know where the shared types live.

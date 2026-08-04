@@ -112,8 +112,16 @@ exist.
 `q_gltf::MAX_INSTANCES_PER_TILE` and the workspace's `MAX_WORKSPACE_SPHERES`.
 Defining it twice is how they drift apart.
 
-`axis_binding.world_axes` records the mapping the code implements, which
-`ADR-CANDIDATE-014` recommends keeping.
+`axis_binding.world_axes` records the mapping the code implements, accepted by
+[`ADR-009`](../../../docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md).
+`axis_binding.max_implemented_rank` is the ceiling accepted by
+[`ADR-010`](../../../docs/decisions/ADR-010-tensor-rank-ceiling.md); rank above it
+refuses rather than flattening.
+
+Both values are **decisions, not transcriptions** — unlike every other field
+here, they are not merely copied from an existing constant. `QM-0005` freezes
+them into a cross-language golden vector at gate G1, which is why they were
+promoted to real ADRs before this task became reachable.
 
 ## Memory and Performance Constraints
 

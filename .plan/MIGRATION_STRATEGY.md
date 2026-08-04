@@ -146,7 +146,7 @@ edit made here.**
 
 | Document | Correction | Task |
 | --- | --- | --- |
-| `ARCHITECTURE.md` §8.2 | Plane mapping — code and the task specification agree against it | `QM-0090` (after `ADR-CANDIDATE-014`) |
+| `ARCHITECTURE.md` §8.2 | Plane mapping — code and the task specification agree against it | `QM-0090` (rationale: `ADR-009`, accepted) |
 | `STATUS.md` | Regenerate from a real run at release | `QM-0091` |
 | `README.md` | "What works today" / "What does not work yet" both change substantially | `QM-0090` |
 

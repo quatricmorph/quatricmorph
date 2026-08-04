@@ -2,7 +2,8 @@
 
 ## Status
 
-`Open`.
+`Promoted → ADR-010` (`docs/decisions/ADR-010-tensor-rank-ceiling.md`,
+2026-08-04). The recommended default below was accepted unchanged.
 
 ## Context
 
@@ -97,4 +98,10 @@ is honest in a way that a flattened picture cannot be.
 
 ## Decision deadline
 
-Before `QM-0061`.
+**Passed** — was `QM-0004`, the earliest task in `Tasks affected`.
+
+Recorded because the original deadline read `QM-0061`, which named the task that
+*implements* rank binding rather than the task that first *commits* to a ceiling.
+`QM-0004` writes `axis_binding.max_implemented_rank` into the spatial contract in
+Wave 0, three waves ahead of `QM-0061`. See `README.md` §"How a deadline is
+derived".

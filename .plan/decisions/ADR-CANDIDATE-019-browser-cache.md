@@ -89,4 +89,12 @@ caching), `QM-0032` (server-side L1/L2 wiring).
 
 ## Decision deadline
 
-Before `QM-0051`.
+Before **`QM-0032`**, the earliest task in `Tasks affected`.
+
+Corrected from `QM-0051`, which named the task that *consumes* HTTP caching in
+the browser rather than the tasks that first *commit* to it. `QM-0032` (Wave 2)
+wires the server-side cache; `QM-0041` (Wave 3) commits the content-addressed
+output layout `<out>/<model_id>/tiles/<tile_id>.qtile` that makes the `immutable`
+claim true; `QM-0044` (Wave 3) emits the `Cache-Control` and `ETag` headers.
+All three precede `QM-0051` (Wave 4). See `README.md` §"How a deadline is
+derived".

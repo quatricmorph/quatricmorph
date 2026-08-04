@@ -96,4 +96,9 @@ and for a reason worth stating.
 
 ## Decision deadline
 
-Before `QM-0021`.
+Before **`QM-0020`**, the earliest task in `Tasks affected`.
+
+Corrected from `QM-0021`. `QM-0020` precedes `QM-0021` in Lane A's sequential
+chain (`QM-0012 → QM-0020 → QM-0021 → QM-0022`) and its Scope already commits the
+concrete formula `StatisticsId = blake3(len‖subject_id ‖ len‖algorithm_version)`.
+See `README.md` §"How a deadline is derived".

@@ -24,7 +24,10 @@ flattening it**.
 * `grid-ruler.ts` — `depthSpacing` exists in the config and is **unused** (`0`).
 * `schemas/nsir/schema.json` — records named axes (`output_channel`,
   `input_channel`).
-* `ADR-CANDIDATE-016` — recommended default: rank ≤ 3, refuse above.
+* [`ADR-010`](../../../docs/decisions/ADR-010-tensor-rank-ceiling.md) — **accepted**,
+  not a recommendation: rank ≤ 3 implemented, rank > 3 returns `NotImplemented`
+  carrying `GRID-007`. The ceiling is already frozen in the spatial contract by
+  `QM-0004` and asserted at gate G1; this task implements it.
 
 ## Requirements Covered
 

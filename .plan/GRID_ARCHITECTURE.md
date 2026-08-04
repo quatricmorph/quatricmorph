@@ -102,7 +102,8 @@ coordinate instead of 12 for a float triple, and no drift.
 
 The grid must serve rank-1 (vectors), rank-2 (matrices), rank-3 (blocked or
 batched tensors), and be *designed* for higher ranks (`GRID-007`,
-`ADR-CANDIDATE-016`).
+[`ADR-010`](../docs/decisions/ADR-010-tensor-rank-ceiling.md) — **accepted**:
+rank ≤ 3 implemented, rank > 3 refuses).
 
 ### 3.1 The binding table
 
@@ -175,8 +176,8 @@ is snapped — `every_operand_placement_it_produces_is_on_grid`.
 **Note the recorded divergence:** this mapping resolves to A on the YZ plane, B
 on XZ, C on XY, which is *not* what `ARCHITECTURE.md` §8.2 says. See
 [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §6.1 and
-`ADR-CANDIDATE-014`. The code and the task specification agree; the recommended
-resolution is to correct §8.2.
+[`ADR-009`](../docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md),
+which **accepted** the code's mapping. §8.2 is corrected by `QM-0090`.
 
 ---
 

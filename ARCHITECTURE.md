@@ -70,6 +70,12 @@ VisualizationPreset
 
 This is where DuckDB, Arrow, and Parquet are used.
 
+> **The implementation departs from this.** The catalog is SQLite
+> (`rusqlite`, `bundled`). See
+> [`docs/decisions/ADR-003-catalog-sqlite.md`](docs/decisions/ADR-003-catalog-sqlite.md),
+> which records the departure, the reasoning, and the measured condition that
+> would trigger a move to DuckDB. Do not "fix" the code to match this paragraph.
+
 ### Tensor Tile Plane
 
 Contains multi-resolution representations:
@@ -249,6 +255,12 @@ The resolver must be allowed to return `unknown`. It must never guess a semantic
 ---
 
 # 5. Schema and Database
+
+> **Engine departure.** This section's tables are implemented in SQLite, not
+> DuckDB/Parquet. The DDL lives in `crates/q-catalog/src/schema.rs` and the
+> public API (`Catalog::list_layers`, `get_by_canonical_name`, `find_by_role`,
+> `resolve_byte_range`) is engine-agnostic. See
+> [`docs/decisions/ADR-003-catalog-sqlite.md`](docs/decisions/ADR-003-catalog-sqlite.md).
 
 ## 5.1 Model Table
 
@@ -998,6 +1010,18 @@ Statistical interpretation
 ---
 
 # 16. Repository Structure
+
+> **Two departures, both recorded.** This tree is a description, not a live
+> instruction.
+>
+> * The Cargo workspace lives at the **git repository root**, not in a nested
+>   `quatricmorph/` directory — see
+>   [`docs/decisions/ADR-001-workspace-at-repository-root.md`](docs/decisions/ADR-001-workspace-at-repository-root.md).
+>   Read the `quatricmorph/` line below as naming the repository itself.
+> * The workspace has **seventeen** crates: the sixteen listed here plus
+>   `q-cuda`, which implements the `q_gpu::Backend` trait. `gpu/` keeps this
+>   section's `wgsl/`, `cuda/`, `metal/` layout. See
+>   [`docs/decisions/ADR-007-q-cuda-crate-and-gpu-layout.md`](docs/decisions/ADR-007-q-cuda-crate-and-gpu-layout.md).
 
 ```text
 quatricmorph/

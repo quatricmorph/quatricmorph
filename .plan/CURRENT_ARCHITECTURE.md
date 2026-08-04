@@ -181,9 +181,10 @@ A and C.
 The task specification §16 independently states `World X → J, Y → I, Z → K` with
 `A → I×K, B → K×J, C → I×J` — agreeing with the code, not with §8.2.
 
-Two independent sources agree against one. **Recommended default: keep the code's
-mapping and correct `ARCHITECTURE.md` §8.2.** `ADR-CANDIDATE-014`; correction
-scheduled as `QM-0090`. Changing the code instead would invalidate 13 passing
+Two independent sources agree against one. **Decided: keep the code's mapping and
+correct `ARCHITECTURE.md` §8.2** —
+[`ADR-009`](../docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md),
+accepted 2026-08-04; correction scheduled as `QM-0090`. Changing the code instead would invalidate 13 passing
 `grid-ruler` tests and the proven `mm` placement semantics for no gain.
 
 ### 6.2 Catalog technology

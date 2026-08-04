@@ -39,8 +39,10 @@ The required shape matrix already passes: `2×3 @ 3×2`, `3×3 @ 3×1`, `1×3 @ 
 ## Entry conditions
 
 * **G1** passed — the shared contract exists.
-* `ADR-CANDIDATE-014` (plane mapping), `015` (cell primitive), `016` (axis
-  binding) decided.
+* Plane mapping and axis binding **decided** — `ADR-009` and `ADR-010`, both
+  accepted 2026-08-04 and frozen in the spatial contract at G1.
+* `ADR-CANDIDATE-015` (cell primitive) decided — its sprite-versus-mesh half is
+  decided *by* `QM-0063`'s measurement.
 * A running daemon for `QM-0066`; **G2** for real tile data.
 
 ## Tasks

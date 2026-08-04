@@ -21,8 +21,8 @@ phase exists to keep it.
 
 * **G4** passed — the end-to-end demonstration runs.
 * Phases 00–08 complete.
-* `ADR-CANDIDATE-014` decided, so the `ARCHITECTURE.md` §8.2 correction has a
-  recorded rationale.
+* `ADR-009` accepted, so the `ARCHITECTURE.md` §8.2 correction has a recorded
+  rationale. **Satisfied 2026-08-04.**
 
 ## Tasks
 
@@ -36,8 +36,9 @@ phase exists to keep it.
 
 ## `QM-0090` — the divergence resolution
 
-The one place this plan sanctions editing `ARCHITECTURE.md`, and only after
-`ADR-CANDIDATE-014` is promoted:
+The one place this plan sanctions editing `ARCHITECTURE.md` **§8.2**, and only
+under a recorded ADR — now
+[`ADR-009`](../../../docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md):
 
 `ARCHITECTURE.md` §8.2 says `A: XY, B: YZ, C: XZ`. The code implements, and the
 task specification independently states, a mapping that resolves to `A: YZ,
@@ -113,4 +114,4 @@ since it records the final state. `QM-0094` is last and gates the release.
 | --- | --- |
 | R11 — `STATUS.md` and the plan diverge | `QM-0091` regenerates from a run; `STATUS.md` wins by precedence |
 | Documentation overstates what shipped | `QM-0094` audits every claim against a cited test |
-| The §8.2 correction is made without the ADR | `QM-0090` is `Blocked` until `ADR-CANDIDATE-014` is promoted |
+| The §8.2 correction is made without the ADR | `ADR-009` records the rationale; `QM-0090` cites it and its diff is reviewed line by line |

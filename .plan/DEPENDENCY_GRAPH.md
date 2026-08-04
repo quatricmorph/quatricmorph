@@ -68,7 +68,7 @@ PHASE 08 ─ integration ──────────────────�
   QM-0036 ─► QM-0083 cuda soak  [RTX 3090]
 
 PHASE 09 ─ release ─────────────────────────────────────────────────────────
-  QM-0080 ─┬─► QM-0090 docs (blocked on ADR-CANDIDATE-014)
+  QM-0080 ─┬─► QM-0090 docs (ADR gate satisfied: ADR-009)
            ├─► QM-0092 limitations (needs QM-0084, QM-0035|waiver)
            └─► QM-0093 licensing
   QM-0090 ─► QM-0091 status ─► QM-0094 acceptance audit ◄══ G5

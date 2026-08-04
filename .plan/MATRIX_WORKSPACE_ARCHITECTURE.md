@@ -83,9 +83,10 @@ Shared dimensions align physically: `A.I ≡ C.I` (same Y), `A.K ≡ B.K` (same 
 **Recorded divergence:** this resolves to A on YZ, B on XZ, C on XY, which is not
 what `ARCHITECTURE.md` §8.2 states. The code and the task specification §16 agree
 against §8.2. See [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §6.1 and
-`ADR-CANDIDATE-014`; the recommended resolution is to correct §8.2, because
-changing the code would invalidate 13 passing tests and the proven `mm`
-placement semantics for no gain.
+[`ADR-009`](../docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md),
+which **accepted** the code's mapping and assigned the §8.2 correction to
+`QM-0090` — because changing the code would invalidate 13 passing tests and the
+proven `mm` placement semantics for no gain.
 
 ---
 

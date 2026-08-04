@@ -92,5 +92,15 @@ pipeline can proceed in parallel with the viewer spike rather than waiting on it
 
 ## Decision deadline
 
-**Before `QM-0044`** — the generator must know its target version.
-The P1/P3 fallback decision is made on `QM-0050`'s evidence.
+Two deadlines, because this candidate answers two coupled questions.
+
+* **Placement (P1 / P2 / P3) — before `QM-0050`**, the earliest task in `Tasks
+  affected` (Wave 1). The spike cannot test a placement it has not been given;
+  `QM-0050`'s Repository Evidence already names *"`ADR-CANDIDATE-009` (local ENU
+  frame)"* as an input. P1 is the **hypothesis the spike tests**, and the P1/P3
+  fallback is then decided **on `QM-0050`'s evidence**.
+* **Version (1.1 versus 1.0) — before `QM-0044`** (Wave 3), which is where the
+  generator must know its target version.
+
+Corrected from a single `QM-0044` deadline, which named only the second of the
+two. See `README.md` §"How a deadline is derived".
