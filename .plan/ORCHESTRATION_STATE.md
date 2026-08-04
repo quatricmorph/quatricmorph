@@ -269,3 +269,34 @@ in the first minute.
 
 Controller `target/` was `cargo clean`ed at T+20m to free 2.5 GB ahead of the final
 shard. It rebuilds at first merge validation.
+
+## Controller process error at T+33m — reviewer dispatched into a live worktree
+
+**What I did wrong.** I dispatched `review-agent-1` against `QM-0006` at head
+`26756f1` while `impl-agent-1` was still finishing. For a few minutes two agents
+held the same writable worktree, which controller §8 forbids: *"Never let two
+agents share a writable worktree."* The trigger was my own check — I saw the
+evidence record written and the worktree clean and read that as "implementer
+finished", when the agent had not yet reported completion.
+
+**Consequence.** `impl-agent-1` amended its evidence commit: `26756f1` → `b554e4d`.
+
+**Damage assessment.** `git diff 26756f1..b554e4d --name-only` returns exactly one
+path: `.plan/evidence/QM-0006.md`. The amend only refined the diffstat wording
+inside the evidence record. **No implementation file, no test, and no
+configuration differs between the reviewed commit and the current head**, so
+controller §4's exception applies — the review is not invalidated, because the
+diff under review is provably unchanged. The reviewed SHA is recorded as `26756f1`
+and the merged SHA will be recorded separately; both appear in the evidence record
+rather than being conflated.
+
+**Correction adopted for the rest of the run.** A review agent is dispatched only
+after the implementation agent's own completion notification has arrived — not
+merely when its worktree looks clean and its files look written. A clean worktree
+proves a commit happened, not that the agent is done.
+
+**Residual risk being watched.** `impl-agent-1` and `review-agent-1` may both have
+written `.plan/evidence/QM-0006.md`. Before merging I verify the final record
+contains both the implementer's sections and the reviewer's filled-in
+`## Independent review` block; if either was clobbered, the reviewer re-records
+before the merge proceeds.
