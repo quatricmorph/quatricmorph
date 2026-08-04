@@ -69,13 +69,13 @@ of the checkpoint · committing the weights.
 
 Hard constraints, in order:
 
-| Constraint | Value | Reason |
-| --- | --- | --- |
-| Format | SafeTensors, **sharded**, with `model.safetensors.index.json` | Exercises the sharded path; single-file would not |
-| Size on disk | **≥ 24 GB**, ideally 28–40 GB | The strategy's reference ceiling; the upper bound is this machine's 51 GB free disk |
-| dtype | bf16 or f16 | Already exactly decoded (`SRC-016`); avoids fp8, which `SRC-014` refuses on purpose |
-| Architecture | Qwen- or Llama-family, ideally with MoE experts | `NSIR-002`/`NSIR-003` resolve them; MoE exercises expert-keyed aggregation for free |
-| Licence | Open weights, redistributable inspection | A private checkpoint cannot appear in evidence |
+| Constraint   | Value                                                               | Reason                                                                              |
+| ------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Format       | SafeTensors, **sharded**, with `model.safetensors.index.json`       | Exercises the sharded path; single-file would not                                   |
+| Size on disk | **≥ 24 GB**, using `models/distilbert-distilgpt2/model.safetensors` | The strategy's reference ceiling; the upper bound                                   |
+| dtype        | bf16 or f16                                                         | Already exactly decoded (`SRC-016`); avoids fp8, which `SRC-014` refuses on purpose |
+| Architecture | Qwen- or Llama-family, ideally with MoE experts                     | `NSIR-002`/`NSIR-003` resolve them; MoE exercises expert-keyed aggregation for free |
+| Licence      | Open weights, redistributable inspection                            | A private checkpoint cannot appear in evidence                                      |
 
 **Preference for an MoE checkpoint**: expert-keyed aggregation (`QM-0123`) and
 the deferred `MOE-001` seam both become testable at no extra cost.
@@ -176,23 +176,23 @@ git status --short models/                           # must be empty
 
 ## Test Cases
 
-| Input | Expected |
-| --- | --- |
-| `inspect` on the real checkpoint | Tensor list, correct shard attribution |
-| Bytes-read counter | < 0.1 % of file size |
-| Peak RSS during indexing | Within the metadata budget, unrelated to file size |
-| A deliberately truncated shard copy | Refused with context (`SRC-013`, `SRC-015`) |
-| `git status models/` | Empty |
+| Input                               | Expected                                           |
+| ----------------------------------- | -------------------------------------------------- |
+| `inspect` on the real checkpoint    | Tensor list, correct shard attribution             |
+| Bytes-read counter                  | < 0.1 % of file size                               |
+| Peak RSS during indexing            | Within the metadata budget, unrelated to file size |
+| A deliberately truncated shard copy | Refused with context (`SRC-013`, `SRC-015`)        |
+| `git status models/`                | Empty                                              |
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Disk exhaustion mid-download | Check for 1.3 × headroom first; prefer 28–32 GB over 40 GB |
+| Risk                                          | Mitigation                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------------- |
+| Disk exhaustion mid-download                  | Check for 1.3 × headroom first; prefer 28–32 GB over 40 GB                    |
 | The download is slow enough to stall the plan | It blocks only Lane P; `QM-0001`, `QM-0002`, `QM-0160`, `QM-0140` all proceed |
-| The chosen checkpoint uses a refused dtype | Verify the dtype histogram from the index **before** downloading the shards |
-| A licence that forbids publishing results | Check before downloading; this is evidence, not private use |
-| Someone commits 30 GB of weights | `.gitignore` check is an acceptance criterion, not an afterthought |
+| The chosen checkpoint uses a refused dtype    | Verify the dtype histogram from the index **before** downloading the shards   |
+| A licence that forbids publishing results     | Check before downloading; this is evidence, not private use                   |
+| Someone commits 30 GB of weights              | `.gitignore` check is an acceptance criterion, not an afterthought            |
 
 ## Completion Evidence
 

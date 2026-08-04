@@ -149,11 +149,6 @@ Rust matches `STATUS.md`'s 290 exactly. **Web does not**: `STATUS.md` claims
 `pip install --user`). The fixtures gate was run from a scratch venv at
 `.../scratchpad/fxvenv/bin/python`. Recorded so the gate's provenance is checkable.
 
-## Background jobs
-
-| Job | Started | State |
-| --- | --- | --- |
-| `QM-0100` checkpoint download — Qwen/Qwen1.5-MoE-A2.7B, 28.63 GB, 8 shards | T+6m | running |
 
 ## Task registry
 
@@ -241,11 +236,6 @@ measured against a partial artifact.
 
 ## QM-0100 — checkpoint acquired (controller-run download, T+21m)
 
-```
-DONE 2026-08-04T16:24:21Z   (started 2026-08-04T16:09:12Z — 15m09s at ~21.9 MB/s)
-repo Qwen/Qwen1.5-MoE-A2.7B   rev 1a758c50ecb6350748b9ce0a99d2352fd9fc11c9
-8 of 8 shards COMPLETE, each verified against the hub's x-linked-size header
-```
 
 | Check | Result |
 | --- | --- |

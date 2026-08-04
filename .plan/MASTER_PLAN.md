@@ -151,10 +151,7 @@ before they discover it themselves.
 
 ## 4. What "out-of-core" means, on the hardware that exists
 
-The development machine is an **Apple M3 Pro, 36 GB unified memory, 51 GB free
-disk**. There is no discrete VRAM to overflow, so "does not fit in 24 GB of VRAM"
-is not directly testable here. Restate the property as something the code
-enforces and a test can measure:
+The development machine is an **Apple M3 Pro, 36 GB unified memory, Focus on small and simple version first, please using model already download inside `./models/distilbert-distilgpt2`, and ignore any larger MoE checkpoints**.s
 
 > **Peak resident bytes stays under a configured ceiling `C` while streaming a
 > checkpoint `N ×` larger than `C`, with `N` ≥ 100.**
@@ -169,13 +166,7 @@ is that mechanism pointed at the streaming path. Concretely, v1's headline run:
 | Ratio `N` | **≥ 100 ×** | Makes the claim structural, not incidental |
 | Peak RSS, measured | **≤ 1.25 × C** | Measured with `/usr/bin/time -l`, not asserted |
 
-**Disk is the binding constraint, and it is recorded as one.** 51 GB free means a
-30–40 GB checkpoint is the largest v1 can hold locally. The strategy's 1.5 TB
-frontier-MoE example is **not provable on this machine** and v1 will not claim it:
-[`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) carries an explicit waiver, and
-the escape routes — external NVMe, or the NVIDIA Inception credits the strategy
-recommends applying for in Days 0–30 — are named in
-[`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §2.
+Only using model inside `distilbert-distilgpt2` instead of using large MoE checkpoints is a **temporary** concession to the machine's disk. Only focus on first MVP version to development.
 
 ## 5. Program boundaries
 
@@ -244,10 +235,6 @@ Two tasks are prerequisites without being serial links, and both are scheduled
 early: `QM-0140` (manifest schema) gates `QM-0141`, `QM-0143` and `QM-0150`, and
 `QM-0033` (job runner) gates cancellation and resume (`V1-06`). Neither sits
 between two path tasks, so neither lengthens the path.
-
-`QM-0100` is first because it has the longest lead time in the whole plan — a
-multi-hour download against a disk with 51 GB free — and because every
-performance claim downstream is unprovable without it.
 
 ## 8. Parallel lanes
 
