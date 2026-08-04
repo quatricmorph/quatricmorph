@@ -231,7 +231,7 @@ only asset the product has at this stage, which is being trusted.
 | --- | --- | --- |
 | A predicted accuracy or eval delta | Requires an evaluation the tool does not run | "Weight-space error. Accuracy impact is not measured — run your eval on the recommended config" |
 | That relative Frobenius error *is* sensitivity | It is a proxy, and a coarse one | "Ranked by relative weight-space error, a proxy for sensitivity" |
-| That a trillion-parameter checkpoint was processed locally | 51 GB of free disk says otherwise | The measured size, and the measured peak RSS, both printed |
+| That a trillion-parameter checkpoint was processed locally | 21 GB of free disk says otherwise | The measured size, and the measured peak RSS, both printed |
 | That a metric was GPU-computed when CPU ran it | The backend is recorded per run | The backend name in the run-metadata block |
 | That a sampled statistic is exact | `STAT-005` already types this | The fidelity label the data model carries |
 

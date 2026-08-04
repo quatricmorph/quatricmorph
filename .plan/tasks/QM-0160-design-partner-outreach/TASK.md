@@ -25,7 +25,7 @@ Not a code task. Its inputs are:
 * `.plan/VALIDATION_PLAN.md` §2 — segments, the four questions, where to find
   people.
 * `.plan/MASTER_PLAN.md` §3 — the value-proposition sentence, to be used verbatim.
-* `.plan/DEFINITION_OF_DONE.md` §1 waiver — why Inception matters: 51 GB of free
+* `.plan/DEFINITION_OF_DONE.md` §1 waiver — why Inception matters: 21 GB of free
   disk caps the local checkpoint at 30–40 GB.
 
 ## Requirements Covered

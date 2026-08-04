@@ -25,7 +25,7 @@ entire plan, and none of it is compressible by working harder.
 
 ## Restating "out-of-core" for the hardware that exists
 
-The development machine is an Apple M3 Pro with 36 GB unified memory and 51 GB
+The development machine is an Apple M3 Pro with 36 GB unified memory and 21 GB
 free disk. There is no discrete VRAM to overflow. The property is therefore
 stated as something the code enforces and `/usr/bin/time -l` can measure:
 
@@ -39,7 +39,7 @@ phase points that mechanism at the streaming path and measures the result.
 
 * `QM-0001` baseline verified (or running in parallel — `QM-0100` does not depend
   on it).
-* At least 45 GB free disk. **Check before starting**; the machine had 51 GB at
+* At least 45 GB free disk. **Check before starting**; the machine had 21 GB at
   planning time and the checkpoint is the largest single artifact this repository
   will ever hold.
 

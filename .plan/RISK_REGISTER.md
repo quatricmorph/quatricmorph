@@ -101,7 +101,7 @@ it is unrecoverable.
 
 ## M5 — the checkpoint will not fit · **Medium / Medium**
 
-**Concern.** The development machine has 51 GB of free disk and 36 GB of unified
+**Concern.** The development machine has 21 GB of free disk and 36 GB of unified
 memory. v1's headline checkpoint is capped at roughly 30–40 GB, and the
 strategy's 1.5 TB frontier-MoE example is not provable locally.
 

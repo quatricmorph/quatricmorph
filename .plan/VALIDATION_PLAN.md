@@ -57,7 +57,7 @@ and direct outreach. Target: **3–5 design partners lined up before the engine
 works**, per the strategy's Days 0–30.
 
 **NVIDIA Inception** (free, no equity, GPU cloud credits): apply in Days 0–30. It
-costs nothing, it is the escape route from this machine's 51 GB disk ceiling
+costs nothing, it is the escape route from this machine's 21 GB disk ceiling
 (`DEFINITION_OF_DONE.md` §1 waiver), and applying late is the only way it can
 become blocking.
 

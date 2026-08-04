@@ -171,12 +171,12 @@ would block a business milestone.
 
 ## 5. Runnable on the development machine
 
-**Every v1 task.** The machine is an Apple M3 Pro, 36 GB unified memory, 51 GB
+**Every v1 task.** The machine is an Apple M3 Pro, 36 GB unified memory, 21 GB
 free disk. No task in Phases 10–14 requires NVIDIA hardware, and the Metal lane
 targets the GPU that is present.
 
 The binding constraint is **disk, not compute**: `QM-0100` must fit its checkpoint
-in 51 GB, which caps v1's headline model at roughly 30–40 GB. That cap is
+in 21 GB, which caps v1's headline model at roughly 30–40 GB. That cap is
 recorded as a waiver in [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md), not
 papered over.
 

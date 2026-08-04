@@ -36,7 +36,7 @@ here is **measured**, never asserted.
 
 ### Waiver — checkpoint size
 
-**The development machine has 51 GB of free disk.** v1's headline checkpoint is
+**The development machine has 21 GB of free disk.** v1's headline checkpoint is
 therefore capped at roughly 30–40 GB. The strategy document's 1.5 TB frontier-MoE
 example is **not provable on this hardware**, and v1 makes no claim about it.
 
