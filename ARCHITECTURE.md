@@ -10,7 +10,7 @@ Quatricmorph will open an open-weight model from Hugging Face or local disk and 
 * evaluate mathematical expressions such as `(A @ B) @ C`;
 * visually simulate the matrix multiplication process;
 * perform statistical analysis without loading the entire checkpoint into RAM;
-* use CPU, WebGPU, Metal, CUDA, or a distributed system depending on the workload;
+* use CPU, WebGPU, Metal, CUDA, or a distributed system depending on the workload — **v1 conversion runs on CPU and Metal only; CUDA is a post-v1 accelerator lane** (§12.3);
 * cache results so sessions can be reopened and shared on the web.
 
 This architecture directly extends Quatricmorph's current definition: an immutable checkpoint source, tensors normalized into NSIR objects, large data read lazily, and every interface sharing the same query layer.
@@ -806,10 +806,12 @@ Not every workload should be forced through the renderer.
 Rendering:
 wgpu / WebGPU / Metal / Vulkan
 
-Large tensor compute:
-CUDA
+Large tensor compute (v1):
 Metal Performance Shaders
 CPU SIMD/BLAS
+
+Large tensor compute (post-v1, next step):
+CUDA
 
 Experimental runtime:
 PyTorch
@@ -817,7 +819,18 @@ Candle
 custom kernels
 ```
 
-The CUDA plugin handles:
+**v1 GPU compute lane is Metal, not CUDA.** The conversion stage (block statistics,
+quantization, visual encoding) runs on CPU with Metal as the accelerated path on
+Apple silicon, both behind the same `q_gpu::Backend` trait. This matches the
+development and target hardware for v1 (Apple silicon, no NVIDIA GPU) and keeps
+the MVP demo buildable without CUDA (`.plan/MASTER_PLAN.md` §5,
+`docs/decisions/ADR-008-track-b-prerequisite-waiver.md`).
+
+**CUDA is an explicit next step, not v1 scope.** An RTX 3090 conversion lane
+behind the same `Backend` trait is planned but deferred until after v1 ships;
+see `.plan/CUDA_ARCHITECTURE.md` and `.plan/decisions/ADR-CANDIDATE-003-metal-build.md`.
+
+The conversion-stage compute plugin (Metal in v1, CUDA post-v1) handles:
 
 * full matrix multiplication;
 * quantization;
@@ -1084,6 +1097,11 @@ Open one SafeTensors file
 ```
 
 Full-model support is out of scope for this phase.
+
+v1 transform-pipeline input: `models/distilbert-distilgpt2/` (local, single-file
+SafeTensors, GPT-2/distilgpt2 architecture, resolved via the generic architecture
+resolver — not sharded, so it does not exercise the sharded/trillion-manifest
+path; that remains covered by the synthetic fixtures in `fixtures/`).
 
 ## Phase 1 — Dense Model Browser
 

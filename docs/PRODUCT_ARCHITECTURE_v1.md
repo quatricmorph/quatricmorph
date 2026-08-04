@@ -643,7 +643,8 @@ These are targets, not guaranteed product claims, and should be benchmarked per 
 
 - Core daemon: Linux, macOS, Windows.
 - CPU backends: x86-64 and ARM64.
-- GPU backends: CUDA first, Metal second; other accelerators through plugins.
+- GPU backends: Metal first (v1's only GPU compute lane), CUDA second (next
+  step, deferred to post-v1); other accelerators through plugins.
 - UI: desktop via Tauri and browser for remote workspaces.
 - Query results: Arrow-compatible records plus JSON and CSV export.
 
@@ -789,7 +790,7 @@ Desktop UI / Web UI / CLI / SDK / Notebook
         │                       │
         ├─ Catalog              ├─ Local mmap/range reader
         ├─ NSIR registry        ├─ CPU kernels
-        ├─ WeightQL planner     ├─ CUDA/Metal kernels
+        ├─ WeightQL planner     ├─ Metal kernels (v1) / CUDA kernels (next step)
         ├─ MIR compiler         ├─ PyTorch/Candle adapters
         ├─ Lineage              ├─ Runtime trace adapters
         ├─ Policy engine        └─ Distributed workers
@@ -909,9 +910,11 @@ Use WebGPU for:
 
 WebGPU should not be the authoritative backend for model export.
 
-#### CUDA
+#### Metal (v1) / CUDA (next step, post-v1)
 
-Use CUDA or framework kernels for:
+v1 uses Metal for these kernels. CUDA is the same role's deferred next step,
+targeted at an NVIDIA RTX 3090 once v1 ships. Use Metal (v1) or CUDA
+(post-v1) framework kernels for:
 
 - high-throughput block transforms;
 - full tensor comparisons;

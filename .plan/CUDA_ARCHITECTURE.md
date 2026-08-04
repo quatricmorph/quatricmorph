@@ -1,4 +1,10 @@
-# CUDA_ARCHITECTURE — RTX 3090 block compute
+# CUDA_ARCHITECTURE — RTX 3090 block compute (next step, post-v1)
+
+**Scope note:** v1's GPU compute lane is Metal, not CUDA — see
+`.plan/decisions/ADR-CANDIDATE-003-metal-build.md` (`Decided`) and
+`.plan/MASTER_PLAN.md` §6 Lane E. Everything in this document describes the
+**deferred next-step CUDA lane**, scheduled after v1 ships, kept ready behind
+the same `q_gpu::Backend` trait Metal implements in v1.
 
 ## 0. Honest starting position
 
@@ -318,20 +324,23 @@ measurement"*. That warning stands until `QM-0036` produces numbers.
 
 ---
 
-## 12. Metal
+## 12. Metal — v1's GPU compute lane
 
 Task specification §34 asks for a Metal build strategy for M3 and later Apple
-GPUs. `gpu/metal/compute.metal` is a placeholder.
+GPUs. `gpu/metal/compute.metal` is the target for v1's implementation.
 
-**Scope:** Metal is an **extension point**, not MVP work
-([`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) §2). It implements the same
-`q_gpu::Backend` trait, is diffed against the same CPU reference, and inherits
-the same block-at-a-time discipline and budgets. Unified memory changes the
-transfer story — there is no discrete copy — but not the ceiling story: an M3 Max
-with 128 GB of unified memory still cannot hold a trillion parameters, and
-competing with the OS and the renderer for that memory is a stricter constraint
-than owning 24 GB outright.
+**Scope:** Metal is **v1's GPU compute lane**, not an extension point held for
+later (this inverts the prior `PRODUCT_SCOPE.md` §2 framing —
+`ADR-CANDIDATE-003` is now `Decided`). It implements the same
+`q_gpu::Backend` trait CUDA would, is diffed against the same CPU reference,
+and inherits the same block-at-a-time discipline and budgets described
+throughout this document (§§3–8) — read those sections as applying to Metal
+in v1, with CUDA reusing the same discipline when its turn comes post-v1.
+Unified memory changes the transfer story — there is no discrete copy — but
+not the ceiling story: an M3 Max with 128 GB of unified memory still cannot
+hold a trillion parameters, and competing with the OS and the renderer for
+that memory is a stricter constraint than owning 24 GB outright.
 
-Note that §26 excludes a *native Metal renderer*. A Metal **compute** backend is
-a different thing and remains a legitimate future lane. `ADR-CANDIDATE-003`
-records the strategy; no MVP task implements it.
+Note that §26 excludes a *native Metal renderer*. A Metal **compute** backend
+is a different thing and is v1 work. `ADR-CANDIDATE-003` records the decision
+and strategy; v1 tasks implement it (`.plan/MASTER_PLAN.md` §6 Lane E).

@@ -97,12 +97,12 @@ regresses. Several are additionally re-exercised by the end-to-end run in
 | `CACHE-006` | L3 browser cache | Stub | *extension point* | — | `QM-0092` |
 | `CACHE-007` | L4 remote cache | Stub | *extension point* | — | `QM-0092` |
 | `CACHE-008` | Cache wired into the query path | Not started | `QM-0032` | `QM-0081` | — |
-| `GPU-003` | wgpu / Metal backends | Not started | *extension point* | — | `QM-0092` |
-| `CUDA-001` | CUDA backend implements the trait | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
-| `CUDA-002` | Reduction kernels | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
-| `CUDA-003` | Histogram kernel | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
-| `CUDA-004` | Tiled block matmul | 🔧 Unverified | `QM-0034` | `QM-0036` 🔧 | `QM-0092` |
-| `CUDA-005` | Quantization / Morton kernels | 🔧 Unverified | `QM-0034` | `QM-0036` 🔧 | `QM-0092` |
+| `GPU-003` | Metal backend (v1 GPU compute lane); wgpu remains *extension point* | Not started | `QM-0037` + new Metal tasks (v1) | — | `QM-0092` |
+| `CUDA-001` | CUDA backend implements the trait (next step, post-v1) | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
+| `CUDA-002` | Reduction kernels (next step, post-v1) | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
+| `CUDA-003` | Histogram kernel (next step, post-v1) | 🔧 Unverified | `QM-0034` | `QM-0035` 🔧 | `QM-0092` |
+| `CUDA-004` | Tiled block matmul (next step, post-v1) | 🔧 Unverified | `QM-0034` | `QM-0036` 🔧 | `QM-0092` |
+| `CUDA-005` | Quantization / Morton kernels (next step, post-v1) | 🔧 Unverified | `QM-0034` | `QM-0036` 🔧 | `QM-0092` |
 | `CHAT-001` | Chat assistant | Not started | `QM-0074` | `QM-0080` | `QM-0090` |
 | `JOB-002` | Job runner | Stub | `QM-0033` | `QM-0081` | — |
 | `AC-004` | Click resolves to the correct address | Partial | `QM-0053` | `QM-0080` | — |
@@ -143,9 +143,9 @@ regresses. Several are additionally re-exercised by the end-to-end run in
 | `GRID-011` | Cross-language spatial conformance test | `QM-0005` | `QM-0005` | — |
 | `GRID-012` | Hover/selection metadata; never colour-only | `QM-0068` | `QM-0068` | — |
 | `MATMUL-006` | Real-block `A @ B` with the full control set | `QM-0067` | `QM-0080` | — |
-| `CUDA-007` | `nvcc` build integration, feature-gated | `QM-0034` | `QM-0034` | `QM-0092` |
-| `CUDA-008` | Differential verification against the CPU reference | `QM-0035`, `QM-0036` | `QM-0035` 🔧 | `QM-0092` |
-| `CUDA-009` | Device-memory leak soak | `QM-0083` | `QM-0083` 🔧 | — |
+| `CUDA-007` | `nvcc` build integration, feature-gated (next step, post-v1) | `QM-0034` | `QM-0034` | `QM-0092` |
+| `CUDA-008` | Differential verification against the CPU reference (next step, post-v1) | `QM-0035`, `QM-0036` | `QM-0035` 🔧 | `QM-0092` |
+| `CUDA-009` | Device-memory leak soak (next step, post-v1) | `QM-0083` | `QM-0083` 🔧 | — |
 | `API-009` | Job routes: create, status, cancel, resume | `QM-0033` | `QM-0081` | — |
 | `API-010` | SSE progress route | `QM-0033` | `QM-0081` | — |
 | `API-011` | Query cancellation, acknowledged | `QM-0073` | `QM-0073` | — |
@@ -211,6 +211,6 @@ Full text, evidence, and waiver policy in
 | Every new requirement has a verification task | ✅ |
 | Every task maps to ≥ 1 requirement | ✅ — asserted per task in `Requirements Covered` |
 | Every `Verified` requirement has a regression guard | ✅ `QM-0001` |
-| Every extension point is marked *not MVP* | ✅ — `SRC-008`, `CAT-010`, `CACHE-005`…`007`, `GPU-003` |
-| Requirements requiring an RTX 3090 are marked 🔧 | ✅ — `CUDA-001`…`005`, `CUDA-008`, `CUDA-009`, `MVP-10`, `MVP-12`, `MVP-42` |
+| Every extension point is marked *not MVP* | ✅ — `SRC-008`, `CAT-010`, `CACHE-005`…`007` (`GPU-003`/Metal is v1 scope, no longer an extension point — see `ADR-CANDIDATE-003`) |
+| Requirements requiring an RTX 3090 are marked 🔧 and deferred post-v1 | ✅ — `CUDA-001`…`005`, `CUDA-008`, `CUDA-009`, `MVP-10`, `MVP-12`, `MVP-42` (next step, not v1) |
 | No requirement ID collides with `STATUS.md` | ✅ — new IDs start above each prefix's maximum |

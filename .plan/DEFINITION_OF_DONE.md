@@ -38,19 +38,28 @@ it still holds at release.
 | `MVP-08` | Unknown semantic roles remain unknown rather than guessed | ✅ | `QM-0010` | `NSIR-001`, `generic_resolver_returns_unknown_for_names_it_was_not_taught`. Re-asserted for the new Qwen resolver |
 | `MVP-09` | Selected tensor blocks can be read by byte range | ✅ | `QM-0030` | `SRC-005`, `TILE-002`, `slice_read_matches_golden_and_reads_only_the_window` |
 
-## CUDA — 🔧 hardware-gated
+## GPU compute — 🍎 Metal in v1, 🔧 CUDA is the next step
+
+`MVP-10` … `MVP-12` are the task specification §33 items and are written
+against CUDA/RTX 3090 verbatim. **v1 ships Metal, not CUDA**
+(`ADR-CANDIDATE-003`, `Decided`): the conversion-stage compute plugin behind
+`q_gpu::Backend` is implemented and verified on Apple GPU hardware for v1,
+and these three criteria are satisfied for v1 through that Metal path plus
+the pre-existing waiver below. CUDA itself is deferred to the named next-step
+task (`.plan/CUDA_ARCHITECTURE.md`) and is not scheduled for v1.
 
 | ID | Criterion | Now | Task | Evidence required |
 | --- | --- | --- | --- | --- |
-| `MVP-10` | 🔧 CUDA processing runs on an RTX 3090 | ⬜ | `QM-0034`, `QM-0035` | Kernel output from the device, with `nvidia-smi` naming the card and the driver version |
-| `MVP-11` | CUDA processing uses bounded block buffers | 🟡 | `QM-0034` | `CUDA-006` verifies the ceiling arithmetic **without a device**; `QM-0034` verifies enforcement on one |
-| `MVP-12` | 🔧 CUDA results are validated against CPU references | ⬜ | `QM-0035`, `QM-0036` | Differential test output at the tolerances in [`CUDA_ARCHITECTURE.md`](CUDA_ARCHITECTURE.md) §6 |
+| `MVP-10` | 🔧 CUDA processing runs on an RTX 3090 (spec-literal; v1 satisfies the intent via Metal, see waiver) | ⬜ | `QM-0034`, `QM-0035` (CUDA, post-v1); new Metal task (v1) | Kernel output from the device — Metal on Apple GPU for v1 (`nvidia-smi` equivalent evidence for CUDA once the next step lands) |
+| `MVP-11` | GPU processing uses bounded block buffers | 🟡 | new Metal task (v1); `QM-0034` (CUDA, post-v1) | `CUDA-006` verifies the ceiling arithmetic **without a device**; the v1 Metal backend verifies enforcement on Apple GPU hardware |
+| `MVP-12` | 🔧 GPU results are validated against CPU references (spec-literal CUDA wording; v1 validates the Metal backend against CPU) | ⬜ | new Metal task (v1); `QM-0035`, `QM-0036` (CUDA, post-v1) | Differential test output — Metal vs `CpuBackend` for v1, at tolerances analogous to [`CUDA_ARCHITECTURE.md`](CUDA_ARCHITECTURE.md) §6 |
 
-**If no RTX 3090 is available at release**, `MVP-10` and `MVP-12` take a written
-waiver: the code exists, `STATUS.md` records `Hardware-Unverified`, the
-documentation claims nothing more, and `QM-0092` states the limitation. `MVP-11`
-is satisfiable without hardware for the arithmetic and is waived only for the
-enforcement path. See [`RISK_REGISTER.md`](RISK_REGISTER.md) R3.
+**CUDA/RTX 3090 itself is out of v1 scope by plan, not by hardware accident.**
+`MVP-10` and `MVP-12`'s literal CUDA wording takes a written waiver for v1: the
+CUDA code path is deferred (not merely unverified), `STATUS.md` records
+`Hardware-Unverified` / `Not Started` as appropriate, the documentation claims
+nothing more, and `QM-0092` states the limitation. `MVP-11` is satisfied via
+the v1 Metal backend's enforcement path. See [`RISK_REGISTER.md`](RISK_REGISTER.md) R3.
 
 ## Conversion artifacts
 
@@ -105,7 +114,7 @@ enforcement path. See [`RISK_REGISTER.md`](RISK_REGISTER.md) R3.
 | ID | Criterion | Now | Task | Evidence required |
 | --- | --- | --- | --- | --- |
 | `MVP-41` | Repeated selection and re-initialization do not leak browser memory | ⬜ | `QM-0082` | 100 iterations; heap and `renderer.info.memory` return within 10 % of baseline |
-| `MVP-42` | 🔧 Repeated CUDA block jobs do not leak device memory | ⬜ | `QM-0083` | 10 000 jobs; `cudaMemGetInfo` free returns to its start value |
+| `MVP-42` | 🔧 Repeated GPU block jobs do not leak device memory (spec-literal CUDA wording; v1 verifies the Metal backend, CUDA verification is the next-step task) | ⬜ | new Metal task (v1); `QM-0083` (CUDA, post-v1) | 10 000 jobs; Metal device memory (Apple `os_signpost`/Instruments or `q_gpu` accounting) returns to its start value for v1. `cudaMemGetInfo` evidence lands with the CUDA next step |
 | `MVP-43` | The browser console contains no unresolved runtime errors | ⬜ | `QM-0085` | Console capture across the full manual checklist, empty |
 
 ## Documentation and licensing
@@ -125,10 +134,13 @@ enforcement path. See [`RISK_REGISTER.md`](RISK_REGISTER.md) R3.
 | ✅ Already satisfied and tested | 17 |
 | 🟡 Partially satisfied | 15 |
 | ⬜ Not yet satisfied | 14 |
-| 🔧 Of which require an RTX 3090 | 3 (`MVP-10`, `MVP-12`, `MVP-42`) |
+| 🔧 Of which are spec-literal CUDA/RTX 3090 wording, satisfied for v1 via Metal instead | 3 (`MVP-10`, `MVP-12`, `MVP-42`) |
 
-**Forty-three of forty-six are achievable with no NVIDIA hardware.** That is the
-plan's central scheduling fact, and it is why CUDA sits off the critical path.
+**Forty-three of forty-six are achievable with no NVIDIA hardware, and v1 ships
+all forty-six with zero CUDA** — the three CUDA-worded criteria above are met
+through the Metal backend and a written waiver on the literal CUDA/RTX 3090
+wording. That is the plan's central scheduling fact, and it is why CUDA sits
+off the critical path and is deferred to the next step after v1.
 
 ---
 

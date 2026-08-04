@@ -108,7 +108,8 @@ visual records, under named budgets.
 **Invariant:** every buffer is bounded and named; no stage holds a whole tensor;
 CPU is the numerical reference and any other backend is diffed against it.
 **MVP delta:** streaming reader, conversion pass, job executor, cache wiring,
-CUDA build and differential verification.
+Metal build and differential verification (v1); CUDA build and differential
+verification (next step, post-v1).
 
 ### 3.3 Tile, GLB, and tileset compiler
 
@@ -188,7 +189,7 @@ conformance-test update. `SCHEMA_PLAN.md` §5 gives the procedure.
 
 2. CONVERT       POST /v1/conversions → job executor
    for each tensor, for each block (bounded, checkpointed, cancellable):
-     stream block  → q_gpu::Backend (CPU today, CUDA when verified)
+     stream block  → q_gpu::Backend (CPU today, Metal in v1, CUDA next step)
      → TensorStatistics + quantized visual cells
      → .qtile (atomic write)  → cache
    then per LOD level: → .glb (instanced) → visual_tiles rows
@@ -221,7 +222,7 @@ substance.
 | SafeTensors header parsing | Rust, host | GPU, browser |
 | Byte-range reads | Rust, host, mmap | Browser |
 | Catalog queries | Rust, SQLite | GPU, browser |
-| Block statistics, quantization, histograms | `q_gpu::Backend` — CPU now, CUDA when verified | Browser |
+| Block statistics, quantization, histograms | `q_gpu::Backend` — CPU now, Metal in v1, CUDA next step | Browser |
 | Morton encoding | Same backend | Browser |
 | Block matmul | Same backend; small blocks may also run in the browser for animation | — |
 | `.qtile` / GLB / `tileset.json` writing | Rust, host | GPU, browser |
@@ -233,11 +234,14 @@ substance.
 ## 7. Extension points, named
 
 Each is a real seam in the MVP that refuses with a requirement ID. Implementing
-any of them is out of scope ([`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) §2).
+any of them is out of scope ([`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) §2) —
+**except the Metal implementation of `q_gpu::Backend`**, which is v1 work
+(`ADR-CANDIDATE-003`, `Decided`); CUDA remains the deferred, out-of-v1-scope
+implementation of that same seam.
 
 | Seam | Where | Opens |
 | --- | --- | --- |
-| `q_gpu::Backend` | `crates/q-gpu/src/lib.rs:73` | CUDA, Metal, wgpu, distributed |
+| `q_gpu::Backend` | `crates/q-gpu/src/lib.rs:73` | Metal implemented in v1; CUDA (next step, post-v1), wgpu, distributed remain seams |
 | `ModelSource` | `crates/q-source/src/lib.rs` | HTTP Range, object storage, Hub |
 | `CacheTier` | `crates/q-cache/src/lib.rs:98` | L0 GPU, L3 browser, L4 CDN |
 | Architecture plugin registry | `crates/q-architecture` | Any model family |

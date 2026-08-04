@@ -36,7 +36,7 @@ deliberately, because each is easy to lose:
 | Artifact validation | External validators over generated output | CI job |
 | End-to-end | Full pipeline over a fixture | CI job |
 | Soak | Memory and handle growth over many iterations | Nightly / pre-release |
-| Hardware | CUDA differential and leak tests | **RTX 3090 only** |
+| Hardware | Metal differential and leak tests (v1); CUDA differential and leak tests (next step, post-v1) | Apple GPU (v1) / **RTX 3090 only** (post-v1) |
 | Manual | Visual and interaction checklist | Pre-release |
 
 ---
@@ -66,7 +66,20 @@ opened.
 fixture tool; assert peak allocation stays under a named budget rather than a
 literal, so the assertion survives an intentional budget change.
 
-### 2.3 CUDA — hardware-gated
+### 2.3a Metal — v1's hardware-gated GPU lane
+
+v1 runs its differential and device-memory GPU tests against **Metal on Apple
+GPU hardware**, not CUDA. The same shapes as §2.3 below apply — min/max, mean,
+variance, norms, ratios, histogram, quantization/Morton, block matmul, OOM
+block-halving and retry, cancellation, and a device-memory soak — verified
+against `CpuBackend` at analogous tolerances (`ADR-CANDIDATE-003`,
+`.plan/CUDA_ARCHITECTURE.md` §12). This is the test suite that actually runs
+in v1, on the development/target machine (Apple silicon).
+
+### 2.3 CUDA — hardware-gated (next step, post-v1)
+
+Not exercised in v1. Kept as the test plan for the deferred CUDA next step,
+once RTX 3090 access is available.
 
 | Test | Hardware |
 | --- | --- |
@@ -83,7 +96,7 @@ literal, so the assertion survives an intentional budget change.
 
 Tolerances in [`CUDA_ARCHITECTURE.md`](CUDA_ARCHITECTURE.md) §6. **Until an RTX
 3090 runs these, the requirements stay `Hardware-Unverified` and the tasks stay
-`Implemented`.**
+`Implemented`.** None of this blocks v1, which ships on the Metal suite above.
 
 ### 2.4 Tile generation
 

@@ -38,7 +38,7 @@ For this MVP, **trillion-scale support** means:
 * Tensor data can be accessed through byte-range reads.
 * Conversion can run incrementally, block by block.
 * Conversion jobs can be cancelled, resumed, and cached.
-* CUDA kernels can process selected blocks on an NVIDIA RTX 3090 (first verified GPU target; broader backends per `ARCHITECTURE.md` §12).
+* v1 conversion kernels process selected blocks on Metal (Apple GPU, first verified target for v1). CUDA kernels on an NVIDIA RTX 3090 are the planned **next step, deferred until after v1** (broader backends per `ARCHITECTURE.md` §12).
 * Visual LOD artifacts can be generated without creating one visual object per parameter.
 * The browser receives only the visual tiles, metadata, and selected exact tensor regions it needs.
 * Full-model residency in system RAM, GPU VRAM, browser memory, or GLB files is never required.
@@ -57,7 +57,7 @@ Local or sharded SafeTensors checkpoint
 → Architecture resolution
 → Canonical tensor metadata
 → Block-addressable tensor catalog
-→ CUDA-accelerated statistics and visual encoding
+→ CPU/Metal-accelerated statistics and visual encoding (v1; CUDA is a post-v1 accelerator lane)
 → Multiresolution tensor tiles
 → GLB tile content
 → tileset.json
@@ -73,7 +73,7 @@ Executable subsystems (minimum):
 
 ```text
 1. SafeTensors ingestion and metadata catalog
-2. CUDA-accelerated tensor conversion pipeline
+2. CPU/Metal-accelerated tensor conversion pipeline (v1); CUDA-accelerated lane (next step)
 3. GLB, tensor-tile, and tileset compiler
 4. Local query and tensor-block service
 5. CesiumJS model viewer
@@ -92,6 +92,17 @@ LOD: model → layer → tensor → block
 Query: exact scalar and tensor slice
 Math: one A @ B visualization
 ```
+
+**Concrete v1 transform-pipeline input:** `models/distilbert-distilgpt2/` — a
+local, single-file SafeTensors checkpoint (GPT-2/distilgpt2 architecture, 6
+layers, resolved via the generic resolver, not Qwen/Llama). It is smaller than
+the 0.5B–7B profile above and is not sharded, so it exercises the ingestion →
+conversion → tile → viewer path end to end but does not exercise the
+sharded/trillion-manifest path — that remains covered by the synthetic
+fixtures in `fixtures/` (`crates/q-catalog/tests/trillion_scale_manifest.rs`).
+The Qwen/Llama-like profile above remains the target family for later real
+checkpoints; a GPT-2 resolver may be added if `models/` grows beyond this one
+fixture.
 
 Immediate engineering wedge is **Phase 0 — Tensor Tiling Spike** (`ARCHITECTURE.md` §17; `docs/requirements/VIZ_MVP.md`).
 
@@ -113,7 +124,7 @@ Therefore the architecture uses:
 * Bounded CPU buffers
 * Bounded pinned-memory buffers
 * Bounded GPU staging buffers
-* Block-level CUDA execution
+* Block-level GPU execution (Metal in v1; CUDA is the deferred next-step lane)
 * Incremental output writing
 * Content-addressed caching
 * Resumable jobs
@@ -454,9 +465,13 @@ Schema versioning and migration belong from the beginning. Table sketches live i
 
 ---
 
-# 9. CUDA-Accelerated Conversion
+# 9. GPU-Accelerated Conversion (Metal in v1, CUDA next step)
 
-CUDA (and later Metal / CPU BLAS plugins) handle block-oriented workloads such as:
+**v1 uses Metal (and CPU) for the conversion stage.** CUDA on an NVIDIA RTX
+3090 is the same `Backend` trait's next lane, deferred until after v1 ships —
+see `.plan/CUDA_ARCHITECTURE.md` and
+`.plan/decisions/ADR-CANDIDATE-003-metal-build.md`. The conversion-stage
+compute plugin (Metal now, CUDA later) handles block-oriented workloads such as:
 
 * FP16 and BF16 conversion.
 * Quantization.
@@ -468,7 +483,7 @@ CUDA (and later Metal / CPU BLAS plugins) handle block-oriented workloads such a
 * Morton-order encoding where beneficial.
 * Optional block matrix multiplication and tensor comparison.
 
-Not CUDA responsibilities:
+Not GPU-plugin responsibilities:
 
 * SafeTensors header parsing.
 * Catalog queries.
@@ -485,7 +500,7 @@ CPU reader
 → bounded host buffer
 → optional pinned memory
 → bounded GPU staging buffer
-→ CUDA kernel
+→ Metal kernel (v1) / CUDA kernel (next step)
 → compact output buffer
 → qtile and GLB writer
 ```
@@ -506,7 +521,7 @@ The converter adapts block size under memory pressure. Device discovery, compute
 
 # 10. Tensor Block and LOD Model
 
-Large matrices divide into configurable logical blocks (e.g. `256 × 256`, `512 × 512`) based on dtype, dimensions, CUDA budget, desired LOD, GLB size, Cesium traversal, and picking/query granularity.
+Large matrices divide into configurable logical blocks (e.g. `256 × 256`, `512 × 512`) based on dtype, dimensions, GPU budget (Metal in v1), desired LOD, GLB size, Cesium traversal, and picking/query granularity.
 
 LOD hierarchy ([`ARCHITECTURE.md`](ARCHITECTURE.md) §9):
 
@@ -549,7 +564,7 @@ Conversion flow:
 *.safetensors
 → metadata catalog
 → tensor blocks
-→ CUDA summaries and visual encoding
+→ GPU summaries and visual encoding (Metal in v1; CUDA next step)
 → *.qtile
 → *.glb
 → tileset.json
@@ -719,7 +734,7 @@ Input text
 
 Constrained MVP subset: tensor reference, slice, transpose, matrix multiplication, basic statistics, comparison.
 
-Planner steps: resolve references and byte ranges; validate shapes; determine exact/sampled/approximate; estimate I/O and host/GPU memory; select CPU or CUDA; build visualization instructions; require explicit execution for expensive operations. Shape mismatch fails before any CUDA kernel launch.
+Planner steps: resolve references and byte ranges; validate shapes; determine exact/sampled/approximate; estimate I/O and host/GPU memory; select CPU or GPU (Metal in v1; CUDA next step); build visualization instructions; require explicit execution for expensive operations. Shape mismatch fails before any GPU kernel launch.
 
 No arbitrary code execution (`eval`, unrestricted SQL/Python, shell interpolation, etc.).
 
@@ -735,7 +750,7 @@ Chat must not read SafeTensors bytes directly. Chat produces or invokes a valida
 
 ## Local daemon
 
-Connects browser apps to catalog, source files, cache, and CUDA runtime. Responsibilities include open/import, exact values and slices, serving tileset/GLB/qtile, executing WeightQL plans, running conversion jobs, progress, cancel/resume, and cache inspection.
+Connects browser apps to catalog, source files, cache, and GPU runtime (Metal in v1; CUDA next step). Responsibilities include open/import, exact values and slices, serving tileset/GLB/qtile, executing WeightQL plans, running conversion jobs, progress, cancel/resume, and cache inspection.
 
 Illustrative API groups ([`ARCHITECTURE.md`](ARCHITECTURE.md) §14):
 
@@ -876,9 +891,9 @@ The MVP is complete only when:
 7. Tensor names map to stable canonical addresses.
 8. Unknown semantic roles remain unknown rather than being guessed.
 9. Selected tensor blocks can be read by byte range.
-10. CUDA processing runs on an NVIDIA RTX 3090 (first verified target).
-11. CUDA processing uses bounded block buffers.
-12. CUDA results are validated against CPU references.
+10. Metal processing runs on Apple GPU hardware in v1 (first verified target for v1). CUDA processing on an NVIDIA RTX 3090 is deferred as an explicit next step, not required for v1.
+11. GPU processing (Metal in v1) uses bounded block buffers.
+12. GPU results (Metal in v1) are validated against CPU references.
 13. Conversion produces versioned qtile artifacts, valid GLB tile content, and valid `tileset.json`.
 14. Generated work can be cancelled and resumed; completed block artifacts are reused from cache.
 15. CesiumJS loads the generated tileset and performs camera-based LOD loading.
@@ -887,13 +902,13 @@ The MVP is complete only when:
 18. Clicking or querying a scalar returns the correct exact value matching a Python SafeTensors reference.
 19. The UI distinguishes aggregate, sampled, quantized, approximate, and exact information.
 20. A selected tensor block opens in the matrix workspace on the shared 3D grid ruler.
-21. Compatible matrix blocks can be multiplied; incompatible shapes are rejected before CUDA execution.
+21. Compatible matrix blocks can be multiplied; incompatible shapes are rejected before GPU execution (Metal in v1).
 22. Multiplication can be animated deterministically with play/pause/step/previous/reset.
 23. Users can query canonical addresses and aliases; ambiguous aliases return candidates.
 24. Users can submit slice queries and constrained matrix expressions; KaTeX renders expressions.
 25. Query cost is estimated before expensive execution; queries can be cancelled.
 26. Chat uses WeightQL and cannot directly access arbitrary checkpoint bytes.
-27. Repeated selection/reinitialization and CUDA jobs do not obviously leak browser or device memory.
+27. Repeated selection/reinitialization and GPU jobs (Metal in v1) do not obviously leak browser or device memory.
 28. Original license and attribution are preserved.
 29. Documentation accurately describes implemented capabilities and limitations.
 30. The product does not claim that one RTX 3090 can hold or fully compute a one-trillion-parameter model.

@@ -2,14 +2,35 @@
 
 ## Status
 
-`Open`. Post-MVP.
+`Decided`. **Metal is the v1 GPU compute lane.** This reverses the prior
+`Open`/"Post-MVP" recommendation below (kept for its evidence and rationale).
+v1 ships CPU + Metal only; CUDA moves to an explicit next step, deferred until
+after v1 (see `.plan/CUDA_ARCHITECTURE.md` §12 and
+`docs/decisions/ADR-008-track-b-prerequisite-waiver.md`).
 
-## Context
+## Revised decision (v1)
+
+The development and target hardware for v1 is Apple silicon with no NVIDIA GPU
+present. Rather than leave Metal an unimplemented extension point while a
+CUDA-shaped MVP criterion (`MVP-10`, historically written against CUDA) goes
+unmet on this hardware, v1 implements Metal as the accelerated conversion
+lane and states the acceptance criterion in terms of Metal for v1, with CUDA
+recorded as the next step. This is **Option B** from the original analysis
+below, accepted with its stated cost (a real compute backend, differential
+tests, memory discipline) because that cost is now in scope for v1 rather
+than being an MVP-scope violation.
+
+CUDA (Option covered by `CUDA_ARCHITECTURE.md`) is not deleted — it is
+deferred: the same `q_gpu::Backend` trait keeps the seam open, and
+`crates/q-cuda`, `gpu/cuda/` remain in the repository as the next-step lane,
+gated on RTX 3090 access.
+
+## Original context (superseded)
 
 The task specification §34 asks for a Metal build strategy covering M3 through
 next-generation Apple GPUs. The development platform *is* Apple silicon, so a
-Metal backend would be the only accelerated path testable here — which makes it
-tempting to pull into the MVP. It should not be.
+Metal backend would be the only accelerated path testable here — which is
+exactly why v1 now adopts it instead of treating it as scope creep.
 
 ## Repository evidence
 
@@ -57,11 +78,12 @@ extension point take?
 Scope expansion ([`RISK_REGISTER.md`](../RISK_REGISTER.md) R12). "The hardware is
 right here" is exactly the reasoning that turns an MVP into a platform.
 
-## Recommended default
+## Original recommended default (superseded — see Status)
 
-**A.** Extension point only.
-
-The strategy, recorded now so implementing it later is additive:
+**A.** Extension point only, for the MVP as originally scoped (CUDA-first).
+No longer the decision in force; kept for the strategy detail below, which
+now applies to the **v1 Metal implementation** rather than to a future
+extension point:
 
 * Implements `q_gpu::Backend`, unchanged.
 * Diffed against `CpuBackend` at the same tolerances as CUDA
@@ -76,8 +98,12 @@ The strategy, recorded now so implementing it later is additive:
 
 ## Tasks affected
 
-None in the MVP. Documented as an extension point in `QM-0092`.
+Lane E (Metal accelerator) in `.plan/MASTER_PLAN.md` §6 — new Metal
+build/kernel tasks alongside `QM-0037-backend-selection`. `QM-0092`'s
+extension-point framing is updated to describe Metal as implemented in v1
+rather than deferred.
 
 ## Decision deadline
 
-Post-MVP. Revisit if `PERF-001`'s conversion budget proves unmeetable on CPU.
+Decided for v1. CUDA (previously the MVP-10 target) is revisited as the named
+next-step task once v1 ships and RTX 3090 access is available.

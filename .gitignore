@@ -16,3 +16,7 @@ __pycache__/
 /.q-cache/
 prompts/
 *.safetensors
+
+# Local real-checkpoint input for the transform pipeline (not committed; see
+# .plan/MASTER_PLAN.md "v1 transform-pipeline input")
+/models/

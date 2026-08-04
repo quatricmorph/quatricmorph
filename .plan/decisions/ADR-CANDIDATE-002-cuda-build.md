@@ -2,7 +2,10 @@
 
 ## Status
 
-`Open`.
+`Open`. **Deferred to the CUDA next step, post-v1** — v1 ships CPU + Metal
+only (see `.plan/decisions/ADR-CANDIDATE-003-metal-build.md`). This ADR still
+needs deciding before `QM-0034` starts, but `QM-0034` itself is scheduled
+after v1, not within it.
 
 ## Context
 

@@ -66,8 +66,8 @@ affected · Decision deadline.
 | # | Decision | Status | Deadline | Recommended default |
 | --- | --- | --- | --- | --- |
 | [001](ADR-CANDIDATE-001-rust-workspace.md) | Rust workspace introduction | `Decided` | — | Root workspace; already shipped as `ADR-001` |
-| [002](ADR-CANDIDATE-002-cuda-build.md) | CUDA build strategy | `Open` | Before `QM-0034` | `build.rs` + `nvcc`, feature-gated **off** by default |
-| [003](ADR-CANDIDATE-003-metal-build.md) | Metal compute for Apple GPUs | `Open` | Post-MVP | Extension point only; same `Backend` trait |
+| [002](ADR-CANDIDATE-002-cuda-build.md) | CUDA build strategy | `Open` | Post-v1 (next step) | `build.rs` + `nvcc`, feature-gated **off** by default; deferred until after v1 |
+| [003](ADR-CANDIDATE-003-metal-build.md) | Metal compute for Apple GPUs | `Decided` | v1 | v1's only GPU compute lane; same `Backend` trait |
 | [004](ADR-CANDIDATE-004-safetensors-library.md) | SafeTensors library selection | `Decided` | — | Own parser; already shipped and verified |
 | [005](ADR-CANDIDATE-005-catalog-technology.md) | Catalog technology | `Open` | Before Phase 08 | SQLite; revisit only on measured need |
 | [006](ADR-CANDIDATE-006-qtile-v1.md) | `.qtile` v1 binary schema | `Decided` | — | v1 frozen; already shipped as `ADR-004` |

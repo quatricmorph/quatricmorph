@@ -67,7 +67,7 @@ they still hold at release. Cited to `STATUS.md`.
 | CPU conversion pass: block statistics over a whole tensor | `STAT-008` | 03 |
 | Job runner: checkpointing, atomic output, resume, cancellation | `JOB-002` | 03 |
 | Cache wired into the block, statistics, and query paths | `CACHE-008` | 03 |
-| CUDA build integration and differential verification vs CPU | `CUDA-007`, `CUDA-008` | 03 |
+| Metal build integration and differential verification vs CPU (v1's GPU lane; CUDA equivalent `CUDA-007`/`CUDA-008` deferred to the next step, post-v1 — see §2) | `GPU-003` | 03 |
 | `.qtile` pyramid generation | `TILE-004` | 04 |
 | Instanced GLB tile content with feature IDs | `GLB-001`, `GLB-004` | 04 |
 | `tileset.json` generation | `CESIUM-001` | 04 |
@@ -104,8 +104,8 @@ implemented and refuses with its requirement ID.
 | **Higher-dimensional tensors (rank > 3)** | Axis-binding table maps tensor axes → world axes with a declared facet rule. Rank ≤ 3 implemented; rank > 3 refuses | `GRID-007` |
 | **Remote checkpoints over HTTP Range** | `ModelSource` trait; `crates/q-source/src/http.rs` computes ranges correctly, transport refuses | `SRC-008` |
 | **Kimi and DeepSeek resolvers** | `architectures/{kimi,deepseek}/plugin.toml` declared with `implemented = false`; registry never lets them claim a model | `NSIR-006` |
-| **CUDA acceleration** | `q_gpu::Backend` trait; `CudaBackend` implements the ceiling check and refuses execution until hardware verifies it | `CUDA-001` |
-| **Metal / wgpu compute** | Same `Backend` trait. `gpu/metal/compute.metal` and `gpu/wgsl/compute.wgsl` are placeholders | `GPU-003` |
+| **CUDA acceleration (next step, post-v1)** | `q_gpu::Backend` trait; `CudaBackend` implements the ceiling check and refuses execution until RTX 3090 hardware verifies it. Deferred until after v1 (`ADR-CANDIDATE-002`) | `CUDA-001` |
+| **wgpu compute (v1 implements Metal directly; wgpu stays the extension point)** | Same `Backend` trait. `gpu/wgsl/compute.wgsl` remains a placeholder; `gpu/metal/compute.metal` is v1 work, not a placeholder (`ADR-CANDIDATE-003`, `Decided`) | `GPU-003` |
 | **L0 GPU-resident cache** | `CacheTier` trait; `LayeredCache` composes tiers | `CACHE-005` |
 | **L3 browser and L4 remote cache** | `L3BrowserCache` / `L4RemoteCache` refuse rather than missing silently | `CACHE-006`, `CACHE-007` |
 | **Implicit 3D Tiles subdivision** | Tileset builder emits explicit tiles; the node type carries the fields implicit tiling would need | `CESIUM-011` |

@@ -36,7 +36,12 @@ ever been produced.**
 ## 2. Target MVP
 
 The MVP is the end-to-end path in the task specification §2, executed on a real
-checkpoint fixture:
+checkpoint fixture. **The v1 transform-pipeline input is
+`models/distilbert-distilgpt2/`** — a local, single-file, un-sharded SafeTensors
+checkpoint (GPT-2/distilgpt2, generic resolver). It is gitignored, not committed;
+the sharded/trillion-manifest path continues to be proven by the synthetic
+fixtures under `fixtures/` and `crates/q-catalog/tests/trillion_scale_manifest.rs`,
+not by `models/`:
 
 ```text
 Local or sharded SafeTensors checkpoint
@@ -77,22 +82,31 @@ It does **not** mean, and this plan will not claim, that a trillion-parameter
 checkpoint can be loaded into RAM, into an RTX 3090's 24 GB of VRAM, into a
 browser, or into a GLB. See [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) §5.
 
-### RTX 3090 constraints
+### v1 GPU lane: Metal, not CUDA
+
+**v1 uses Metal as its only GPU compute lane for the conversion stage.** The
+development and target hardware for v1 is Apple silicon with no NVIDIA GPU
+present, so the conversion stage (block statistics, quantization, visual
+encoding) runs on CPU with Metal as the accelerated path, both behind the same
+`q_gpu::Backend` trait. CUDA is **not** part of v1; it is an explicit next
+step — see "CUDA: deferred to next step" below.
+
+### CUDA: deferred to next step (post-v1)
 
 An RTX 3090 has **24 GB of VRAM**. At fp32, that is roughly 6×10⁹ parameters if
 nothing else were resident — about 0.6 % of a trillion-parameter model, before
-any working buffers, and in practice far less. The architecture therefore treats
-the GPU as a **block processor with a hard ceiling**, never as a place where a
-model lives:
+any working buffers, and in practice far less. When the CUDA lane is taken up
+post-v1, the architecture treats the GPU as a **block processor with a hard
+ceiling**, never as a place where a model lives:
 
 * `q_cuda::RTX_3090_VRAM_BYTES` and `USABLE_VRAM_FRACTION = 0.80` already exist
   and are enforced by `the_vram_ceiling_is_enforced_without_a_device`.
 * Every kernel operates on one host-streamed block. `gpu/cuda/README.md` states
-  this and this plan keeps it.
+  this and this plan keeps it for when the lane is implemented.
 * Every budget in [`MEMORY_BUDGET.md`](MEMORY_BUDGET.md) is a formula over a
   configuration variable, not a fixed promise.
-* **The MVP completes with zero CUDA.** CUDA is an accelerator lane, not the
-  critical path — see §5.
+* **v1 completes with zero CUDA.** CUDA is a post-v1 accelerator lane, not on
+  the critical path, and not scheduled for v1 — see §5.
 
 ## 3. Program boundaries
 
@@ -102,7 +116,7 @@ Full detail in [`TARGET_ARCHITECTURE.md`](TARGET_ARCHITECTURE.md).
 | # | Subsystem | Today | MVP delta |
 | --- | --- | --- | --- |
 | 1 | SafeTensors ingestion and metadata catalog | `q-source`, `q-safetensors`, `q-architecture`, `q-nsir`, `q-catalog` | Qwen resolver; statistics and tile rows persisted |
-| 2 | Block runtime and accelerated conversion | `q-tensor-runtime`, `q-statistics`, `q-gpu`, `q-cuda`, `gpu/cuda/` | Streaming block reader; CPU conversion pass; job runner; CUDA build and differential verification |
+| 2 | Block runtime and accelerated conversion | `q-tensor-runtime`, `q-statistics`, `q-gpu`, `gpu/metal/` (v1); `q-cuda`, `gpu/cuda/` (next step) | Streaming block reader; CPU conversion pass; job runner; Metal build and differential verification (v1); CUDA build and differential verification (post-v1) |
 | 3 | Tile, GLB, and tileset compiler | `q-tiles`, `q-gltf`, `q-tileset` | Pyramid generation; instanced GLB; `tileset.json`; atomic resumable output |
 | 4 | Local query and tensor-block service | `q-daemon`, `q-cli` | Serve tiles and statistics; conversion jobs; cancellation; origin policy |
 | 5 | CesiumJS model viewer | `apps/web/model-viewer` (shell + tested policy) | An actual viewer: tileset load, LOD, picking, inspector, exactness badges, search |
@@ -156,8 +170,9 @@ was verified on (darwin, Apple silicon) with no NVIDIA hardware.
 **Why CUDA is off the critical path.** `q_gpu::CpuBackend` is `GPU-002 Verified`
 and `q_gpu::block_statistics_default` already computes the statistics the tile
 pyramid needs. Routing Phase 04 through the CPU backend makes the pipeline
-buildable and demonstrable today; the CUDA lane then replaces the backend behind
-the same `q_gpu::Backend` trait without changing a single downstream artifact.
+buildable and demonstrable today; a Metal backend then accelerates it in v1
+behind the same `q_gpu::Backend` trait without changing a single downstream
+artifact, and a CUDA backend replaces/joins it as the **next step, after v1**.
 `docs/decisions/ADR-008-track-b-prerequisite-waiver.md` already waives the RTX
 3090 gate for exactly this reason. If CUDA were on the critical path, the MVP
 would be unbuildable in the environment that must build it.
@@ -173,7 +188,8 @@ risks are enumerated in [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md).
 | **B — Viewer** | `QM-0050`…`QM-0057` | `apps/web/model-viewer` | `QM-0004`; `QM-0044` for anything that must render real data |
 | **C — Workspace** | `QM-0060`…`QM-0068` | `apps/web/matrix-workspace` | `QM-0004`; `QM-0066` needs a running daemon |
 | **D — Query and chat** | `QM-0070`…`QM-0075` | `crates/q-weightql`, `q-expression`, `q-gpu`, `apps/web/query-interface` | `QM-0020` for statistics queries |
-| **E — CUDA accelerator** | `QM-0034`…`QM-0036`, `QM-0083` | `crates/q-cuda`, `gpu/cuda/` | **Requires RTX 3090.** Blocks nothing on the critical path |
+| **E — Metal accelerator (v1)** | `QM-0037`, new Metal build/kernel tasks | `crates/q-gpu`, `gpu/metal/` | Blocks nothing on the critical path; targets Apple silicon (dev/target hardware) |
+| **F — CUDA accelerator (next step, post-v1)** | `QM-0034`…`QM-0036`, `QM-0083` | `crates/q-cuda`, `gpu/cuda/` | **Requires RTX 3090. Deferred to post-v1.** Blocks nothing on the critical path |
 
 Lanes B and C both consume the shared spatial contract from `QM-0004` but write
 to different packages, so they do not conflict after it lands. Lane A owns the
