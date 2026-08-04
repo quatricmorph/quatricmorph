@@ -334,3 +334,39 @@ prompt's expectation that SSH push would work is not borne out.
 
 **No retry beyond once per wave.** The run does not halt, does not ask, and does
 not treat this as a blocker. There is no `BLOCKED_BY_CREDENTIAL` state.
+
+## The floor-staleness asymmetry — binding rule for every merge after `QM-0001`
+
+`QM-0001` is writing `scripts/baseline.json` as `{rust: 290, web: 115}` from a
+worktree cut at `145257b`. `QM-0012` is review-pending at **318 rust (+28)**.
+Whichever merges second, the floor is wrong:
+
+* `QM-0001` first → `QM-0012` merges, `main` measures 318, the floor still says
+  290. Stale by 28.
+* `QM-0012` first → `QM-0001` writes 290 from its now-stale worktree. Stale by 28
+  at birth.
+
+**`QM-0001`'s own guard cannot catch this.** It fires when the floor is set
+*above* the real count — that is the `999` demonstration. A floor set *below*
+reality is silent. That is precisely the asymmetry that let `27 passed` read as
+green for as long as `103297d` sat on `main`: a gate that under-reports does not
+fail, it just stops protecting anything.
+
+None of `QM-0012`, `QM-0140`, `QM-0100` or `QM-0002` were briefed to touch
+`baseline.json`, because the file did not exist when their packets were written.
+Controller §6.1 item 6 and §14 make this the controller's responsibility, not
+theirs.
+
+**Rule, effective the moment `QM-0001` merges.** For every subsequent merge:
+
+1. Squash-merge the branch.
+2. Re-measure on the **merged** `main`: `cargo test --workspace` and, if any web
+   file changed, `cd apps/web && npx vitest run`.
+3. Write those **exact measured numbers** into `scripts/baseline.json` — not
+   "≥ previous", the measured value — **in the same squash commit**.
+4. The floor still may only rise. A merge that would lower it is rejected.
+5. At the end of the run, assert `scripts/baseline.json` equals a fresh
+   measurement exactly, and record that comparison in the final report.
+
+Floor updates therefore serialise through the controller, one merge at a time,
+which §14 already requires for this file.
