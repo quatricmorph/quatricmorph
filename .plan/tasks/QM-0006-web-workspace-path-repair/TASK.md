@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented
+Complete
 
 **Start this before `QM-0001`.** `QM-0001` records the permanent test floor, and
 its own specification names `{"rust": 290, "web": 101}`. The tree currently runs
@@ -232,3 +232,27 @@ task's guard. **`QM-0001` must record `web: 115` over 13 files, not `101`** — 
 Worktree path note: the controller assigned `/Users/thanh/.qm-worktrees/qm-0006`,
 which does not exist. The actual path is one `Quatricmorph` segment deeper, as
 recorded above.
+
+## Orchestration
+
+- Controller state: Complete
+- Lane: S   Wave: 0
+- Branch: task/qm-0006-web-workspace-path-repair
+- Worktree: ../.qm-worktrees/qm-0006 (removed after verification)
+- Base commit: ace7d09
+- Implementation commit: 0dd6c3c
+- Reviewed commit: 379e582 (verdict) over implementation 0dd6c3c
+- Implementation agent: impl-agent-1
+- Independent reviewer: review-agent-1
+- Review result: APPROVED (zero blocking findings, 4 non-blocking notes, 3 remaining risks)
+- Evidence record: .plan/evidence/QM-0006.md
+- Merge path: L (local squash)
+- Merge commit: 1cfdc9c
+- Evidence correction commit: 19b7ba0 (replaced a controller-truncated verdict with the reviewer's own)
+- Pushed to origin: no — SSH hangs on pack upload (exit 124), HTTPS 403 "denied to MarkdownOfficial"
+- Post-merge verification: PASSED on local main — fmt 0, clippy 0, cargo test 290 passed/0 failed,
+  vitest 13 files/115 tests, npm build exit 0, `git merge-base --is-ancestor 1cfdc9c main` exit 0
+- Tests added: +14 vitest (guard). Web collection restored 27 -> 115; the 74 previously
+  uncollected tests are live and all pass as written. Rust unchanged at 290.
+- Post-merge cleanup: 601 MB of untracked gitignored residue (dist/, node_modules/) removed
+  from the old apps/web/matrix-workspace path; zero tracked files were under it.
