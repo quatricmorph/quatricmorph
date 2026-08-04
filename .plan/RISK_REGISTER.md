@@ -4,9 +4,145 @@ Ranked by exposure = likelihood × impact. Each risk names a **trigger** — the
 observable event that means it has materialised — because a risk without a
 trigger is a worry, not a managed risk.
 
+**Scope note.** `R1`…`R*` below are the technical risks of the full platform.
+Several of them — `R1` (Cesium), `R2` (spatial contract drift) — belong to
+deferred work and are **not live during v1**; they return with the platform
+release. The risks that decide v1 are `M1`…`M6` immediately below, and they are
+listed first because for a solo founder in a closing window they dominate.
+
 ---
 
-## R1 — CesiumJS cannot render this at all · **High / High**
+# Market and scope risks — live during v1
+
+## M1 — v1 ships and nobody changes a decision · **Medium / Critical**
+
+**Concern.** The strategy's single largest assumption is that engineers will
+change a real decision, and pay, because of what Quatricmorph reveals. Everything
+else in this plan is infrastructure for testing it. If the diagnosis is
+interesting but not decision-changing, the product is at Level 2 on the value
+ladder and there is no business yet.
+
+**Trigger.** `QM-0162` completes with no case, after genuine attempts — or two of
+the four PMF signals in [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §3 are missing
+by month 6.
+
+**Mitigation.** `V1-30` may not be waived (`DEFINITION_OF_DONE.md` §9). Partner
+conversations start on day 1 (`QM-0160`), not after the tool works, so the
+assumption is probed months before the release gate reaches it.
+
+**Residual.** High, and irreducible by engineering. That is what makes it the
+top risk rather than a footnote — and `VALIDATION_PLAN.md` §4 records the kill
+response in advance so it is a decision, not a mood.
+
+---
+
+## M2 — scope creep back toward the platform · **High / High**
+
+**Concern.** The strategy names this as the main risk for a solo founder here:
+*"Do not build the full 18-capability platform before one diagnostic has a
+documented decision-change case."* Forty-four `Deferred` tasks sit in this
+directory, fully specified and tempting, and the tile pipeline in particular is
+genuinely close to working.
+
+**Trigger.** Any commit touching `crates/q-tiles`, `q-gltf`, `q-tileset`,
+`apps/web/model-viewer`, or `apps/web/matrix-workspace` in a v1 task; or a
+`Deferred` task moved to `Ready` without a `VALIDATION_PLAN.md` §5 decision.
+
+**Mitigation.** `Deferred` is a distinct status an agent may not start
+(`.plan/README.md`); `PRODUCT_SCOPE.md` §4 lists the boundary; `EXECUTION_ORDER.md`
+§1 repeats it. Each deferred task names the release that takes it up, so the
+question "when does this come back?" already has an answer.
+
+**Residual.** Moderate. The mechanism is good; the temptation is constant.
+
+---
+
+## M3 — the window closes · **Medium / High**
+
+**Concern.** The strategy reads the unopposed window as **12–18 months, not
+indefinite**. Three parties circle adjacent territory: MixtureKit (MoE routing
+visualisation, shipped Dec 2025), Palace (out-of-core GPU tensor visualisation,
+Sep 2025 — retargetable at checkpoints), and Goodfire ($150M Series B, Feb 2026,
+moving from "understand" toward "design and intervene").
+
+**Trigger.** Any of: a Palace-like framework retargeted at ML checkpoints; a
+Goodfire release operating on raw tensors rather than learned features; a W&B or
+CoreWeave feature touching static checkpoint weights; MixtureKit extending to
+arbitrary large open-weight checkpoints.
+
+**Mitigation.** Quarterly competitive watch (`VALIDATION_PLAN.md` §7), one
+paragraph appended here per quarter. v1 is deliberately the shortest path to a
+Level-3 result rather than the broadest platform.
+
+**Residual.** Moderate. Speed is the only real mitigation, and this plan is the
+attempt at it.
+
+---
+
+## M4 — an overclaim destroys credibility with the first serious user · **Low / Critical**
+
+**Concern.** The audience is engineers who will check. A predicted accuracy delta
+the tool cannot support, a "trillion-parameter" claim the disk cannot back, a GPU
+attribution when the CPU ran it — any one of these, caught once, ends the
+relationship and is repeated to colleagues.
+
+**Trigger.** A forbidden claim from `PRODUCT_SCOPE.md` §5.2 appearing in a
+document, a report template, or a UI string.
+
+**Mitigation.** The forbidden-claims table is a specification, not advice;
+`V1-22` audits report strings; `QM-0090` audits every document; `QM-0165`'s
+release audit greps the repository. The `EVAL-001`/`EVAL-002` seams refuse the
+accuracy claim in code rather than relying on discipline.
+
+**Residual.** Low, and the mechanisms are cheap. Kept at Critical impact because
+it is unrecoverable.
+
+---
+
+## M5 — the checkpoint will not fit · **Medium / Medium**
+
+**Concern.** The development machine has 51 GB of free disk and 36 GB of unified
+memory. v1's headline checkpoint is capped at roughly 30–40 GB, and the
+strategy's 1.5 TB frontier-MoE example is not provable locally.
+
+**Trigger.** `QM-0100` cannot place a ≥ 24 GB checkpoint on disk, or `QM-0101`
+cannot hold its residency ceiling on one.
+
+**Mitigation.** `DEFINITION_OF_DONE.md` §1 carries an explicit waiver stating what
+v1 claims and what it does not. Escape routes: external NVMe, or the NVIDIA
+Inception credits `QM-0160` applies for in Days 0–30 — free, no equity, applied
+for before it becomes blocking.
+
+**Residual.** Low on the honesty axis (the waiver is written), moderate on the
+marketing axis: "24 GB" is a less arresting number than "1.5 TB", and the
+temptation to imply the larger one is exactly `M4`.
+
+---
+
+## M6 — the surface, not the diagnosis, is what people react to · **Medium / Low**
+
+**Concern.** The inverse of the usual worry: partners may praise the heat-map and
+ignore the ranking, which would mean v1 validated a Level-1 artifact.
+
+**Trigger.** `QM-0151`'s legibility review shows readers using the ranked list and
+ignoring the map — or the reverse, with nobody acting on either.
+
+**Mitigation.** `QM-0151` records *which element* each reader used. The report
+carries the same content in text, so a headless pivot (`VALIDATION_PLAN.md` §5.1)
+costs nothing.
+
+**Residual.** Low. Either outcome is information, and both are cheap to act on.
+
+---
+
+# Technical risks
+
+Below this line, the register is unchanged. Note that `R1` and `R2` concern
+deferred work and are **dormant during v1**.
+
+---
+
+## R1 — CesiumJS cannot render this at all · **High / High** *(dormant during v1)*
 
 **Concern.** Cesium is a geospatial engine. It assumes an ellipsoid, a globe, and
 GIS coordinates. `ARCHITECTURE.md` §12.1 is candid that it "still carries many GIS
@@ -28,7 +164,7 @@ traversal and culling ourselves.
 
 ---
 
-## R2 — the spatial contract is introduced and then bypassed · **Medium / High**
+## R2 — the spatial contract is introduced and then bypassed · **Medium / High** *(dormant during v1)*
 
 **Concern.** `QM-0004` creates one contract; nothing stops a later task from
 declaring a local constant "just for now". The current

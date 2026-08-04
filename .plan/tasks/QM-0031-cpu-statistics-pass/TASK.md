@@ -8,6 +8,8 @@ Unblocks when `QM-0030` and `QM-0020` reach `Complete`. (`QM-0022` dropped — d
 
 **v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
+
+**v1 role.** Retained, and distinct from `QM-0122`. This task computes **single-tensor** statistics (`STAT-008`) and persists them, which the manifest's per-tensor block and `QM-0032`'s cache path both consume. `QM-0122` computes **paired** diagnostic metrics and does not replace it. If `QM-0122` lands first and subsumes the persistence path in practice, reduce this task's scope by editing it — do not leave the overlap undecided.
 ## Phase
 
 Phase 03 — Block runtime and compute

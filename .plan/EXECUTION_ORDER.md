@@ -50,12 +50,12 @@ Lane R:  QM-0140  manifest schema v1                (schema only — no data nee
 report schema is the contract between the engine, the CLI, the daemon, and the
 surface. Writing it late means writing it four times.
 
-### Wave 2 — the engine (6 tasks)
+### Wave 2 — the engine (7 tasks)
 
 ```text
 Lane Q:  QM-0120 → QM-0121 → QM-0122                 ══ GATE G2 at QM-0122
 Lane T:  QM-0020  persist statistics
-Lane T:  QM-0010  Qwen resolver                      (v1 target checkpoints are Qwen-family)
+Lane T:  QM-0010 → QM-0011  Qwen resolver + conformance   (v1 targets are Qwen-family)
 Lane S:  QM-0150  heat-map surface against the schema, with synthetic data
 ```
 
@@ -85,17 +85,23 @@ Lane S:  QM-0152  surface reads a real manifest
 Lane U:  QM-0127  Metal differential verification vs CPU
 ```
 
-### Wave 5 — validation (5 tasks, mostly not code)
+### Wave 5 — validation (8 tasks, mostly not code)
 
 ```text
 QM-0161  design-partner run on a checkpoint the founder did not choose
 QM-0162  documented decision-change case             ══ GATE G5
 QM-0163  price probe
+QM-0164  repeated-use log                            (runs over weeks, in the background)
 parallel: QM-0102 scaling benchmarks
+          QM-0081 cache/resume failure injection
+          QM-0082 browser soak
           QM-0085 runtime error and security audit
 ```
 
-### Wave 6 — release (5 tasks)
+`QM-0164` spans this wave and the next: repeated use cannot be observed inside a
+single wave, and prompting a partner to generate the signal invalidates it.
+
+### Wave 6 — release (6 tasks)
 
 ```text
 parallel:  QM-0090  documentation update
@@ -104,21 +110,31 @@ parallel:  QM-0090  documentation update
            QM-0167  root-document amendment          (see Phase 14)
 then:      QM-0091  regenerate STATUS.md
 then:      QM-0165  v1 release audit                 ══ RELEASE
+after:     QM-0166  technical write-up               (not a release blocker)
 ```
+
+`QM-0166` follows the release rather than gating it. It is the outcome that
+survives either result — including the one where `VALIDATION_PLAN.md` §4's kill
+criteria fire.
 
 ## 3. Critical path
 
 ```text
-QM-0100 → QM-0101 → QM-0030 → QM-0120 → QM-0121 → QM-0122 → QM-0123 → QM-0033
-        → QM-0125 → QM-0140 → QM-0141 → QM-0150 → QM-0161 → QM-0162 → QM-0165
+QM-0100 → QM-0101 → QM-0030 → QM-0120 → QM-0121 → QM-0122 → QM-0123
+        → QM-0125 → QM-0141 → QM-0150 → QM-0161 → QM-0162 → QM-0165
 ```
 
-**Fifteen tasks. Not one requires an NVIDIA GPU, a renderer, or a chat
+**Thirteen tasks. Not one requires an NVIDIA GPU, a renderer, or a chat
 interface.**
 
-`QM-0140` (manifest schema) is on the path but is schedulable much earlier than
-its position implies — it depends only on the *shape* of the engine's output, not
-its data. Doing it in Wave 1 shortens the path by one wave.
+`QM-0140` (manifest schema) and `QM-0033` (job runner) are **prerequisites, not
+serial links**: `QM-0140` gates `QM-0141`, `QM-0143` and `QM-0150`, and `QM-0033`
+gates cancellation and resume (`V1-06`). Both are scheduled early — `QM-0140` in
+Wave 1, `QM-0033` in Wave 3 — and neither extends the path.
+
+This string is canonical. [`MASTER_PLAN.md`](MASTER_PLAN.md) §7 states the same
+sequence with its task titles; if the two ever disagree, `MASTER_PLAN.md` wins
+and this file is corrected.
 
 ### Why the shared spatial contract is no longer first
 
@@ -147,11 +163,11 @@ would block a business milestone.
 | --- | --- | --- | --- |
 | **P — proof** (critical) | `QM-0100`, `QM-0101`, `QM-0102`, `QM-0030`, `QM-0033` | `crates/q-source`, `q-tensor-runtime`, `fixtures/`, `models/` | — |
 | **Q — engine** (critical) | `QM-0120`…`QM-0127` | `crates/q-quant`, `crates/q-diagnostics`, `crates/q-gpu` | `QM-0030` |
-| **R — report** | `QM-0140`…`QM-0144` | `crates/q-report`, `q-cli`, `q-daemon` | schema: nothing; data: `QM-0123` |
+| **R — report** | `QM-0140`…`QM-0143` | `crates/q-report`, `q-cli`, `q-daemon` | schema: nothing; data: `QM-0123` |
 | **S — surface** | `QM-0150`…`QM-0153` | `apps/web/diagnostics` | `QM-0140` schema |
-| **T — catalog** | `QM-0010`, `QM-0012`, `QM-0020`, `QM-0032` | `crates/q-catalog` | sequential among themselves |
+| **T — catalog** | `QM-0010`, `QM-0011`, `QM-0012`, `QM-0020`, `QM-0031`, `QM-0032` | `crates/q-catalog` | sequential among themselves |
 | **U — Metal** | `QM-0126`, `QM-0127` | `crates/q-gpu`, `gpu/metal/` | `QM-0121`. **Blocks nothing** |
-| **V — validation** | `QM-0160`…`QM-0165` | no code | **nothing — starts on day 1** |
+| **V — validation** | `QM-0160`…`QM-0167` | no code | **nothing — starts on day 1** |
 
 ## 5. Runnable on the development machine
 

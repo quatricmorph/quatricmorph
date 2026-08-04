@@ -6,6 +6,8 @@ Blocked
 
 Unblocks when `QM-0010` reaches `Complete`.
 
+**In v1.** `QM-0010`'s Qwen resolver is v1 work — v1's target checkpoints are Qwen-family — so the conformance suite that guards it is too. Lane T, Wave 2.
+
 ## Phase
 
 Phase 01 — SafeTensors ingestion completion

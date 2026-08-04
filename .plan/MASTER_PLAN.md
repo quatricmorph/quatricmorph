@@ -223,15 +223,13 @@ Phases 00–03, 08 and 09 contribute the tasks named in §7; the rest are
 
 ```text
 QM-0100  acquire and verify a real ≥24 GB checkpoint      ← start immediately, long lead time
-QM-0101  bounded-residency streaming proof, measured
+QM-0101  bounded-residency proof, measured
   → QM-0030  bounded streaming block reader
   → QM-0120  quantisation simulation (RTN, group/channel, sym/asym)
   → QM-0121  paired block reduction in the Backend trait
   → QM-0122  streaming diagnostic pass over a whole tensor
   → QM-0123  aggregation: channel → tensor → layer → expert → model
-  → QM-0033  job runner: checkpoint, atomic output, resume, cancel
   → QM-0125  ranking and the mixed-precision frontier
-  → QM-0140  JSON manifest v1
   → QM-0141  deterministic Markdown report
   → QM-0150  heat-map surface
   → QM-0161  design-partner run on a real checkpoint
@@ -239,8 +237,13 @@ QM-0101  bounded-residency streaming proof, measured
   → QM-0165  v1 release audit
 ```
 
-Fifteen tasks. **Every one runs on an M3 Pro with no NVIDIA hardware**, and none
+Thirteen tasks. **Every one runs on an M3 Pro with no NVIDIA hardware**, and none
 of them requires a renderer, a tileset, or a chat interface.
+
+Two tasks are prerequisites without being serial links, and both are scheduled
+early: `QM-0140` (manifest schema) gates `QM-0141`, `QM-0143` and `QM-0150`, and
+`QM-0033` (job runner) gates cancellation and resume (`V1-06`). Neither sits
+between two path tasks, so neither lengthens the path.
 
 `QM-0100` is first because it has the longest lead time in the whole plan — a
 multi-hour download against a disk with 51 GB free — and because every
@@ -252,9 +255,9 @@ performance claim downstream is unprovable without it.
 | --- | --- | --- | --- |
 | **P — Proof** (critical) | `QM-0100`, `QM-0101`, `QM-0030` | `crates/q-source`, `q-tensor-runtime`, `fixtures/` | — |
 | **Q — Quantisation engine** (critical) | `QM-0120`…`QM-0127` | `crates/q-quant`, `q-diagnostics`, `q-gpu` | `QM-0030` |
-| **R — Report and interface** | `QM-0140`…`QM-0144` | `crates/q-report`, `q-cli`, `q-daemon` | `QM-0123` for real data; the schema can be written first |
+| **R — Report and interface** | `QM-0140`…`QM-0143` | `crates/q-report`, `q-cli`, `q-daemon` | `QM-0123` for real data; the schema can be written first |
 | **S — Surface** | `QM-0150`…`QM-0153` | `apps/web/diagnostics` | `QM-0140` (manifest schema only — not real data) |
-| **T — Catalog and persistence** | `QM-0012`, `QM-0020`, `QM-0032`, `QM-0010` | `crates/q-catalog` | Sequential among themselves (shared file) |
+| **T — Catalog and persistence** | `QM-0010`, `QM-0011`, `QM-0012`, `QM-0020`, `QM-0031`, `QM-0032` | `crates/q-catalog` | Sequential among themselves (shared file) |
 | **U — Metal accelerator** | `QM-0126`, `QM-0127` | `crates/q-gpu`, `gpu/metal/` | `QM-0121`. **Blocks nothing** — CPU is the reference and ships v1 |
 | **V — Validation** (runs from day 1) | `QM-0160`…`QM-0167` | No code | **Nothing.** Partner conversations start before the tool works |
 
