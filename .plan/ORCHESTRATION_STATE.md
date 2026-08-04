@@ -209,3 +209,32 @@ The 44/36/9 distribution matches controller §2 exactly. `.plan/README.md`'s
 "three start `Ready`" is wrong by six, and its "eight values" prose contradicts its
 own nine-row table — both routed to `QM-0002`, both recorded in
 `.plan/PLAN_CHANGELOG.md`.
+
+## Disk budget — the binding constraint on concurrency (controller §3.3)
+
+Measured at T+18m, mid-download:
+
+```
+free 18 GB · checkpoint 22 of 28.63 GB on disk · projected free after download ≈ 11 GB
+per-worktree cargo targets: qm-0140 193M, qm-0012 279M (growing toward ~2 GB each)
+controller target/ 2.1 GB
+```
+
+**Cap: two concurrent Rust-building worktrees** (`qm-0140` lane R, `qm-0012` lane T)
+while the 28.63 GB checkpoint is resident. `qm-0006` (web only), `qm-0002`
+(`.plan/` only) and `qm-0160` (scaffolding) build no Rust and are free.
+
+Policy for the rest of the run:
+* `df -g .` before creating any worktree; do not create one if the projection
+  falls under 10 GB free.
+* `cargo clean` and `git worktree remove` each worktree immediately after its
+  post-merge verification passes — recovers ~2 GB apiece.
+* No shared `CARGO_TARGET_DIR` between concurrently running agents (§8).
+* A persistent monitor fires at < 12 GB free.
+
+If disk forces it, the checkpoint may be trimmed **after** `QM-0100`'s inspect
+evidence and `fixtures/real-checkpoint-record.json` are recorded — the record is
+the durable artifact by the task's own design. Any such trim is recorded as a
+limitation in the final report, and `QM-0101`/`QM-0102` then stay `Blocked` with
+"checkpoint trimmed to reclaim disk" as the named blocker rather than being
+measured against a partial artifact.
