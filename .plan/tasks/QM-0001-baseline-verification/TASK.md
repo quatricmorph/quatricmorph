@@ -4,6 +4,27 @@
 
 Ready
 
+> **Controller correction, 2026-08-04 (Run 2).** Every `web: 101` in this task is
+> **stale**. `QM-0006` repaired `apps/web`'s test collection — commit `103297d` had
+> pointed vitest's include globs at a directory that did not exist, so the suite was
+> silently collecting 3 of 12 files and reporting `27 passed` at exit 0. After
+> `QM-0006`, the measured suite is **13 files / 115 tests** (the pre-existing corpus
+> is exactly 12 files / 101 tests; `QM-0006` adds a 14-test guard that both root
+> `include` globs match).
+>
+> **Record `{"rust": 290, "web": 115}`.** Copying `101` from the lines below would
+> set the floor 14 tests below reality — the same class of defect `QM-0006` exists
+> to fix, and the floor may only ever rise. Re-measure before writing the file; do
+> not trust this note either.
+>
+> This task is sequenced **after `QM-0006` merges**. It also edits
+> `.github/workflows/build.yaml`, which `QM-0006` owns until then. While you are in
+> that file, fix the `upload-artifact` step's `name:` — it reads
+> `quatricmorph-quatricmorph-workspace`, the same double-sed wart `QM-0006` fixed in
+> `package.json`. It is an artifact label, not a path, so `QM-0006` left it
+> deliberately and recorded it under `## Not performed`.
+
+
 ## Phase
 
 Phase 00 — Repository baseline and shared contracts
@@ -68,7 +89,7 @@ Changing any test · adding tests for unbuilt features · modifying `STATUS.md`
 ## Files Expected to Add
 
 * `scripts/verify-baseline.sh`
-* `scripts/baseline.json` — recorded floor: `{"rust": 290, "web": 101}`
+* `scripts/baseline.json` — recorded floor: `{"rust": 290, "web": 115}` (see the controller correction under `## Status`; the `101` this line originally carried is stale)
 
 ## Files Expected to Remove or Deprecate
 
@@ -79,7 +100,7 @@ None.
 `scripts/baseline.json`:
 
 ```json
-{ "commit": "5ca434d", "rust_tests": 290, "web_tests": 101,
+{ "commit": "<re-measure>", "rust_tests": 290, "web_tests": 115,
   "cli_golden": { "value_q10_100_42": "0.006408154033124447" } }
 ```
 
@@ -144,7 +165,7 @@ Introduced by this task:
 
 | Input | Expected |
 | --- | --- |
-| Clean checkout | exit 0; `rust=290 web=101` or higher |
+| Clean checkout | exit 0; `rust=290 web=115` or higher |
 | One `#[test]` renamed to fail | exit 1 naming it |
 | `baseline.json` rust floor set to 999 | exit 1, "baseline regression: 290 < 999" |
 | `q-cli value … --index 100,42` | `0.006408154033124447` |

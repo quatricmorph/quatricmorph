@@ -105,3 +105,56 @@ sentence fixes routed to `QM-0002`.
 **Dependency impact:** None.
 **Evidence:** Parsed distribution over 89 task directories: 44 `Deferred`,
 36 `Blocked`, 9 `Ready` — matching controller §2 exactly.
+
+## 2026-08-04 — QM-0001 — the specified web floor of 101 is stale; it must be 115
+
+**Discovered during:** `QM-0006` implementation (Stage D), reported by `impl-agent-1`
+**Defect:** `QM-0001` specifies `scripts/baseline.json` as
+`{"rust": 290, "web": 101}` in three places — `## Files Expected to Add`,
+`## Data Contracts`, and its `## Test Cases` table. That `101` was measured before
+`103297d` broke vitest's collection, and it does not account for the guard test
+`QM-0006` was required to add. After `QM-0006` the measured suite is **13 files /
+115 tests**: the pre-existing corpus is exactly 12 files / 101 tests, plus a
+14-test guard that both root `include` globs match.
+**Why it matters:** the floor may only ever be raised. Writing `101` would set it
+14 tests below reality and permanently license a 14-test regression — the same
+class of defect `QM-0006` exists to fix, and one the floor rule then makes
+irreversible.
+**Correction:** all three `web: 101` occurrences in `QM-0001/TASK.md` changed to
+`115`, with a note under `## Status` recording why, instructing the implementer to
+re-measure rather than trust the note, and sequencing the task after `QM-0006`
+merges. The `"commit": "5ca434d"` placeholder in the data contract was replaced
+with `<re-measure>` because `HEAD` has moved well past `5ca434d`.
+**Also routed to `QM-0001`:** `.github/workflows/build.yaml`'s `upload-artifact`
+step still carries `name: quatricmorph-quatricmorph-workspace`, the same
+double-sed wart `QM-0006` fixed in `package.json`. `QM-0006` examined it and left
+it deliberately — it is an artifact label, not a path, and its `path:` field is
+correct — recording it under `## Not performed`. `QM-0001` is the next task to
+open that file and should fix it there.
+**Files changed:** `.plan/tasks/QM-0001-baseline-verification/TASK.md`
+**Dependency impact:** `QM-0001` gains a hard sequencing edge behind `QM-0006`
+(already recorded when `QM-0006` was created).
+**Evidence:** `npx vitest run` in `../.qm-worktrees/qm-0006/apps/web` →
+`Test Files 13 passed (13) / Tests 115 passed (115)`, exit 0, measured by the
+controller independently of the implementer. Excluding the new file: 12 files /
+101 tests.
+
+## 2026-08-04 — CONTROLLER — a note inserted above a `## Status` value broke the parser
+
+**Discovered during:** applying the `QM-0001` correction above
+**Defect:** the controller inserted the correction note immediately after the
+`## Status` heading, ahead of the value. `.plan/README.md`'s parser contract takes
+the first non-empty line after the heading, so `QM-0001` began parsing as
+`> **Controller correction…` instead of `Ready`. Verified by re-running the parse
+across all task files: one file returned an illegal value.
+**Correction:** the value now sits immediately under the heading and the note
+follows it. Re-parsed all 90 task directories: 36 `Blocked`, 44 `Deferred`,
+10 `Ready`, zero illegal values.
+**Lesson recorded for later tasks:** prose added to a `## Status` section must go
+**below** the single value, never above it. `.plan/README.md`'s "exactly one of the
+values above, on its own line, so it can be parsed" constrains position, not just
+content.
+**Files changed:** `.plan/tasks/QM-0001-baseline-verification/TASK.md`
+**Dependency impact:** none.
+**Evidence:** `for d in .plan/tasks/*/; do awk '/^## Status/{f=1;next} f&&NF{print;exit}' "$d/TASK.md"; done | sort | uniq -c` →
+before: one `> **Controller correction…` row; after: `36 Blocked / 44 Deferred / 10 Ready`.
