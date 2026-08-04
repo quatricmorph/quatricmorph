@@ -18,9 +18,9 @@ every dependency's license is recorded.
 ## Repository Evidence
 
 * `mm/LICENSE` — MIT, Meta Platforms, Inc.
-* `apps/web/matrix-workspace/LICENSE` — the same text, reproduced.
-* `apps/web/matrix-workspace/NOTICE.md` — the derivation attribution.
-* `apps/web/matrix-workspace/package.json` — `"license": "MIT"`, description:
+* `apps/web/quatricmorph-workspace/LICENSE` — the same text, reproduced.
+* `apps/web/quatricmorph-workspace/NOTICE.md` — the derivation attribution.
+* `apps/web/quatricmorph-workspace/package.json` — `"license": "MIT"`, description:
   *"Matrix multiplication workspace, derived from Meta's mm (see NOTICE.md)"*.
 * `Cargo.toml` — `license = "MIT OR Apache-2.0"`.
 * `AGENTS.md`: *"`mm/` Historical matrix-viz reference — read-only; do not
@@ -111,7 +111,7 @@ None. The audit runs in seconds.
 ## Acceptance Criteria
 
 1. `git diff` against the baseline shows **no change under `mm/`**.
-2. `apps/web/matrix-workspace/LICENSE` matches `mm/LICENSE` textually.
+2. `apps/web/quatricmorph-workspace/LICENSE` matches `mm/LICENSE` textually.
 3. `NOTICE.md` attributes Meta Platforms, Inc. and states the derivation.
 4. `package.json` and `Cargo.toml` declare licenses correctly.
 5. Every dependency's license is recorded.
@@ -131,7 +131,7 @@ respectful of the original work.
 
 ```bash
 git diff 5ca434d -- mm/                       # must be empty
-sha256sum mm/LICENSE apps/web/matrix-workspace/LICENSE
+sha256sum mm/LICENSE apps/web/quatricmorph-workspace/LICENSE
 cargo license --json                           # introduced here
 npx license-checker --json --production
 ./scripts/license-audit.sh

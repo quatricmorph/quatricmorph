@@ -74,7 +74,7 @@ Hierarchy navigation (`QM-0055`) · chat (`QM-0074`) · editing.
 ## Files Expected to Remove or Deprecate
 
 * The local `Fidelity` type in
-  `apps/web/matrix-workspace/src/tensor/block-adapter.ts` — replaced by the
+  `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` — replaced by the
   shared one, re-exported for compatibility.
 
 ## Data Contracts

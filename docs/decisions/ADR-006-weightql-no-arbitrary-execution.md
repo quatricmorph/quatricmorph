@@ -45,7 +45,7 @@ construction rather than by validation:
    catalog's own filter interpolation uses only `&'static str` values derived
    from enums, never user input.
 6. **The initializer-from-expression feature is not ported.**
-   `apps/web/matrix-workspace` has no `eval` path.
+   `apps/web/quatricmorph-workspace` has no `eval` path.
 
 ## Alternatives considered
 

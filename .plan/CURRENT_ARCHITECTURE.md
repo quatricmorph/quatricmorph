@@ -42,7 +42,7 @@ where the code diverges from `ARCHITECTURE.md`.
 └─────────┼─────────────────────────────────────────────────────────────────────┘
           ▼
   apps/web  (npm workspaces)
-   ├── matrix-workspace/   Three.js, ported from mm — the only thing that renders
+   ├── quatricmorph-workspace/   Three.js, ported from mm — the only thing that renders
    ├── model-viewer/       lod-policy.ts + tile-client.ts — no renderer
    └── query-interface/    weightql.ts + katex-preview.ts + app.ts — no chat
 
@@ -91,15 +91,15 @@ this plan is written against them by name.
 | `QTileHeader` / `QTile` | `crates/q-tiles/src/lib.rs` | 72-byte header, magic `QTILE\0\0\0`, v1, little-endian, 256 MiB payload ceiling |
 | `Backend` | `crates/q-gpu/src/lib.rs:73` | The compute seam. `CpuBackend` is the declared reference; `CudaBackend` implements the same trait and refuses |
 | `CacheKey` | `crates/q-cache/src/lib.rs:47` | `ARCHITECTURE.md` §13.2 key, length-prefixed so field boundaries cannot collide |
-| `GridRuler3D` | `apps/web/matrix-workspace/src/layout/grid-ruler.ts:289` | Ten parameters, snap invariant at `1e-6`, `assertVecSnapped` at layout boundaries |
-| `TensorBlockSource` | `apps/web/matrix-workspace/src/tensor/block-adapter.ts:53` | Interface with `HandEnteredSource` (works) and `DaemonBlockSource` (refuses) |
+| `GridRuler3D` | `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:289` | Ten parameters, snap invariant at `1e-6`, `assertVecSnapped` at layout boundaries |
+| `TensorBlockSource` | `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts:53` | Interface with `HandEnteredSource` (works) and `DaemonBlockSource` (refuses) |
 | `Expr` | `crates/q-expression/src/lib.rs` | Closed enum — the reason no `eval` exists anywhere in the product |
 
 ---
 
 ## 4. The matrix workspace, after the `mm` port
 
-`apps/web/matrix-workspace/src/` is 40 TypeScript modules in seven directories.
+`apps/web/quatricmorph-workspace/src/` is 40 TypeScript modules in seven directories.
 The port's central achievement is that **pure math is separated from Three.js
 scene state**, which is what makes real tensor blocks possible at all.
 
@@ -166,7 +166,7 @@ task. `ARCHITECTURE.md` is not edited by this plan.
 A: XY plane      B: YZ plane      C: XZ plane
 ```
 
-`apps/web/matrix-workspace/src/layout/grid-ruler.ts:9-10` states, and implements:
+`apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:9-10` states, and implements:
 
 ```text
 World X → J (output cols), Y → I (output rows), Z → K (contraction)

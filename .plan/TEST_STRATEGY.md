@@ -243,7 +243,7 @@ screenshots as evidence.
 ## 6. CI
 
 Current jobs — `rust` (fmt, clippy, build, test), `fixtures` (regenerate and
-`git diff --exit-code`), `web` (vitest + a `matrix-workspace` build uploaded as an
+`git diff --exit-code`), `web` (vitest + a `quatricmorph-workspace` build uploaded as an
 artifact). Deliberately **no CUDA job**, with a comment explaining that a job
 which "passed" without the hardware would be worse than none.
 

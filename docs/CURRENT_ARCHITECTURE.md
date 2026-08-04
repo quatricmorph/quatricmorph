@@ -1,6 +1,6 @@
 # Current architecture of `mm` — evidence record
 
-**Purpose.** Every extraction into `apps/web/matrix-workspace` cites this
+**Purpose.** Every extraction into `apps/web/quatricmorph-workspace` cites this
 document as evidence. It records what `mm/` **actually contains**, read from the
 files, with a reuse decision per symbol. Nothing here is inferred from a name or
 assumed from convention; where a file the task list expected does not exist,
@@ -34,7 +34,7 @@ the app is built:
 browsers without import-map support.
 
 **Consequence for the port:** there was no dependency graph to inherit.
-`apps/web/matrix-workspace/package.json` declares `three` and `lil-gui` as real
+`apps/web/quatricmorph-workspace/package.json` declares `three` and `lil-gui` as real
 dependencies for the first time; the vendored `mm/lib/*.js` copies were not
 carried over.
 
@@ -135,7 +135,7 @@ to ask for a value without also holding its geometry.
 **Decision: Extract and refactor** → `src/viz/mat.ts` for now (a faithful port),
 with `sizeFromData`/`colorFromData` factored toward `src/viz/sizing.ts`. The
 data/presentation split is what
-`apps/web/matrix-workspace/src/tensor/block-adapter.ts` exists to finish.
+`apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` exists to finish.
 
 ### 2.4 `class MatMul` (lines 924-1791, 48 methods)
 
@@ -243,7 +243,7 @@ browser. A second, milder instance is the `config` branch of
 URL synchronously and applies the response as application state.
 
 **Decision: Deprecate.** Neither is carried into
-`apps/web/matrix-workspace`. More broadly, this is why WeightQL is a closed
+`apps/web/quatricmorph-workspace`. More broadly, this is why WeightQL is a closed
 expression language: `q_expression::Expr` is a closed enum with no `eval`, no
 user-defined functions, no shell interpolation, and no raw SQL, enforced by
 tests in both `crates/q-weightql/src/parser.rs` and
@@ -272,7 +272,7 @@ the same code is served as a product surface.
 | `mm/ref.html` | 1527-line self-contained reference page | **Extract** → `src/ref/index.ts` |
 | `mm/intro/` | Prose article plus ~30 images and videos | **Reuse as-is** → `public/intro/` |
 | `mm/README.md` | Usage notes | Read; superseded by the workspace README |
-| `mm/LICENSE` | MIT, Meta Platforms, Inc. | **Reuse as-is** — copied verbatim to `apps/web/matrix-workspace/LICENSE`, with attribution in `NOTICE.md` |
+| `mm/LICENSE` | MIT, Meta Platforms, Inc. | **Reuse as-is** — copied verbatim to `apps/web/quatricmorph-workspace/LICENSE`, with attribution in `NOTICE.md` |
 
 ---
 

@@ -67,7 +67,7 @@ designed but not built.
 ## Files Expected to Change
 
 * `crates/q-tensor-runtime/src/lib.rs` — `BlockExtent` depth
-* `apps/web/matrix-workspace/src/layout/tensor-frame.ts`
+* `apps/web/quatricmorph-workspace/src/layout/tensor-frame.ts`
 
 ## Files Expected to Add
 

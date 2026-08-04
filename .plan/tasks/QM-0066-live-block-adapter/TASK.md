@@ -17,7 +17,7 @@ behaviour for anything unbounded.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts:107` —
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts:107` —
   `DaemonBlockSource`, a stub. Its test is named
   `the_daemon_source_refuses_rather_than_returning_plausible_zeros` (`GRID-004`).
 * `:61` `assertBlockIsBounded`; `:83` `HandEnteredSource` (works); `:39`
@@ -46,7 +46,7 @@ Sequential before `QM-0067`. Needs a running daemon.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace/src/tensor`, plus a Web Worker.
+`apps/web/quatricmorph-workspace/src/tensor`, plus a Web Worker.
 
 ## Scope
 
@@ -62,14 +62,14 @@ Matmul on real blocks (`QM-0067`) · writing blocks · caching beyond HTTP.
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts`
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts`
 
 ## Files Expected to Add
 
 * `apps/web/core/src/qtile/decoder.ts`
-* `apps/web/matrix-workspace/src/tensor/qtile-worker.ts`
+* `apps/web/quatricmorph-workspace/src/tensor/qtile-worker.ts`
 * `apps/web/core/src/__tests__/qtile-decoder.test.ts`
-* `apps/web/matrix-workspace/e2e/block-fetch.spec.ts`
+* `apps/web/quatricmorph-workspace/e2e/block-fetch.spec.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -144,7 +144,7 @@ path; Playwright fetch-and-render with a golden-value comparison.
 ```bash
 cargo run -p q-daemon -- --model-root fixtures/tiny-llama-large     # verified today
 cd apps/web && npx vitest run qtile-decoder                          # introduced here
-npx playwright test apps/web/matrix-workspace/e2e/block-fetch.spec.ts
+npx playwright test apps/web/quatricmorph-workspace/e2e/block-fetch.spec.ts
 ```
 
 ## Test Cases

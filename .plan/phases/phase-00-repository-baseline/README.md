@@ -22,8 +22,8 @@ effort and obscure what actually blocks the MVP:
 | --- | --- |
 | Understand `mm` | `docs/CURRENT_ARCHITECTURE.md` — 305 lines, per-symbol reuse decisions across ~78 symbols, plus 6 defects and a security finding |
 | Build baseline | Verified: `cargo test --workspace` → 290 passed; `npx vitest run` → 101 passed |
-| Reusable behaviour identified | The port exists: `apps/web/matrix-workspace/`, 40 modules, 74 tests |
-| License and attribution protected | `mm/LICENSE` unmodified; `apps/web/matrix-workspace/{LICENSE,NOTICE.md}`; `AGENTS.md` marks `mm/` read-only |
+| Reusable behaviour identified | The port exists: `apps/web/quatricmorph-workspace/`, 40 modules, 74 tests |
+| License and attribution protected | `mm/LICENSE` unmodified; `apps/web/quatricmorph-workspace/{LICENSE,NOTICE.md}`; `AGENTS.md` marks `mm/` read-only |
 
 So Phase 00 is retargeted to what genuinely blocks everything downstream: **the
 three-spatial-authority problem** ([`REPOSITORY_ANALYSIS.md`](../../REPOSITORY_ANALYSIS.md) §5)

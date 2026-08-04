@@ -121,7 +121,7 @@ development environment.
 | --- | --- | --- | --- |
 | **A — artifacts** (critical) | `QM-0030`…`QM-0033`, `QM-0037`, `QM-0040`…`QM-0046`, plus catalog work | `crates/q-tensor-runtime`, `q-statistics`, `q-tiles`, `q-gltf`, `q-tileset`, `q-catalog` | G1 |
 | **B — viewer** | `QM-0050`…`QM-0057` | `apps/web/model-viewer` | G1; G2 for real data |
-| **C — workspace** | `QM-0060`…`QM-0068` | `apps/web/core`, `apps/web/matrix-workspace` | G1 |
+| **C — workspace** | `QM-0060`…`QM-0068` | `apps/web/core`, `apps/web/quatricmorph-workspace` | G1 |
 | **D — query** | `QM-0070`…`QM-0075` | `crates/q-weightql`, `q-expression`, `apps/web/query-interface` | `QM-0031`, `QM-0020` |
 | **E — CUDA** | `QM-0034`…`QM-0036`, `QM-0083` | `crates/q-cuda`, `gpu/cuda` | G1. **Blocks nothing** |
 

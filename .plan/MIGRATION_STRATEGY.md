@@ -6,7 +6,7 @@ Not much — and that is the finding.
 
 The large migration this plan might have had to describe **already happened**:
 `mm` was analysed symbol by symbol (`docs/CURRENT_ARCHITECTURE.md`), ported to
-TypeScript under `apps/web/matrix-workspace/`, and surrounded by a Rust workspace
+TypeScript under `apps/web/quatricmorph-workspace/`, and surrounded by a Rust workspace
 that implements `ARCHITECTURE.md` §16's layout. `ADR-002` records that the crates
 were *rewritten, not migrated*.
 
@@ -15,7 +15,7 @@ What remains is four narrower moves:
 | # | Move | Risk | Task |
 | --- | --- | --- | --- |
 | M1 | Grid and LOD constants → one shared contract | **High** — touches three packages and two languages | `QM-0004`, `QM-0005`, `QM-0060` |
-| M2 | `matrix-workspace/src/layout/` → `apps/web/core/spatial/` | Medium — import paths across one package | `QM-0060` |
+| M2 | `quatricmorph-workspace/src/layout/` → `apps/web/core/spatial/` | Medium — import paths across one package | `QM-0060` |
 | M3 | `model-viewer/src/lod-policy.ts` constants → `apps/web/core/lod/` | Low — one file, 10 tests | `QM-0060` |
 | M4 | Stubs → implementations behind unchanged traits | Low — the seams are already there | Phases 03–07 |
 
@@ -44,7 +44,7 @@ must converge on one.
 | LOD ladder | `q_tensor_runtime::Lod` | `model-viewer/src/lod-policy.ts:20` — its own enum |
 | `ROOT_GEOMETRIC_ERROR` | `q_tileset:34` = `1024.0` | `lod-policy.ts:102` — `1024` inline |
 | Distance thresholds | — | `lod-policy.ts:51` |
-| Grid parameters | — | `matrix-workspace/src/layout/grid-ruler.ts:63` |
+| Grid parameters | — | `quatricmorph-workspace/src/layout/grid-ruler.ts:63` |
 
 ### Sequence
 
@@ -81,7 +81,7 @@ reverting step 1 removes a schema definition nothing yet depends on.
 ## 3. M2 / M3 — package moves
 
 `ADR-CANDIDATE-007` records the decision to create `apps/web/core` rather than
-have `model-viewer` depend on `matrix-workspace`. The reason: the viewer needs
+have `model-viewer` depend on `quatricmorph-workspace`. The reason: the viewer needs
 the grid and the LOD ladder, not Three.js, `lil-gui`, or the `mm` heritage.
 Depending on the workspace would drag ~2 MB of renderer into a package that
 renders with Cesium.

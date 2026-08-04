@@ -21,7 +21,7 @@ The repository is split on rank today:
 * `q_tiles::QTileHeader` — `dimensions: u8` carries rank and `origin`/`extent`
   are `[u32; 3]`, so the format allows three; but `QTileHeader::for_block`
   hard-codes `dimensions: 2` and `extent[2] = 1`.
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts` — 2-D operands on three
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts` — 2-D operands on three
   planes; `depthSpacing` exists in the config and is **unused** (`0`).
 * `schemas/nsir/schema.json` — records named axes such as `output_channel` and
   `input_channel`.

@@ -17,7 +17,7 @@ colour.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/interaction/selection.ts` — ported from `mm`;
+* `apps/web/quatricmorph-workspace/src/interaction/selection.ts` — ported from `mm`;
   6 tests. Uses the `raycaster.far` toggle idiom (`0` ↔ `Infinity`) documented in
   `docs/CURRENT_ARCHITECTURE.md` §1 as *"a non-obvious idiom"*.
 * `mm/index.html:455-466` `updateSpotlight`; `468-481` `requestLabelUpdate`
@@ -45,7 +45,7 @@ Last Phase 06 task — it touches hover paths several earlier tasks modify.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace/src/interaction`.
+`apps/web/quatricmorph-workspace/src/interaction`.
 
 ## Scope
 
@@ -61,13 +61,13 @@ Viewer picking (`QM-0053`) · the inspector panel (`QM-0054`) · editing values.
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/interaction/selection.ts`
-* `apps/web/matrix-workspace/src/viz/mat.ts`
+* `apps/web/quatricmorph-workspace/src/interaction/selection.ts`
+* `apps/web/quatricmorph-workspace/src/viz/mat.ts`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/interaction/hover-card.ts`
-* `apps/web/matrix-workspace/src/interaction/__tests__/hover.test.ts`
+* `apps/web/quatricmorph-workspace/src/interaction/hover-card.ts`
+* `apps/web/quatricmorph-workspace/src/interaction/__tests__/hover.test.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -138,7 +138,7 @@ selection, greyscale legibility, and the request log.
 
 ```bash
 cd apps/web && npx vitest run hover                                # introduced here
-npx playwright test apps/web/matrix-workspace/e2e/hover.spec.ts
+npx playwright test apps/web/quatricmorph-workspace/e2e/hover.spec.ts
 ```
 
 ## Test Cases

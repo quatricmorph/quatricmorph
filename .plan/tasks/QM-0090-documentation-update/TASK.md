@@ -22,7 +22,7 @@ correcting `ARCHITECTURE.md` §8.2.
 ## Repository Evidence
 
 * `ARCHITECTURE.md` §8.2: `A: XY plane, B: YZ plane, C: XZ plane`.
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts:9-10`, implemented and
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:9-10`, implemented and
   covered by 13 tests: `X→J, Y→I, Z→K` with `A on I×K, B on K×J, C on I×J`,
   which resolves to **A: YZ, B: XZ, C: XY**.
 * The task specification §16 independently states the code's mapping.

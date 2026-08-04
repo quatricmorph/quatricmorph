@@ -75,7 +75,7 @@ exist applies as much to a mean as to a picture.
 The `mm` blocking code carried the same insight: `viz.js:386-400`'s `grid`
 skipped a block whose `start >= max`, with the comment *"dead final block when
 size * n - max > size"*. That logic is now
-`apps/web/matrix-workspace/src/math/blocking.ts`, tested (`MATMUL-002`).
+`apps/web/quatricmorph-workspace/src/math/blocking.ts`, tested (`MATMUL-002`).
 
 ### 2.3 Byte-range planning
 

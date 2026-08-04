@@ -105,7 +105,7 @@ merge-conflict hotspots.
 | `crates/q-weightql/src/plan.rs` (673) | `QM-0070`, `QM-0071`, `QM-0072`, `QM-0073` | **Strictly sequential** in that order |
 | `crates/q-daemon/src/lib.rs` (941) | `QM-0012`, `QM-0020`, `QM-0032`, `QM-0033`, `QM-0041`, `QM-0042`, `QM-0044`, `QM-0073`, `QM-0075` | Route additions are additive; coordinate on the router table. `QM-0033` adds a module — merge it before the later route tasks |
 | `apps/web/model-viewer/src/index.ts` | `QM-0050`…`QM-0057` | `QM-0050` establishes the shell first; the rest touch their own modules |
-| `apps/web/matrix-workspace/src/viz/mat.ts` | `QM-0063`, `QM-0064`, `QM-0068` | Sequential: `QM-0063` → `QM-0064` → `QM-0068` |
+| `apps/web/quatricmorph-workspace/src/viz/mat.ts` | `QM-0063`, `QM-0064`, `QM-0068` | Sequential: `QM-0063` → `QM-0064` → `QM-0068` |
 | `schemas/visualization/schema.json` | `QM-0004`, `QM-0021` | `QM-0004` first, alone |
 | `crates/q-gltf/src/instanced.rs` | `QM-0042`, `QM-0043` | Sequential |
 | `.github/workflows/build.yaml` | `QM-0001`, `QM-0003`, `QM-0005`, `QM-0046`, `QM-0080`, `QM-0082`, `QM-0084` | Each adds a **separate job**; conflicts are trivial to resolve |

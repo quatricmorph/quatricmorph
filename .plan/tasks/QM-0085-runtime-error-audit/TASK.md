@@ -18,7 +18,7 @@ of every boundary added since the baseline.
 ## Repository Evidence
 
 * `MVP-43` — *"The browser console contains no unresolved runtime errors."*
-* `apps/web/matrix-workspace/src/util/__tests__/params.test.ts` currently prints
+* `apps/web/quatricmorph-workspace/src/util/__tests__/params.test.ts` currently prints
   `error loading params from json '{not-json' …` — a **deliberate** log in a
   passing test, so the audit must distinguish expected from unresolved output.
 * `SEC-001`…`SEC-005` Verified; `SEC-006`…`SEC-008` added by `QM-0075` and
@@ -80,7 +80,7 @@ None.
 // console-allowlist.json
 [ { "pattern": "error loading params from json",
     "reason": "deliberate: params.test.ts asserts malformed JSON does not throw",
-    "source": "apps/web/matrix-workspace/src/util/params.ts" } ]
+    "source": "apps/web/quatricmorph-workspace/src/util/params.ts" } ]
 ```
 
 **Every allowlisted message needs a stated reason and a source.** An allowlist

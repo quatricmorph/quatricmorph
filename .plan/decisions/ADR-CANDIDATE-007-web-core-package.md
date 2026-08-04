@@ -13,7 +13,7 @@ hand-mirror Rust constants.
 
 ## Repository evidence
 
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER`,
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER`,
   ten parameters, `GRID_SNAP_TOLERANCE = 1e-6`.
 * `apps/web/model-viewer/src/lod-policy.ts:20,51,102` — its **own** `enum Lod`,
   `LOD_DISTANCE_THRESHOLDS`, and `geometricErrorForLod = 1024 / 2 ** lod` with
@@ -21,7 +21,7 @@ hand-mirror Rust constants.
 * `crates/q-tileset/src/lib.rs:34,46` — `ROOT_GEOMETRIC_ERROR = 1024.0`,
   `GeometricError::for_lod`.
 * `apps/web/package.json` — npm workspaces already configured for three packages.
-* `matrix-workspace` depends on `three` (^0.185) and `lil-gui`; `model-viewer`
+* `quatricmorph-workspace` depends on `three` (^0.185) and `lil-gui`; `model-viewer`
   depends on neither.
 
 ## Decision required
@@ -33,7 +33,7 @@ Where do the shared spatial, LOD, address, and fidelity types live?
 | Option | |
 | --- | --- |
 | **A** | A new `apps/web/core` package; both apps depend on it |
-| **B** | `model-viewer` depends on `matrix-workspace` |
+| **B** | `model-viewer` depends on `quatricmorph-workspace` |
 | **C** | Duplicate and rely on the conformance tests to catch drift |
 | **D** | Generate TypeScript from the JSON schema at build time |
 

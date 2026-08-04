@@ -17,7 +17,7 @@ ARCHITECTURE.md §8.2:
 A: XY plane      B: YZ plane      C: XZ plane
 ```
 
-`apps/web/matrix-workspace/src/layout/grid-ruler.ts:9-10`, in the module
+`apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:9-10`, in the module
 documentation and implemented in `placeOperands`:
 
 ```text

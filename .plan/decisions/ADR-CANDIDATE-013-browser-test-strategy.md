@@ -19,7 +19,7 @@ vitest can exercise, because there is no GL context in Node.
   `interaction`, `block-adapter`.
 * `MATMUL-005` — *"Demo still runs after extraction"* — is verified by
   `npx vite build` succeeding, **not** by rendering anything.
-* `.github/workflows/build.yaml` `web` job — vitest + a `matrix-workspace` build.
+* `.github/workflows/build.yaml` `web` job — vitest + a `quatricmorph-workspace` build.
 * `MVP-18`, `MVP-21`, `MVP-41`, `MVP-43` all require a real browser.
 
 ## Decision required

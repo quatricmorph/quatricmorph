@@ -15,7 +15,7 @@ application". That premise is a generation behind the repository.
 `mm/` is **one read-only directory** inside a much larger tree. The
 redesign it warns against has already happened: `mm` was analysed symbol by
 symbol in `docs/CURRENT_ARCHITECTURE.md`, ported to TypeScript under
-`apps/web/matrix-workspace/`, and surrounded by a 17-crate Rust workspace
+`apps/web/quatricmorph-workspace/`, and surrounded by a 17-crate Rust workspace
 implementing SafeTensors ingestion, canonical addressing, a metadata catalog,
 WeightQL, a `.qtile` format, a cache, and a local HTTP daemon.
 
@@ -40,17 +40,17 @@ Test distribution measured from the vitest run:
 | File | Tests |
 | --- | --- |
 | `query-interface/src/__tests__/weightql.test.ts` | 17 |
-| `matrix-workspace/src/math/__tests__/matmul.test.ts` | 17 |
-| `matrix-workspace/src/layout/__tests__/grid-ruler.test.ts` | 13 |
-| `matrix-workspace/src/math/__tests__/blocking.test.ts` | 10 |
-| `matrix-workspace/src/viz/__tests__/array2d.test.ts` | 9 |
-| `matrix-workspace/src/math/__tests__/animation-schedule.test.ts` | 7 |
-| `matrix-workspace/src/interaction/__tests__/interaction.test.ts` | 6 |
+| `quatricmorph-workspace/src/math/__tests__/matmul.test.ts` | 17 |
+| `quatricmorph-workspace/src/layout/__tests__/grid-ruler.test.ts` | 13 |
+| `quatricmorph-workspace/src/math/__tests__/blocking.test.ts` | 10 |
+| `quatricmorph-workspace/src/viz/__tests__/array2d.test.ts` | 9 |
+| `quatricmorph-workspace/src/math/__tests__/animation-schedule.test.ts` | 7 |
+| `quatricmorph-workspace/src/interaction/__tests__/interaction.test.ts` | 6 |
 | `model-viewer/src/__tests__/lod-policy.test.ts` | 6 |
 | `model-viewer/src/__tests__/tile-client.test.ts` | 4 |
-| `matrix-workspace/src/viz/__tests__/expr.test.ts` | 4 |
-| `matrix-workspace/src/util/__tests__/params.test.ts` | 3 |
-| `matrix-workspace/src/tensor/__tests__/block-adapter.test.ts` | 5 |
+| `quatricmorph-workspace/src/viz/__tests__/expr.test.ts` | 4 |
+| `quatricmorph-workspace/src/util/__tests__/params.test.ts` | 3 |
+| `quatricmorph-workspace/src/tensor/__tests__/block-adapter.test.ts` | 5 |
 
 This confirms the counts `STATUS.md` claims for its `2026-08-03` run. **`STATUS.md`
 is accurate and is adopted as the factual baseline for this plan.**
@@ -79,8 +79,8 @@ cargo run -p q-daemon -- --model-root fixtures/tiny-llama-2shard
 # Web (npm workspaces rooted at apps/web)
 cd apps/web && npm install
 npx vitest run
-npm run build --workspace matrix-workspace
-npm run dev  --workspace matrix-workspace     # vite
+npm run build --workspace quatricmorph-workspace
+npm run dev  --workspace quatricmorph-workspace     # vite
 npm run dev  --workspace model-viewer         # vite, shell only
 
 # Fixtures
@@ -90,7 +90,7 @@ python3 -m venv .venv && .venv/bin/pip install numpy safetensors
 
 CI (`.github/workflows/build.yaml`) runs three jobs: `rust` (fmt, clippy, build,
 test), `fixtures` (regenerate and `git diff --exit-code`), and `web` (vitest plus
-a `matrix-workspace` build uploaded as an artifact). It contains **no CUDA job**,
+a `quatricmorph-workspace` build uploaded as an artifact). It contains **no CUDA job**,
 with a comment explaining that a job which "passed" without an RTX 3090 would be
 worse than no job.
 
@@ -108,7 +108,7 @@ crates/                        17 crates, ~15 184 lines of Rust
 gpu/cuda/                       4 .cu files + README (HARDWARE-UNVERIFIED)
 gpu/metal/compute.metal                — placeholder
 gpu/wgsl/compute.wgsl                  — placeholder
-apps/web/                      npm workspaces: matrix-workspace, model-viewer, query-interface
+apps/web/                      npm workspaces: quatricmorph-workspace, model-viewer, query-interface
 architectures/                 generic, llama (implemented); qwen, kimi, deepseek (declared)
 schemas/                       nsir 116, qtile 93, visualization 119, weightql 166 lines
 fixtures/                      tiny-llama-single (105 KB), tiny-llama-2shard (1.18 MB) + golden.json
@@ -161,7 +161,7 @@ tallies 4 reuse-as-is, ~45 extract, ~20 extract-and-refactor, 9 deprecate.
 It also records six defects found by reading, and one security finding: `mm`
 reaches `eval` from a URL parameter (`mm/viz.js:119-126` via
 `mm/index.html:531`). That path is **not** carried into
-`apps/web/matrix-workspace` and is the origin of the closed-expression design in
+`apps/web/quatricmorph-workspace` and is the origin of the closed-expression design in
 `q-expression` (`ADR-006`).
 
 This plan does not repeat that analysis. It cites it, and its Phase 00 task
@@ -170,7 +170,7 @@ This plan does not repeat that analysis. It cites it, and its Phase 00 task
 **Verified consequence:** the port is real, not aspirational. `mm/viz.js`'s
 `grid`, `dotprod`, `ikjmul`, `scatterFromCount`, and the `getVmprodBump` /
 `getMvprodBump` / `getVvprodBump` cursors now exist as pure, separately tested
-modules at `apps/web/matrix-workspace/src/math/{blocking,matmul,animation-schedule}.ts`
+modules at `apps/web/quatricmorph-workspace/src/math/{blocking,matmul,animation-schedule}.ts`
 with 34 tests between them.
 
 ---
@@ -241,7 +241,7 @@ The TypeScript comment says *"mirrors `q_tileset::GeometricError`"* — hand-mir
 by a human, with no mechanism to detect drift. Change `ROOT_GEOMETRIC_ERROR` in
 Rust and the viewer silently refines at the wrong distance.
 
-A fourth authority is about to appear: `apps/web/matrix-workspace/src/layout/grid-ruler.ts`
+A fourth authority is about to appear: `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts`
 holds the ten grid parameters (`cellSize`, `minorGridSpacing`, `majorGridInterval`,
 `tensorPadding`, `labelMargin`, `framePadding`, `operandGap`, `axisMargin`,
 `depthSpacing`, `origin`) that the product requirement says must be *shared
@@ -293,10 +293,10 @@ prerequisite for Phases 04, 05, and 08.
 | File | Content |
 | --- | --- |
 | `mm/LICENSE` | MIT, Meta Platforms, Inc. Unmodified |
-| `apps/web/matrix-workspace/LICENSE` | The same MIT text, reproduced |
-| `apps/web/matrix-workspace/NOTICE.md` | Attribution for the derivation |
+| `apps/web/quatricmorph-workspace/LICENSE` | The same MIT text, reproduced |
+| `apps/web/quatricmorph-workspace/NOTICE.md` | Attribution for the derivation |
 | `Cargo.toml` `workspace.package.license` | `MIT OR Apache-2.0` |
-| `apps/web/matrix-workspace/package.json` | `"license": "MIT"`, description names `mm` |
+| `apps/web/quatricmorph-workspace/package.json` | `"license": "MIT"`, description names `mm` |
 
 `AGENTS.md` marks `mm/` read-only. No task in this plan modifies it.
 `QM-0093` audits this at release.

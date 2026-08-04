@@ -20,7 +20,7 @@ Three divergences are already identified and must be registered, not
 re-discovered:
 
 1. **Plane mapping.** `ARCHITECTURE.md` §8.2 says `A: XY, B: YZ, C: XZ`.
-   `apps/web/matrix-workspace/src/layout/grid-ruler.ts:9-10` documents and
+   `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:9-10` documents and
    implements `X→J, Y→I, Z→K` with `A on I×K, B on K×J, C on I×J`, which resolves
    to `A: YZ, B: XZ, C: XY`. The task specification §16 agrees with the code.
    13 tests hold the code's version.

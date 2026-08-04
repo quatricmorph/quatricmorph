@@ -27,7 +27,7 @@ others:
 | Geometric error | `q_tileset::GeometricError::for_lod` (`:46`), `ROOT_GEOMETRIC_ERROR = 1024.0` (`:34`) |
 | Geometric error, again | `lod-policy.ts:102` — `1024 / 2 ** lod`, comment *"mirrors `q_tileset::GeometricError`"* |
 | Distance thresholds | `lod-policy.ts:51` — `[4096, 1024, 256, 64, 16]` |
-| Grid parameters | `matrix-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER` |
+| Grid parameters | `quatricmorph-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER` |
 | Snap tolerance | `grid-ruler.ts:280` — `GRID_SNAP_TOLERANCE = 1e-6` |
 | Instance ceiling | `q_gltf::MAX_INSTANCES_PER_TILE = 262_144` (`crates/q-gltf/src/lib.rs:77`) |
 

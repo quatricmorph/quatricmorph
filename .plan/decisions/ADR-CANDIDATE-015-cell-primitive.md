@@ -15,7 +15,7 @@ properties: grid-derived size, occlusion, and opacity.
 
 ## Repository evidence
 
-* `apps/web/matrix-workspace/src/viz/material.ts:4` — one shared
+* `apps/web/quatricmorph-workspace/src/viz/material.ts:4` — one shared
   `ShaderMaterial`; `TEXTURE = new THREE.TextureLoader().load('/assets/ball.png')`.
 * Its vertex shader sizes points by `mag * pointSize / -mvPosition.z` —
   **distance-derived, not grid-derived**.

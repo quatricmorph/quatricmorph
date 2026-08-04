@@ -11,12 +11,12 @@ existing web packages use none.
 
 ## Repository evidence
 
-* `apps/web/matrix-workspace/package.json` — `three`, `lil-gui`; dev:
+* `apps/web/quatricmorph-workspace/package.json` — `three`, `lil-gui`; dev:
   `typescript`, `vite`, `vitest`. **No framework.**
 * `apps/web/model-viewer/package.json` — dev only: `typescript`, `vite`,
   `vitest`. **No `cesium` yet.**
 * `apps/web/query-interface/package.json` — no dependencies at all.
-* `apps/web/matrix-workspace/src/gui/` — `research-gui.ts` (faithful `mm` port)
+* `apps/web/quatricmorph-workspace/src/gui/` — `research-gui.ts` (faithful `mm` port)
   and `mvp-gui.ts` (reduced), both built on `lil-gui`.
 * `docs/CURRENT_ARCHITECTURE.md` §4 — `mm`'s `initGui` was one 370-line function
   over an untyped `params` bag; the port split it in two.

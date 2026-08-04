@@ -22,9 +22,9 @@ everything.
   workspace is embedded."*
 * Defect 4: *"`disposeAndClear` disposes geometries but **not materials or
   textures**."*
-* `apps/web/matrix-workspace/src/util/params.ts` — `flatten`, `unflatten`,
+* `apps/web/quatricmorph-workspace/src/util/params.ts` — `flatten`, `unflatten`,
   `compress`, `uncompress`, 3 tests.
-* `apps/web/matrix-workspace/src/app/url.ts` — URL serialization, ported.
+* `apps/web/quatricmorph-workspace/src/app/url.ts` — URL serialization, ported.
 * `docs/CURRENT_ARCHITECTURE.md` §3 — the `config`-URL branch fetched an
   arbitrary URL synchronously and applied it as state. **Deprecated.**
 * `cameraPresetPose` in `grid-ruler.ts` — four presets already defined.

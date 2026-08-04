@@ -85,8 +85,8 @@ Documented plainly, not buried:
 | --- |
 | `mm/LICENSE` byte-identical to its original |
 | `mm/` unmodified in its entirety |
-| `apps/web/matrix-workspace/LICENSE` reproduces the MIT text |
-| `apps/web/matrix-workspace/NOTICE.md` attributes Meta Platforms, Inc. |
+| `apps/web/quatricmorph-workspace/LICENSE` reproduces the MIT text |
+| `apps/web/quatricmorph-workspace/NOTICE.md` attributes Meta Platforms, Inc. |
 | `package.json` names `mm` in its description |
 | `Cargo.toml` declares `MIT OR Apache-2.0` |
 | Every third-party dependency's license recorded |

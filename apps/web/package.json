@@ -5,14 +5,14 @@
   "type": "module",
   "description": "Quatricmorph web applications: matrix workspace, model viewer, query interface",
   "workspaces": [
-    "matrix-workspace",
+    "quatricmorph-workspace",
     "model-viewer",
     "query-interface"
   ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:matrix-workspace": "npm run build --workspace matrix-workspace"
+    "build:quatricmorph-workspace": "npm run build --workspace quatricmorph-workspace"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

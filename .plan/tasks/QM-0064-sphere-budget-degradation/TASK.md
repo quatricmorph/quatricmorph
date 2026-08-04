@@ -17,7 +17,7 @@ so**, rather than silently truncating.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts:61` —
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts:61` —
   `assertBlockIsBounded`; `refuses_a_block_that_would_pull_a_whole_tensor_into_the_browser`
   (`GRID-005` Verified).
 * `q_gltf::MAX_INSTANCES_PER_TILE = 262_144`.
@@ -44,7 +44,7 @@ Sequential after `QM-0063` — same rendering path.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace`, `apps/web/core`.
+`apps/web/quatricmorph-workspace`, `apps/web/core`.
 
 ## Scope
 
@@ -63,13 +63,13 @@ the workspace beyond this one degradation step.
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts`
-* `apps/web/matrix-workspace/src/viz/mat.ts`
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts`
+* `apps/web/quatricmorph-workspace/src/viz/mat.ts`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/viz/aggregate-cells.ts`
-* `apps/web/matrix-workspace/src/viz/__tests__/budget.test.ts`
+* `apps/web/quatricmorph-workspace/src/viz/aggregate-cells.ts`
+* `apps/web/quatricmorph-workspace/src/viz/__tests__/budget.test.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -143,7 +143,7 @@ visible.
 
 ```bash
 cd apps/web && npx vitest run budget                    # introduced here
-npm run dev --workspace matrix-workspace
+npm run dev --workspace quatricmorph-workspace
 ```
 
 ## Test Cases

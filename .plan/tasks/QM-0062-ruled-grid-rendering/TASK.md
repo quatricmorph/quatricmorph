@@ -21,8 +21,8 @@ invisible.
   `labelMargin`, `origin` are all config values that **nothing renders**.
 * `mm/util.js:124-138` — `lineSeg`, `axes()` drawing 128-unit RGB axes.
 * `mm/util.js:140-162` — `rowGuide` at a stride of `(h-1)/denom`.
-* Ported to `apps/web/matrix-workspace/src/util/geometry.ts`.
-* `apps/web/matrix-workspace/src/layout/tensor-frame.ts` — `buildTensorFrame`,
+* Ported to `apps/web/quatricmorph-workspace/src/util/geometry.ts`.
+* `apps/web/quatricmorph-workspace/src/layout/tensor-frame.ts` — `buildTensorFrame`,
   `frameContainsPoint`.
 * Task specification §25 requires independent toggles for major grid, minor
   grid, labels, and hierarchy frames.
@@ -45,7 +45,7 @@ Parallel with `QM-0061`, `QM-0065`.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace`.
+`apps/web/quatricmorph-workspace`.
 
 ## Scope
 
@@ -64,14 +64,14 @@ tensor frames themselves (`QM-0065`) · cell rendering (`QM-0063`).
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/util/geometry.ts`
-* `apps/web/matrix-workspace/src/app/scene.ts`
-* `apps/web/matrix-workspace/src/gui/mvp-gui.ts`
+* `apps/web/quatricmorph-workspace/src/util/geometry.ts`
+* `apps/web/quatricmorph-workspace/src/app/scene.ts`
+* `apps/web/quatricmorph-workspace/src/gui/mvp-gui.ts`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/layout/grid-lines.ts`
-* `apps/web/matrix-workspace/src/layout/__tests__/grid-lines.test.ts`
+* `apps/web/quatricmorph-workspace/src/layout/grid-lines.ts`
+* `apps/web/quatricmorph-workspace/src/layout/__tests__/grid-lines.test.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -137,7 +137,7 @@ centres.
 
 ```bash
 cd apps/web && npx vitest run grid-lines               # introduced here
-npm run dev --workspace matrix-workspace
+npm run dev --workspace quatricmorph-workspace
 ```
 
 ## Test Cases

@@ -2062,7 +2062,7 @@ quatricmorph/
 ├── apps/
 │   └── web/
 │       ├── query-interface/
-│       └── matrix-workspace/
+│       └── quatricmorph-workspace/
 │
 ├── schemas/
 │   ├── query/
@@ -2113,7 +2113,7 @@ scene reconstruction as query execution
 ```text
 QueryEngine
 → VisualizationPlan
-→ matrix-workspace adapter
+→ quatricmorph-workspace adapter
 → renderer
 ```
 

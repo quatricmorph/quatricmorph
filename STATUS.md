@@ -146,16 +146,16 @@ neither numbering is orphaned.
 
 | ID | Description | Status | Maps to | Files | Test(s) |
 | --- | --- | --- | --- | --- | --- |
-| GRID-001 | `GridRuler3D` — one spatial authority, ten layout parameters | Verified | TILE-06 | `apps/web/matrix-workspace/src/layout/grid-ruler.ts` | `exposes_every_layout_parameter_the_workspace_needs`, `every_operand_placement_it_produces_is_on_grid` |
-| GRID-002 | Grid snap invariant within a documented tolerance (1e-6) | Verified | — | `apps/web/matrix-workspace/src/layout/grid-ruler.ts` | `snaps_positions_to_cellSize_multiples`, `tolerates_float_accumulation_within_the_documented_tolerance` |
-| GRID-003 | `TensorGridFrame` — boundary, margins, labels, deterministic anchor | Implemented | — | `apps/web/matrix-workspace/src/layout/tensor-frame.ts` | `layout/__tests__/grid-ruler.test.ts` |
-| GRID-004 | Tensor-block adapter (real checkpoint data into the workspace) | **Stub** | — | `apps/web/matrix-workspace/src/tensor/block-adapter.ts` | `the_daemon_source_refuses_rather_than_returning_plausible_zeros` |
-| GRID-005 | Block-request ceiling; no whole-tensor transfer to the browser | Verified | ARCH §19 | `apps/web/matrix-workspace/src/tensor/block-adapter.ts` | `refuses_a_block_that_would_pull_a_whole_tensor_into_the_browser` |
-| MATMUL-001 | Pure matmul separated from Three.js scene state | Verified | PLAT-P1-MATMUL-VIZ | `apps/web/matrix-workspace/src/math/matmul.ts`, `blocking.ts` | `math/__tests__/matmul.test.ts` (2×3@3×2, 3×3@3×1, 1×3@3×2, 1×3@3×1, 1×1@1×1, 2×3@2×2 rejected) |
-| MATMUL-002 | Block decomposition extracted as pure index math | Verified | — | `apps/web/matrix-workspace/src/math/blocking.ts` | `math/__tests__/blocking.test.ts` (7 tests) |
-| MATMUL-003 | Animation schedule extracted as a pure state machine | Verified | PLAT-P1-MATMUL-VIZ | `apps/web/matrix-workspace/src/math/animation-schedule.ts` | `math/__tests__/animation-schedule.test.ts` (7 tests) |
+| GRID-001 | `GridRuler3D` — one spatial authority, ten layout parameters | Verified | TILE-06 | `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts` | `exposes_every_layout_parameter_the_workspace_needs`, `every_operand_placement_it_produces_is_on_grid` |
+| GRID-002 | Grid snap invariant within a documented tolerance (1e-6) | Verified | — | `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts` | `snaps_positions_to_cellSize_multiples`, `tolerates_float_accumulation_within_the_documented_tolerance` |
+| GRID-003 | `TensorGridFrame` — boundary, margins, labels, deterministic anchor | Implemented | — | `apps/web/quatricmorph-workspace/src/layout/tensor-frame.ts` | `layout/__tests__/grid-ruler.test.ts` |
+| GRID-004 | Tensor-block adapter (real checkpoint data into the workspace) | **Stub** | — | `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` | `the_daemon_source_refuses_rather_than_returning_plausible_zeros` |
+| GRID-005 | Block-request ceiling; no whole-tensor transfer to the browser | Verified | ARCH §19 | `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` | `refuses_a_block_that_would_pull_a_whole_tensor_into_the_browser` |
+| MATMUL-001 | Pure matmul separated from Three.js scene state | Verified | PLAT-P1-MATMUL-VIZ | `apps/web/quatricmorph-workspace/src/math/matmul.ts`, `blocking.ts` | `math/__tests__/matmul.test.ts` (2×3@3×2, 3×3@3×1, 1×3@3×2, 1×3@3×1, 1×1@1×1, 2×3@2×2 rejected) |
+| MATMUL-002 | Block decomposition extracted as pure index math | Verified | — | `apps/web/quatricmorph-workspace/src/math/blocking.ts` | `math/__tests__/blocking.test.ts` (7 tests) |
+| MATMUL-003 | Animation schedule extracted as a pure state machine | Verified | PLAT-P1-MATMUL-VIZ | `apps/web/quatricmorph-workspace/src/math/animation-schedule.ts` | `math/__tests__/animation-schedule.test.ts` (7 tests) |
 | MATMUL-004 | CPU reference matmul (Rust) | Verified | — | `crates/q-gpu/src/lib.rs` | `tests::hand_computed_matmul_2x3_by_3x2`, `hand_computed_matmul_edge_shapes` |
-| MATMUL-005 | Demo still runs after extraction (regression bar) | Verified | — | `apps/web/matrix-workspace/` | 74 workspace tests pass; `npx vite build` succeeds |
+| MATMUL-005 | Demo still runs after extraction (regression bar) | Verified | — | `apps/web/quatricmorph-workspace/` | 74 workspace tests pass; `npx vite build` succeeds |
 
 ## CACHE
 

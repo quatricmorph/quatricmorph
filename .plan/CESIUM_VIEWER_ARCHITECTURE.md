@@ -287,7 +287,7 @@ one they can.
 | Debounce | Camera writes to history debounced (`mm` used 250 ms; reused, and the constant is named this time) |
 
 URL state reuses the `mm` port's parameter machinery
-(`apps/web/matrix-workspace/src/util/params.ts`, `app/url.ts`, 3 tests) —
+(`apps/web/quatricmorph-workspace/src/util/params.ts`, `app/url.ts`, 3 tests) —
 **without** the `config`-URL branch, which fetched an arbitrary URL synchronously
 and applied the response as state (`docs/CURRENT_ARCHITECTURE.md` §3). That
 branch is deprecated and not carried forward.

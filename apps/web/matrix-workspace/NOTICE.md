@@ -1,6 +1,6 @@
 # Attribution
 
-`apps/web/matrix-workspace` is derived from **mm**, the matrix-multiplication
+`apps/web/quatricmorph-workspace` is derived from **mm**, the matrix-multiplication
 visualizer by Meta Platforms, Inc. and affiliates. The original lives in this
 repository at [`mm/`](../../../mm), kept read-only as a historical reference.
 

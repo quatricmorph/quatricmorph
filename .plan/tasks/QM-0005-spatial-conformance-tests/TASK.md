@@ -22,7 +22,7 @@ divergence.
   with no mechanism to detect drift.**
 * `q_tileset::GeometricError::for_lod` — `ROOT_GEOMETRIC_ERROR / 2^lod`.
 * `q_tensor_runtime::Lod::ALL` — six variants.
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts` — `DEFAULT_GRID_RULER`,
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts` — `DEFAULT_GRID_RULER`,
   `GRID_SNAP_TOLERANCE = 1e-6`, `cellCenterLocal`.
 * `lod-policy.ts` tests `never_reads_exact_values_from_camera_movement_alone` and
   `reads_exact_values_only_on_an_explicit_selection` — the mechanised form of
@@ -71,7 +71,7 @@ generating code from the schema.
 
 * `crates/q-tileset/tests/spatial_conformance.rs`
 * `apps/web/model-viewer/src/__tests__/spatial-conformance.test.ts`
-* `apps/web/matrix-workspace/src/__tests__/spatial-conformance.test.ts`
+* `apps/web/quatricmorph-workspace/src/__tests__/spatial-conformance.test.ts`
 
 ## Files Expected to Remove or Deprecate
 

@@ -121,7 +121,7 @@ the v1 Metal backend's enforcement path. See [`RISK_REGISTER.md`](RISK_REGISTER.
 
 | ID | Criterion | Now | Task | Evidence required |
 | --- | --- | --- | --- | --- |
-| `MVP-44` | The original license and attribution are preserved | ✅ | `QM-0093` | `mm/LICENSE` unmodified; `apps/web/matrix-workspace/LICENSE` + `NOTICE.md` present; `mm/` untouched per `AGENTS.md` |
+| `MVP-44` | The original license and attribution are preserved | ✅ | `QM-0093` | `mm/LICENSE` unmodified; `apps/web/quatricmorph-workspace/LICENSE` + `NOTICE.md` present; `mm/` untouched per `AGENTS.md` |
 | `MVP-45` | Documentation accurately describes implemented capabilities and limitations | 🟡 | `QM-0090`, `QM-0091`, `QM-0092` | `STATUS.md` regenerated from a real run; no row more favourable than its evidence; `ARCHITECTURE.md` §8.2 divergence resolved |
 | `MVP-46` | The product does not claim one RTX 3090 can hold or fully compute a 10¹²-parameter model | ✅ | `QM-0094` | Text audit across `README.md`, `ARCHITECTURE.md`, `STATUS.md`, `.plan/`, and every UI string. `STATUS.md` already states: *"Trillion-scale means metadata … It proves nothing about loading weights, because that is not possible and is not claimed anywhere."* |
 

@@ -21,7 +21,7 @@ in the viewer's scene?
 A: XY plane      B: YZ plane      C: XZ plane
 ```
 
-`apps/web/matrix-workspace/src/layout/grid-ruler.ts:9-10`, in the module doc, and
+`apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:9-10`, in the module doc, and
 implemented in `placeOperands`:
 
 ```text

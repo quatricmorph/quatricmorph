@@ -17,12 +17,12 @@ canonical addresses, and fidelity serve both web applications.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER`,
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:63` — `DEFAULT_GRID_RULER`,
   ten parameters; `:280` `GRID_SNAP_TOLERANCE = 1e-6`; 13 tests.
 * `apps/web/model-viewer/src/lod-policy.ts:20,51,102` — its own `Lod` enum,
   distance thresholds, and a hand-mirrored geometric-error formula.
 * `apps/web/package.json` — npm workspaces already configured for three packages.
-* `matrix-workspace` depends on `three` and `lil-gui`; `model-viewer` on neither.
+* `quatricmorph-workspace` depends on `three` and `lil-gui`; `model-viewer` on neither.
 * `grid-ruler.ts:346-355` already demonstrates the back-compatible alias pattern.
 * `ADR-CANDIDATE-007` — a new package, not a cross-dependency.
 
@@ -64,11 +64,11 @@ kind.
 ## Files Expected to Change
 
 * `apps/web/package.json` — add `core` to `workspaces`
-* `apps/web/matrix-workspace/package.json`, `model-viewer/package.json` — depend
+* `apps/web/quatricmorph-workspace/package.json`, `model-viewer/package.json` — depend
   on it
-* `apps/web/matrix-workspace/src/layout/grid-ruler.ts` → re-export shim
+* `apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts` → re-export shim
 * `apps/web/model-viewer/src/lod-policy.ts` → import constants
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts` → import `Fidelity`
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` → import `Fidelity`
 
 ## Files Expected to Add
 
@@ -135,8 +135,8 @@ literal exists outside `core`.
 
 ```bash
 cd apps/web && npx vitest run                              # verified today
-npx tsc --noEmit -p matrix-workspace && npx tsc --noEmit -p model-viewer
-npm run build --workspace matrix-workspace
+npx tsc --noEmit -p quatricmorph-workspace && npx tsc --noEmit -p model-viewer
+npm run build --workspace quatricmorph-workspace
 grep -rn "1024 / 2 \*\*\|cellSize: 1" --include=*.ts . | grep -v core/    # should be empty
 ```
 

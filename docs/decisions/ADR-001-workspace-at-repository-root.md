@@ -39,7 +39,7 @@ Content was moved rather than recreated where it had value:
 
 | From | To |
 | --- | --- |
-| `quatricmorph/apps/web/` | `apps/web/matrix-workspace/` |
+| `quatricmorph/apps/web/` | `apps/web/quatricmorph-workspace/` |
 | `quatricmorph/architectures/` | `architectures/` |
 | `quatricmorph/schemas/` | `schemas/` |
 | `quatricmorph/gpu/` | `gpu/` |
@@ -69,7 +69,7 @@ have meant deleting them anyway. They were rewritten from scratch; see ADR-002.
 
 * One workspace root, one `cargo test --workspace`, one `apps/web` npm
   workspace.
-* `apps/web/matrix-workspace` keeps its git history through the move, and its
+* `apps/web/quatricmorph-workspace` keeps its git history through the move, and its
   test suite stayed green across it (46 tests at the time of the move).
 * `mm/` is untouched, per `AGENTS.md:28` and `PREREQUISITES.md:57`.
 * Everything removed is recoverable from git history; nothing was deleted that

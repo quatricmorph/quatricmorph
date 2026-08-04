@@ -17,9 +17,9 @@ nothing is re-litigated.
   article, and `LICENSE` (MIT, Meta Platforms, Inc.).
 * `docs/CURRENT_ARCHITECTURE.md` — 305 lines, a **per-symbol** decision record
   with a tally: 4 reuse-as-is, ~45 extract, ~20 extract-and-refactor, 9 deprecate.
-* `apps/web/matrix-workspace/src/` — 40 modules across `math/`, `layout/`, `viz/`,
+* `apps/web/quatricmorph-workspace/src/` — 40 modules across `math/`, `layout/`, `viz/`,
   `interaction/`, `app/`, `gui/`, `tensor/`, `util/`; 74 tests.
-* `apps/web/matrix-workspace/{LICENSE,NOTICE.md}` — MIT text reproduced with
+* `apps/web/quatricmorph-workspace/{LICENSE,NOTICE.md}` — MIT text reproduced with
   attribution.
 * `AGENTS.md` — *"`mm/` Historical matrix-viz reference — read-only; do not
   delete; not product surface."*
@@ -81,7 +81,7 @@ That single finding is the origin of the closed-expression design in
 ## Licensing
 
 `mm/LICENSE` unmodified; the MIT text reproduced at
-`apps/web/matrix-workspace/LICENSE` with attribution in `NOTICE.md`;
+`apps/web/quatricmorph-workspace/LICENSE` with attribution in `NOTICE.md`;
 `package.json` names `mm` in its description. `mm/` is read-only and no task in
 this plan modifies it. Audited by `QM-0093`.
 

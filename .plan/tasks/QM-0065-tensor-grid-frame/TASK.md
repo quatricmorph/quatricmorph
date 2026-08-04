@@ -17,7 +17,7 @@ labelled frame on one coordinate system.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/layout/tensor-frame.ts` — `TensorMarginFrame`,
+* `apps/web/quatricmorph-workspace/src/layout/tensor-frame.ts` — `TensorMarginFrame`,
   `buildTensorFrame`, `frameContainsPoint`. `GRID-003` is **`Implemented`**, the
   only such row in `STATUS.md`: it works but has no dedicated test.
 * `grid-ruler.ts` — `labelMargin`, `framePadding`, `tensorPadding`, `axisMargin`
@@ -45,7 +45,7 @@ Parallel with `QM-0063`, `QM-0064` — different modules.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace/src/layout`.
+`apps/web/quatricmorph-workspace/src/layout`.
 
 ## Scope
 
@@ -63,12 +63,12 @@ metadata (`QM-0068`).
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/layout/tensor-frame.ts`
-* `apps/web/matrix-workspace/src/viz/mat.ts`
+* `apps/web/quatricmorph-workspace/src/layout/tensor-frame.ts`
+* `apps/web/quatricmorph-workspace/src/viz/mat.ts`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/layout/__tests__/tensor-frame.test.ts`
+* `apps/web/quatricmorph-workspace/src/layout/__tests__/tensor-frame.test.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -133,7 +133,7 @@ bounds.
 
 ```bash
 cd apps/web && npx vitest run tensor-frame              # introduced here
-npm run dev --workspace matrix-workspace
+npm run dev --workspace quatricmorph-workspace
 ```
 
 ## Test Cases

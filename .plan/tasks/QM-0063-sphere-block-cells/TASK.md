@@ -17,7 +17,7 @@ its value — and decide sprites versus instanced meshes **by measurement**.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/viz/material.ts:4` — one shared `ShaderMaterial`;
+* `apps/web/quatricmorph-workspace/src/viz/material.ts:4` — one shared `ShaderMaterial`;
   `TEXTURE = TextureLoader().load('/assets/ball.png')`. Vertex shader sizes points
   by `mag * pointSize / -mvPosition.z` — **distance-derived, not grid-derived**.
 * `viz/mat.ts:51` `emptyPoints`; `:110` `sizeFromData`; `:144` `colorFromData`
@@ -44,7 +44,7 @@ Parallel with `QM-0061`, `QM-0062`. Touches `viz/`.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace/src/viz`.
+`apps/web/quatricmorph-workspace/src/viz`.
 
 ## Scope
 
@@ -63,16 +63,16 @@ changing the picking mechanism.
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/viz/material.ts`
-* `apps/web/matrix-workspace/src/viz/mat.ts`
-* `apps/web/matrix-workspace/src/viz/sizing.ts`
-* `apps/web/matrix-workspace/src/gui/mvp-gui.ts`
+* `apps/web/quatricmorph-workspace/src/viz/material.ts`
+* `apps/web/quatricmorph-workspace/src/viz/mat.ts`
+* `apps/web/quatricmorph-workspace/src/viz/sizing.ts`
+* `apps/web/quatricmorph-workspace/src/gui/mvp-gui.ts`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/viz/instanced-spheres.ts`
-* `apps/web/matrix-workspace/src/viz/__tests__/encoding.test.ts`
-* `apps/web/matrix-workspace/e2e/render-budget.spec.ts`
+* `apps/web/quatricmorph-workspace/src/viz/instanced-spheres.ts`
+* `apps/web/quatricmorph-workspace/src/viz/__tests__/encoding.test.ts`
+* `apps/web/quatricmorph-workspace/e2e/render-budget.spec.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -150,8 +150,8 @@ render timing at both counts.
 
 ```bash
 cd apps/web && npx vitest run encoding                                   # new
-npx playwright test apps/web/matrix-workspace/e2e/render-budget.spec.ts   # new
-npm run dev --workspace matrix-workspace
+npx playwright test apps/web/quatricmorph-workspace/e2e/render-budget.spec.ts   # new
+npm run dev --workspace quatricmorph-workspace
 ```
 
 ## Test Cases

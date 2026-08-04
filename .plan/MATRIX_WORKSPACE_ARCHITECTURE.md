@@ -2,7 +2,7 @@
 
 ## 0. State
 
-`apps/web/matrix-workspace/` is the `mm` port: 40 TypeScript modules, 74 tests.
+`apps/web/quatricmorph-workspace/` is the `mm` port: 40 TypeScript modules, 74 tests.
 The port's central achievement is that **pure math is separated from Three.js
 scene state**, which is what makes real tensor blocks possible at all.
 

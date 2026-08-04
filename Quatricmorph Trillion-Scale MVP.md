@@ -265,7 +265,7 @@ quatricmorph/
 ├── apps/
 │   └── web/
 │       ├── model-viewer/
-│       ├── matrix-workspace/
+│       ├── quatricmorph-workspace/
 │       └── query-interface/
 ├── architectures/
 │   ├── generic/
@@ -1778,7 +1778,7 @@ Create:
 │   ├── phase-03-cuda-block-runtime/
 │   ├── phase-04-tensor-tiles-and-glb/
 │   ├── phase-05-cesium-model-viewer/
-│   ├── phase-06-grid-matrix-workspace/
+│   ├── phase-06-grid-quatricmorph-workspace/
 │   ├── phase-07-weightql-and-chat/
 │   ├── phase-08-integration-and-performance/
 │   └── phase-09-documentation-and-release/

@@ -187,7 +187,7 @@ million and is never rendered as spheres at all; it is rendered as tiles, and
 descending into it yields blocks.
 
 The value→channel encoding is specified in [`GRID_ARCHITECTURE.md`](GRID_ARCHITECTURE.md)
-§5. Note that `opacity` is a **new** channel: `apps/web/matrix-workspace/src/viz/mat.ts`
+§5. Note that `opacity` is a **new** channel: `apps/web/quatricmorph-workspace/src/viz/mat.ts`
 has `sizeFromData` and `colorFromData` but nothing drives alpha, and
 `src/viz/material.ts` is a `ShaderMaterial` over `public/assets/ball.png`. Adding
 opacity is a shader change with its own task (`QM-0063`), and it is deliberately

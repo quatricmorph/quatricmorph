@@ -97,7 +97,7 @@ crates/             17 crates: ingestion, NSIR, catalog, WeightQL, tiles, comput
 gpu/cuda/           CUDA kernel sources — HARDWARE-UNVERIFIED, never compiled
 gpu/wgsl/, metal/   Placeholder shaders
 apps/web/
-  matrix-workspace/ Matrix multiplication workspace, derived from mm (see its NOTICE.md)
+  quatricmorph-workspace/ Matrix multiplication workspace, derived from mm (see its NOTICE.md)
   model-viewer/     CesiumJS browser — app shell only
   query-interface/  WeightQL input with KaTeX preview
 architectures/      Family resolvers: generic + llama implemented; qwen/kimi/deepseek declared
@@ -121,6 +121,6 @@ mm/                 Historical matrix-viz reference — read-only, not product s
 ## License
 
 Rust and web code: `MIT OR Apache-2.0`.
-`apps/web/matrix-workspace` derives from **mm** by Meta Platforms, Inc.; its MIT
-license is reproduced at `apps/web/matrix-workspace/LICENSE` with attribution in
-`apps/web/matrix-workspace/NOTICE.md`. `mm/` retains its original license.
+`apps/web/quatricmorph-workspace` derives from **mm** by Meta Platforms, Inc.; its MIT
+license is reproduced at `apps/web/quatricmorph-workspace/LICENSE` with attribution in
+`apps/web/quatricmorph-workspace/NOTICE.md`. `mm/` retains its original license.

@@ -109,7 +109,7 @@ subsystems: `q_gltf::MAX_INSTANCES_PER_TILE` and the workspace's
 | --- | --- | --- |
 | `q-tensor-runtime`, `q-tileset` | A test loads the JSON and asserts each Rust constant equals its schema value | `QM-0005` |
 | `apps/web/core` | The JSON is imported at build time and re-exported as typed constants — the **only** definition in TypeScript | `QM-0004` |
-| `model-viewer`, `matrix-workspace` | Import from `apps/web/core`; declare no spatial constants of their own | `QM-0060` |
+| `model-viewer`, `quatricmorph-workspace` | Import from `apps/web/core`; declare no spatial constants of their own | `QM-0060` |
 
 **Assert, do not generate, on the Rust side.** Generated Rust would need a build
 script, would complicate `cargo test` for a machine without Node, and would make
@@ -172,7 +172,7 @@ version it does not know rather than guessing a layout. Deferred to v2:
 | Schema | Rust | TypeScript |
 | --- | --- | --- |
 | `nsir` | `q-nsir` — `CanonicalAddress`, `Alias`, `SemanticRecord`; `q_source::TensorRole` | `apps/web/core/address` |
-| `qtile` | `q-tiles` — `QTileHeader`, `QTile`, `BlockEncoding` | Worker decoder in `matrix-workspace` and `model-viewer` |
+| `qtile` | `q-tiles` — `QTileHeader`, `QTile`, `BlockEncoding` | Worker decoder in `quatricmorph-workspace` and `model-viewer` |
 | `weightql` | `q-weightql` — `Statement`, `Script`, `Plan`; `q_expression::Expr` | `query-interface/src/weightql.ts` |
 | `visualization` | `q-tileset` — `TilesetNode`, `BoundingBox`, `GeometricError`; `q-gltf` — `GlbTileSpec`; `q_catalog` `visual_tiles` | `apps/web/core/{spatial,lod}` |
 

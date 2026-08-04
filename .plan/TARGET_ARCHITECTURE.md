@@ -52,7 +52,7 @@ quatricmorph/                        (repository root)
 ├── apps/web/                        npm workspaces
 │   + ├── core/                      +  SHARED: grid, LOD, addresses, exactness
 │   ├── model-viewer/                CesiumJS browser
-│   ├── matrix-workspace/            Three.js, from mm
+│   ├── quatricmorph-workspace/            Three.js, from mm
 │   └── query-interface/             WeightQL + KaTeX
 ├── architectures/                   generic · llama · (+qwen) · kimi · deepseek
 ├── schemas/                         nsir · qtile · weightql · visualization(+spatial)
@@ -66,7 +66,7 @@ quatricmorph/                        (repository root)
 
 The product requirement is that one 3D grid system be *shared across all
 visualizations and mathematical operations*. Today the grid lives in
-`matrix-workspace` and the LOD policy lives in `model-viewer`, each unaware of
+`quatricmorph-workspace` and the LOD policy lives in `model-viewer`, each unaware of
 the other, and both hand-mirror Rust constants
 ([`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §6.4).
 
@@ -76,13 +76,13 @@ applications must agree on, generated from or asserted against
 
 | Module | Contents | Replaces |
 | --- | --- | --- |
-| `spatial/grid.ts` | The ten grid parameters, snap, `assertSnapped`, cell-centre derivation | `matrix-workspace/src/layout/grid-ruler.ts` (re-exported for compatibility) |
+| `spatial/grid.ts` | The ten grid parameters, snap, `assertSnapped`, cell-centre derivation | `quatricmorph-workspace/src/layout/grid-ruler.ts` (re-exported for compatibility) |
 | `spatial/axes.ts` | Axis binding: tensor axes → world axes; rank ≤ 3 implemented, rank > 3 refuses | new (`GRID-007`) |
 | `lod/ladder.ts` | The 6-level ladder, distance thresholds, geometric-error rule | `model-viewer/src/lod-policy.ts` constants |
 | `address/canonical.ts` | Canonical address parse/format, alias forms | duplicated ad-hoc parsing |
 | `fidelity/exactness.ts` | `metadata \| aggregate \| sampled \| quantized \| exact` and its badge contract | `block-adapter.ts`'s local `Fidelity` type |
 
-`matrix-workspace` and `model-viewer` depend on it. Nothing else changes.
+`quatricmorph-workspace` and `model-viewer` depend on it. Nothing else changes.
 
 ## 3. The seven MVP subsystems
 
@@ -144,8 +144,8 @@ badge.
 
 ### 3.6 Grid-aligned matrix workspace
 
-**Owns:** `apps/web/matrix-workspace`, depends on `apps/web/core`.
-**Runs as:** `npm run dev --workspace matrix-workspace`.
+**Owns:** `apps/web/quatricmorph-workspace`, depends on `apps/web/core`.
+**Runs as:** `npm run dev --workspace quatricmorph-workspace`.
 **Contract in:** a bounded tensor block from the daemon, or hand-entered values.
 **Invariant:** every position is grid-snapped within `1e-6` and derived, never
 stored; no request may pull a whole tensor into the browser (`GRID-005`).

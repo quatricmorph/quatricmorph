@@ -120,7 +120,7 @@ Full detail in [`TARGET_ARCHITECTURE.md`](TARGET_ARCHITECTURE.md).
 | 3 | Tile, GLB, and tileset compiler | `q-tiles`, `q-gltf`, `q-tileset` | Pyramid generation; instanced GLB; `tileset.json`; atomic resumable output |
 | 4 | Local query and tensor-block service | `q-daemon`, `q-cli` | Serve tiles and statistics; conversion jobs; cancellation; origin policy |
 | 5 | CesiumJS model viewer | `apps/web/model-viewer` (shell + tested policy) | An actual viewer: tileset load, LOD, picking, inspector, exactness badges, search |
-| 6 | Grid-aligned matrix workspace | `apps/web/matrix-workspace` | Shared grid core; N-D axis binding; ruled-grid rendering; sphere-block cells; live block adapter; real-block matmul |
+| 6 | Grid-aligned matrix workspace | `apps/web/quatricmorph-workspace` | Shared grid core; N-D axis binding; ruled-grid rendering; sphere-block cells; live block adapter; real-block matmul |
 | 7 | Chat, selector, WeightQL, KaTeX interface | `apps/web/query-interface` | Chat → plan; candidate resolution; cost preview; cancellation; sanitization |
 
 ## 4. Phase summary
@@ -186,7 +186,7 @@ risks are enumerated in [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md).
 | --- | --- | --- | --- |
 | **A — Artifact pipeline** (critical) | `QM-0030`…`QM-0046` | `crates/q-tensor-runtime`, `q-statistics`, `q-tiles`, `q-gltf`, `q-tileset`, `q-catalog` | `QM-0004` |
 | **B — Viewer** | `QM-0050`…`QM-0057` | `apps/web/model-viewer` | `QM-0004`; `QM-0044` for anything that must render real data |
-| **C — Workspace** | `QM-0060`…`QM-0068` | `apps/web/matrix-workspace` | `QM-0004`; `QM-0066` needs a running daemon |
+| **C — Workspace** | `QM-0060`…`QM-0068` | `apps/web/quatricmorph-workspace` | `QM-0004`; `QM-0066` needs a running daemon |
 | **D — Query and chat** | `QM-0070`…`QM-0075` | `crates/q-weightql`, `q-expression`, `q-gpu`, `apps/web/query-interface` | `QM-0020` for statistics queries |
 | **E — Metal accelerator (v1)** | `QM-0037`, new Metal build/kernel tasks | `crates/q-gpu`, `gpu/metal/` | Blocks nothing on the critical path; targets Apple silicon (dev/target hardware) |
 | **F — CUDA accelerator (next step, post-v1)** | `QM-0034`…`QM-0036`, `QM-0083` | `crates/q-cuda`, `gpu/cuda/` | **Requires RTX 3090. Deferred to post-v1.** Blocks nothing on the critical path |
@@ -227,8 +227,8 @@ task that would close it. In summary form, the MVP requires:
 6. The documentation contains no claim that one RTX 3090 can hold or fully
    compute a one-trillion-parameter model.
 7. `mm`'s MIT license and Meta Platforms attribution are intact at
-   `mm/LICENSE`, `apps/web/matrix-workspace/LICENSE`, and
-   `apps/web/matrix-workspace/NOTICE.md`.
+   `mm/LICENSE`, `apps/web/quatricmorph-workspace/LICENSE`, and
+   `apps/web/quatricmorph-workspace/NOTICE.md`.
 
 ## 9. Explicit non-goals
 

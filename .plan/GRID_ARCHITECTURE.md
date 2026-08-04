@@ -41,7 +41,7 @@ otherwise unrelated guarantees possible:
 ### 2.1 Grid parameters
 
 The ten parameters already present in
-`apps/web/matrix-workspace/src/layout/grid-ruler.ts:25-37`, promoted to the
+`apps/web/quatricmorph-workspace/src/layout/grid-ruler.ts:25-37`, promoted to the
 schema and given Rust and TypeScript consumers.
 
 | Parameter | Default | Meaning |

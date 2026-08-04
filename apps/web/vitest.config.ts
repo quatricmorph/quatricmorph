@@ -7,8 +7,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'matrix-workspace/src/**/*.test.ts',
-      'matrix-workspace/src/**/__tests__/**/*.test.ts',
+      'quatricmorph-workspace/src/**/*.test.ts',
+      'quatricmorph-workspace/src/**/__tests__/**/*.test.ts',
       'model-viewer/src/**/__tests__/**/*.test.ts',
       'query-interface/src/**/__tests__/**/*.test.ts',
     ],

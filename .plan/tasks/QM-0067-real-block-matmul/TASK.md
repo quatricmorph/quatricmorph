@@ -17,7 +17,7 @@ and fix `mm`'s disposal defect while doing so.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/math/matmul.ts` — 17 tests covering every
+* `apps/web/quatricmorph-workspace/src/math/matmul.ts` — 17 tests covering every
   required shape combination including the `2×3 @ 2×2` rejection (`MATMUL-001`).
 * `math/animation-schedule.ts` — the cursor logic as a **pure state machine**,
   7 tests (`MATMUL-003`).
@@ -45,7 +45,7 @@ Sequential after `QM-0066`.
 
 ## Program Boundary
 
-`apps/web/matrix-workspace/src/{viz,interaction,gui}`.
+`apps/web/quatricmorph-workspace/src/{viz,interaction,gui}`.
 
 ## Scope
 
@@ -62,16 +62,16 @@ hover metadata (`QM-0068`).
 
 ## Files Expected to Change
 
-* `apps/web/matrix-workspace/src/viz/matmul.ts`
-* `apps/web/matrix-workspace/src/interaction/animation.ts`
-* `apps/web/matrix-workspace/src/gui/mvp-gui.ts`
-* `apps/web/matrix-workspace/src/util/objects.ts` — `disposeAndClear`
+* `apps/web/quatricmorph-workspace/src/viz/matmul.ts`
+* `apps/web/quatricmorph-workspace/src/interaction/animation.ts`
+* `apps/web/quatricmorph-workspace/src/gui/mvp-gui.ts`
+* `apps/web/quatricmorph-workspace/src/util/objects.ts` — `disposeAndClear`
 
 ## Files Expected to Add
 
-* `apps/web/matrix-workspace/src/tensor/operands.ts`
-* `apps/web/matrix-workspace/src/__tests__/real-matmul.test.ts`
-* `apps/web/matrix-workspace/e2e/matmul-controls.spec.ts`
+* `apps/web/quatricmorph-workspace/src/tensor/operands.ts`
+* `apps/web/quatricmorph-workspace/src/__tests__/real-matmul.test.ts`
+* `apps/web/quatricmorph-workspace/e2e/matmul-controls.spec.ts`
 
 ## Files Expected to Remove or Deprecate
 
@@ -146,7 +146,7 @@ controls and the memory soak.
 
 ```bash
 cd apps/web && npx vitest run real-matmul                                  # new
-npx playwright test apps/web/matrix-workspace/e2e/matmul-controls.spec.ts   # new
+npx playwright test apps/web/quatricmorph-workspace/e2e/matmul-controls.spec.ts   # new
 ```
 
 ## Test Cases
