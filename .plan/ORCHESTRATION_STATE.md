@@ -159,3 +159,28 @@ Rust matches `STATUS.md`'s 290 exactly. **Web does not**: `STATUS.md` claims
 
 | Task | Lane | Wave | State | Branch | Worktree | Impl | Review | Merge |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `QM-0006` web workspace path repair | S | 0 | Implement | `task/qm-0006-web-workspace-path-repair` | `../.qm-worktrees/qm-0006` | impl-agent-1 | pending | — |
+| `QM-0140` manifest schema | R | 1 | Implement | `task/qm-0140-manifest-schema` | `../.qm-worktrees/qm-0140` | impl-agent-2 | pending | — |
+| `QM-0012` config model metadata | T | 2 | Implement | `task/qm-0012-config-model-metadata` | `../.qm-worktrees/qm-0012` | impl-agent-3 | pending | — |
+| `QM-0002` plan reconciliation | V | 0 | Implement | `task/qm-0002-plan-repo-reconciliation` | `../.qm-worktrees/qm-0002` | impl-agent-4 | pending | — |
+
+All four branched from `ace7d09`, proven clean (`git status --short` empty) and
+correctly based (`git merge-base --is-ancestor main HEAD` exit 0) before assignment.
+
+## Sequencing decisions (file-scope conflicts)
+
+| Held task | Blocked behind | Conflict |
+| --- | --- | --- |
+| `QM-0001` baseline verification | `QM-0006` | Both edit `.github/workflows/build.yaml`; and `QM-0001`'s own floor spec names `web: 101`, unmeetable until `QM-0006` lands |
+| `QM-0010` Qwen resolver | `QM-0012` | Both touch `crates/q-architecture` |
+| `QM-0093` licence audit | `QM-0001` | Both create files under `scripts/` |
+| `QM-0167` root document amendment | `QM-0002` | Both touch `.plan/README.md`; also sequenced late by its own design |
+| `QM-0160` outreach scaffolding | disk | Human-dependent (§3.2); queued until the checkpoint download frees headroom |
+
+## ADR candidates
+
+Eighteen candidates remain unpromoted. **None is named by any task in flight or
+next up** (`QM-0006`, `QM-0140`, `QM-0012`, `QM-0002`, `QM-0001`, `QM-0010`,
+`QM-0093`, `QM-0160`, `QM-0167` — grepped, zero `ADR-CANDIDATE-` references).
+No promotion is therefore blocking, and none is performed speculatively: a
+promotion sweep would raise task counts without producing verified code.
