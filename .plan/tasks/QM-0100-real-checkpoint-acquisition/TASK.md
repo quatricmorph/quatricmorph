@@ -90,9 +90,12 @@ time — it is no longer a reason to sequence anything. `QM-0001`, `QM-0002`,
 
 ## Scope
 
-* Select a checkpoint meeting the criteria in "Selection" below.
-* Download it, verify integrity, and record source URI, revision hash, and size.
-* Confirm it indexes through the existing ingestion path.
+* Verify the checkpoint already on disk at `models/distilbert-distilgpt2/` — the
+  owner has already selected it; there is nothing to choose and nothing to download.
+* Measure its identity from the file: byte size, header length, tensor count,
+  dtype histogram, rank histogram, architecture.
+* Confirm it indexes through the existing ingestion path, reading headers only.
+* Confirm rank > 3 is refused rather than flattened (ADR-010).
 * Record a small, committed **metadata record** describing it, so the plan's
   numbers stay checkable after the checkpoint is deleted.
 
