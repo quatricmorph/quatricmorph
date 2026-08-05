@@ -1,0 +1,32 @@
+[package]
+name = "q-quant"
+description = "Quantisation simulation: values in, values out. No file access, no catalog, no I/O policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The dependency list is part of the contract.
+#
+# `.plan/DIAGNOSTIC_ARCHITECTURE.md` §2 makes this crate "deliberately separable:
+# it is the piece a later module reuses when *verifying* someone else's
+# quantisation". `TASK.md` §Program Boundary states values-in/values-out, and its
+# §Risks names "a dependency on `q-source` here" as a review failure — so this
+# crate carries its own error type (`QuantError`) rather than importing
+# `q_source::error::QError`, and depends on **no** Quatricmorph crate at all.
+#
+# Nothing below reads a file, opens a catalog, or applies an I/O policy.
+[dependencies]
+# Config and parameter types travel to reports and the catalog in `QM-0121`
+# onward, the same reason `q-statistics` and `q-tensor-runtime` carry serde.
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# tests/goldens/quant-goldens.json — the Python/NumPy reference output. Reading a
+# checked-in golden in a dev-dependency is the idiom `q-tensor-runtime` already
+# uses for `fixtures/tiny-llama-2shard/golden.json`; it is a test input, not an
+# I/O policy, and it is absent from the built library.
+serde_json = { workspace = true }

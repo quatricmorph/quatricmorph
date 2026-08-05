@@ -8,6 +8,7 @@ members = [
     "crates/q-catalog",
     "crates/q-tensor-runtime",
     "crates/q-statistics",
+    "crates/q-quant",
     "crates/q-weightql",
     "crates/q-expression",
     "crates/q-tiles",
@@ -38,6 +39,7 @@ q-nsir = { path = "crates/q-nsir" }
 q-catalog = { path = "crates/q-catalog" }
 q-tensor-runtime = { path = "crates/q-tensor-runtime" }
 q-statistics = { path = "crates/q-statistics" }
+q-quant = { path = "crates/q-quant" }
 q-weightql = { path = "crates/q-weightql" }
 q-expression = { path = "crates/q-expression" }
 q-tiles = { path = "crates/q-tiles" }

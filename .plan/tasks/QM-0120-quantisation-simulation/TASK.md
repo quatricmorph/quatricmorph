@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0030` reaches `Complete`.
+`QM-0030` reached `Complete` and merged; this task is unblocked and in progress.
 
 ## Phase
 
@@ -214,3 +214,43 @@ cargo test -p q-quant golden
   implementation across the golden vectors.
 * Hand computations for at least three cases, written out.
 * Confirmation that `q-quant`'s dependency list contains no I/O crate.
+
+## Orchestration
+
+**State:** `Awaiting Independent Review`
+
+| Field | Value |
+| --- | --- |
+| Lane | Q — the engine lane. `QM-0120` opens it; `QM-0121` → `QM-0122` follow, and `QM-0122` is gate **G2** |
+| Branch | `task/qm-0120-quantisation-simulation` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0120` |
+| Base | `d49701c` |
+| Head | The single commit on this branch above base `d49701c` — `feat(q-quant): add quantisation simulation verified against the reference [QM-0120]`. Resolve with `git rev-parse task/qm-0120-quantisation-simulation`. It is not spelled as a literal here because this file is *inside* that commit, so any SHA written here would name a different commit |
+| Agent | `impl-agent-13` |
+| Evidence | `.plan/evidence/QM-0120.md` |
+| Merge path | **L** |
+| Tests added | **53** — 45 unit tests in `crates/q-quant/src`, 7 in `crates/q-quant/tests/reference_goldens.rs`, 1 in `crates/q-quant/tests/allocation_bounds.rs` |
+| Floor before | rust **545** tests over **45** binaries; web **115** over **13** files |
+| Floor after | rust **598** tests over **49** binaries; web **115** over **13** files (unchanged — no web file touched) |
+
+Two other branches were raising the rust floor concurrently; 598/49 is what this
+branch measures on base `d49701c`, and the controller reconciles the true
+post-merge value at merge.
+
+**For the reviewer, the two things that matter most.** First, the goldens under
+`crates/q-quant/tests/goldens/` are the output of
+`python/reference/quantise_reference.py`, written from
+`.plan/DIAGNOSTIC_ARCHITECTURE.md` §3.1 **before** any Rust arithmetic existed;
+re-run it with `--emit-goldens crates/q-quant/tests/goldens/` and
+`git diff --exit-code` must be clean. Second, every comparison against the
+reference is bit-exact — the measured maximum divergence over 8 686 reconstructed
+values and 18 derived scales is **0 ULP** — so there is no tolerance anywhere to
+audit.
+
+**Third**, read `## Defects found and fixed before commit` in the evidence. Two
+real wrong numbers were found and fixed *after* the first green run, because the
+goldens alone could not see them — both implementations agreed on the wrong
+answer. The `s = |c|` zero-dynamic-range rule and the `reconstruction_not_finite`
+refusal are the two places where this crate deviates from what
+`.plan/DIAGNOSTIC_ARCHITECTURE.md` §3.1 literally tabulates, and both deviations
+are argued from §3.1's own stated purpose.

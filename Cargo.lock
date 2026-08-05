@@ -775,6 +775,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "q-quant"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "q-report"
 version = "0.1.0"
 dependencies = [
