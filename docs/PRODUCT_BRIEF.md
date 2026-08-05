@@ -25,6 +25,11 @@ The tensor database and virtual computational objects are the core layer; visual
 3. **Tensor Tile** — summaries, samples, exact blocks (`.qtile`)  
 4. **Visualization** — tileset.json, GLB, GPU buffers, labels, camera state  
 
+Plane 2's engine is a recorded departure: `ARCHITECTURE.md` §5 specifies DuckDB /
+Arrow / Parquet, and the implementation is SQLite per Accepted
+[ADR-003](decisions/ADR-003-catalog-sqlite.md). The ADR governs; do not "fix" the
+code to match the paragraph.
+
 ## Strategic wedge (platform)
 
 ```text
@@ -38,7 +43,26 @@ Open SafeTensors (HF or local)
 
 ## Immediate engineering wedge (now)
 
-**Phase 0 — Tensor Tiling Spike** ([ARCHITECTURE.md](../ARCHITECTURE.md) §17–§18):
+**Release v1 — out-of-core quantization-error diagnostic** ([ARCHITECTURE.md](../ARCHITECTURE.md) §17.1–§17.2):
+
+```text
+Real open-weight SafeTensors checkpoint
+→ stream under a configured resident-byte ceiling
+→ simulate quantization block by block
+→ measure per-channel / per-tensor / per-layer weight-space error
+→ rank fragile layers; compute a bytes-versus-error frontier
+→ deterministic Markdown report + versioned JSON manifest
+→ one 2D heat-map fed by that manifest
+```
+
+v1 input: `models/distilbert-distilgpt2/`; larger MoE checkpoints are out of v1
+scope ([`.plan/MASTER_PLAN.md`](../.plan/MASTER_PLAN.md) §4). Release gate:
+`V1-01` … `V1-32` in [`.plan/DEFINITION_OF_DONE.md`](../.plan/DEFINITION_OF_DONE.md).
+v1 reports *weight-space* error, measured; it does not predict a downstream
+behavioural or benchmark delta.
+
+**Phase 0 — Tensor Tiling Spike** ([ARCHITECTURE.md](../ARCHITECTURE.md) §17.3, §18) is
+**deferred to the platform release** along with the rest of the strategic wedge above:
 
 ```text
 Open one SafeTensors file
@@ -49,7 +73,7 @@ Open one SafeTensors file
 → click a cell and retrieve the exact value
 ```
 
-Viewer stack for the spike: React or Svelte + CesiumJS + 3D Tiles 1.1 + GLB + `.qtile` sidecars. Full-model support is out of scope for Phase 0.
+Viewer stack for that spike: React or Svelte + CesiumJS + 3D Tiles 1.1 + GLB + `.qtile` sidecars. Full-model support is out of scope for Phase 0. Requirements: [requirements/VIZ_MVP.md](requirements/VIZ_MVP.md).
 
 ## Product axioms (must not violate)
 

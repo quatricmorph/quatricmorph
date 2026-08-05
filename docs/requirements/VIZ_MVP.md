@@ -1,6 +1,24 @@
 # Phase 0 — Tensor Tiling Spike Requirements
 
-Active coding target. Source: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §17–§18. Requirement IDs for commits and agent reports: `TILE-*`.
+> **Status: Deferred to the platform release.** `TILE-01` … `TILE-11` are **not**
+> the current coding target. The active release is v1, the out-of-core
+> quantization-error diagnostic — see [`ARCHITECTURE.md`](../../ARCHITECTURE.md)
+> §17.1–§17.2 for the scope decision and its source,
+> [`.plan/DEFINITION_OF_DONE.md`](../../.plan/DEFINITION_OF_DONE.md) for v1's
+> release gate, and [`.plan/PRODUCT_SCOPE.md`](../../.plan/PRODUCT_SCOPE.md) for
+> the boundary.
+>
+> **This file is retained unchanged in substance and nothing here is deleted.**
+> These requirements remain correct and become the active checklist again when
+> the platform release resumes ([`ARCHITECTURE.md`](../../ARCHITECTURE.md) §17.3,
+> Phase 0). Requirement IDs are **not** renumbered: `TILE-*` is cited by
+> [`../../STATUS.md`](../../STATUS.md) and the commit history.
+>
+> Deferral is a **product decision**, not an engineering blocker. What would
+> reverse it is recorded in
+> [`.plan/STRATEGY_ALIGNMENT.md`](../../.plan/STRATEGY_ALIGNMENT.md) §7.
+
+Source: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §17.3 and §18. Requirement IDs for commits and agent reports: `TILE-*`.
 
 ## Goal
 
@@ -36,6 +54,11 @@ Concrete MVP profile:
 | 5 | Scalar region | exact or sampled weight values |
 
 ## Requirement IDs
+
+All rows below are **Deferred to the platform release**; the `Status` column
+records implementation state, not currency. Live requirement-to-test
+traceability is [`../../STATUS.md`](../../STATUS.md), which is authoritative
+where the two disagree.
 
 | ID | Requirement | Status |
 | --- | --- | --- |

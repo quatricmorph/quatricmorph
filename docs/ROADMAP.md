@@ -2,7 +2,32 @@
 
 Derived from [`ARCHITECTURE.md`](../ARCHITECTURE.md) §17–§18. That document is authoritative if this file drifts.
 
-## Phase 0 — Tensor Tiling Spike (now)
+## Release v1 — Out-of-core quantization-error diagnostic (now)
+
+```text
+Real open-weight SafeTensors checkpoint
+→ stream under a configured resident-byte ceiling
+→ simulate quantization block by block
+→ measure per-channel / per-tensor / per-layer weight-space error
+→ rank fragile layers; compute a bytes-versus-error frontier
+→ deterministic Markdown report + versioned JSON manifest
+→ one 2D heat-map fed by that manifest
+```
+
+v1 input: `models/distilbert-distilgpt2/`; larger MoE checkpoints are out of v1 scope
+([`.plan/MASTER_PLAN.md`](../.plan/MASTER_PLAN.md) §4). Release gate: `V1-01` … `V1-32`
+in [`.plan/DEFINITION_OF_DONE.md`](../.plan/DEFINITION_OF_DONE.md). The scope decision
+and its source are recorded in [`ARCHITECTURE.md`](../ARCHITECTURE.md) §17.1.
+
+v1 reports *weight-space* error, measured. It does not predict a downstream
+behavioural or benchmark delta.
+
+---
+
+**Phases 0–6 below are the platform release, which follows v1.** They are retained
+unchanged and not renumbered; `TILE-*` and `PLAT-*` keep their meanings.
+
+## Phase 0 — Tensor Tiling Spike (deferred to the platform release)
 
 ```text
 Open one SafeTensors file

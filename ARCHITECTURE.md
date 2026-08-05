@@ -1083,7 +1083,77 @@ quatricmorph/
 
 # 17. Implementation Roadmap
 
-## Phase 0 — Tensor Tiling Spike
+## 17.1 Release history and scope
+
+**v1 is the quantization-error diagnostic. It is not the visualization platform.**
+
+| | |
+| --- | --- |
+| Decided | August 2026 |
+| Source | [`Quatricmorph - Standalone Business, Market, and Technical Strategy.md`](<Quatricmorph - Standalone Business, Market, and Technical Strategy.md>) §4 (value ladder), §9, §12 |
+| Reconciliation, and what the deferral costs | [`.plan/STRATEGY_ALIGNMENT.md`](.plan/STRATEGY_ALIGNMENT.md) |
+| v1 release gate | [`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md), criteria `V1-01` … `V1-32` |
+| v1 scope boundary | [`.plan/PRODUCT_SCOPE.md`](.plan/PRODUCT_SCOPE.md) |
+| v1 plan and hardware directive | [`.plan/MASTER_PLAN.md`](.plan/MASTER_PLAN.md) |
+
+The strategy document separates *visual demonstration* and *model understanding*
+from *engineering diagnosis*, and argues that only the third changes a decision
+with money attached. The phase roadmap below previously terminated at the first
+two — a rendered tileset and an animated `A @ B`. v1 therefore leads with one
+diagnostic instead, and the visualization phases follow it.
+
+**What this decision does not do.** It deletes nothing. §1–§16 and §19 of this
+document — the four data planes, ingestion, NSIR, the catalog, the block and LOD
+model, the memory discipline, and the structural prohibitions — are unchanged,
+and v1 is built on them, not against them. Phases 0–6 below keep their numbers,
+their goals, and their requirement IDs (`TILE-*`, `PLAT-*`); they are
+**re-sequenced after v1, not renumbered**, because those identifiers are cited by
+[`AGENTS.md`](AGENTS.md), [`docs/`](docs/), [`STATUS.md`](STATUS.md), and the
+commit history, and renumbering would orphan every citation.
+
+**What would reverse it.** Deferral is one line in a `## Status` field. The three
+conditions that move the platform lane back onto the critical path are recorded
+in [`.plan/STRATEGY_ALIGNMENT.md`](.plan/STRATEGY_ALIGNMENT.md) §7 and
+[`.plan/VALIDATION_PLAN.md`](.plan/VALIDATION_PLAN.md) §5.
+
+**What v1 may never claim.** v1 reports *weight-space* error, measured. It does
+not predict a downstream behavioural or benchmark delta; that seam refuses with
+its requirement ID rather than estimating one — see
+[`.plan/DIAGNOSTIC_ARCHITECTURE.md`](.plan/DIAGNOSTIC_ARCHITECTURE.md) §8, and
+§19 of this document.
+
+## 17.2 Release v1 — Out-of-core quantization-error diagnostic (current)
+
+Goal:
+
+```text
+Open a real open-weight SafeTensors checkpoint
+→ stream it under a configured resident-byte ceiling
+→ simulate quantization block by block
+→ measure per-channel, per-tensor, and per-layer weight-space error
+→ rank fragile layers and compute a bytes-versus-error frontier
+→ emit a deterministic Markdown report and a versioned JSON manifest
+→ present one 2D heat-map fed by that manifest
+```
+
+v1 transform-pipeline input: `models/distilbert-distilgpt2/` (local, single-file
+SafeTensors, GPT-2/distilgpt2 architecture, resolved via the generic architecture
+resolver — not sharded, so it does not exercise the sharded/trillion-manifest
+path; that remains covered by the synthetic fixtures in `fixtures/`). Larger MoE
+checkpoints are out of v1 scope; see [`.plan/MASTER_PLAN.md`](.plan/MASTER_PLAN.md) §4.
+
+The v1 acceptance criteria are `V1-01` … `V1-32` in
+[`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md), **not** §18 of this
+document. The CesiumJS model viewer, the matrix-multiplication workspace, and the
+chat interface are deferred to the platform release below.
+
+## 17.3 Platform release — Phases 0–6 (follows v1)
+
+Retained in full. These phases are correct, still specified, and still the
+long-term architecture; they are sequenced after v1 rather than before it. Their
+acceptance criteria are §18 of this document.
+
+### Phase 0 — Tensor Tiling Spike
 
 Goal:
 
@@ -1096,14 +1166,10 @@ Open one SafeTensors file
 → click a cell and retrieve the exact value
 ```
 
-Full-model support is out of scope for this phase.
+Full-model support is out of scope for this phase. Requirements:
+[`docs/requirements/VIZ_MVP.md`](docs/requirements/VIZ_MVP.md) (`TILE-*`).
 
-v1 transform-pipeline input: `models/distilbert-distilgpt2/` (local, single-file
-SafeTensors, GPT-2/distilgpt2 architecture, resolved via the generic architecture
-resolver — not sharded, so it does not exercise the sharded/trillion-manifest
-path; that remains covered by the synthetic fixtures in `fixtures/`).
-
-## Phase 1 — Dense Model Browser
+### Phase 1 — Dense Model Browser
 
 Supports:
 
@@ -1126,7 +1192,7 @@ Open a Qwen/Llama-like model
 → scalar
 ```
 
-## Phase 2 — Mathematical Query Engine
+### Phase 2 — Mathematical Query Engine
 
 Supports:
 
@@ -1148,7 +1214,7 @@ Visualize (A @ B) @ C
 
 on real tensor blocks.
 
-## Phase 3 — Custom WebGPU Renderer
+### Phase 3 — Custom WebGPU Renderer
 
 Replaces detailed GLBs with:
 
@@ -1160,7 +1226,7 @@ Replaces detailed GLBs with:
 
 Cesium is used only for overview, or is fully replaced within the tensor workspace.
 
-## Phase 4 — Native GPU Desktop
+### Phase 4 — Native GPU Desktop
 
 Implements:
 
@@ -1172,7 +1238,7 @@ Implements:
 * GPU memory scheduler;
 * multi-GPU jobs.
 
-## Phase 5 — Runtime Neural Observability
+### Phase 5 — Runtime Neural Observability
 
 Adds:
 
@@ -1184,7 +1250,7 @@ Adds:
 * token-conditioned visualization;
 * matrix multiplication from real prompts.
 
-## Phase 6 — Trillion-Scale Remote Execution
+### Phase 6 — Trillion-Scale Remote Execution
 
 Adds:
 
@@ -1198,9 +1264,17 @@ Adds:
 
 ---
 
-# 18. Concrete MVP
+# 18. Concrete MVP — Platform Release
 
-The first MVP should not start with the full Kimi K3.
+> **This section is the acceptance list for the platform release (§17.3, Phases
+> 0–6), not for v1.** v1's release gate is `V1-01` … `V1-32` in
+> [`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md); the disposition of
+> each criterion below is recorded there. The criteria are retained and
+> **unchanged** — they are still correct and will be needed again — and their
+> numbering is preserved because [`STATUS.md`](STATUS.md) cites it as
+> `AC-001` … `AC-010`.
+
+The platform MVP should not start with the full Kimi K3.
 
 It should choose:
 
@@ -1214,7 +1288,7 @@ Query: exact scalar and tensor slice
 Math: one A @ B visualization
 ```
 
-## Acceptance Criteria
+## Platform-Release Acceptance Criteria
 
 1. Do not load the entire checkpoint into RAM.
 2. Successfully parse sharded SafeTensors.

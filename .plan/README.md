@@ -16,7 +16,7 @@ enforced by [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md).
 
 It is a **delta plan**, not a greenfield plan. The repository already contains a
 17-crate Rust workspace, three web applications, four JSON schemas, checked-in
-SafeTensors fixtures, eight ADRs, and a requirement-traceability document built
+SafeTensors fixtures, ten ADRs, and a requirement-traceability document built
 from real test output. A plan that ignored that would be fiction. Every task in
 `tasks/` therefore starts from a cited file, symbol, or test that exists now.
 
@@ -32,24 +32,27 @@ one gets a task to fix it.
 
 | Rank | Document | Authority |
 | --- | --- | --- |
-| 1 | [`../Quatricmorph - Standalone Business, Market, and Technical Strategy.md`](<../Quatricmorph - Standalone Business, Market, and Technical Strategy.md>) | **What to build first and why.** Authoritative on *scope, sequencing, and success criteria* — not on implementation mechanics. Dated August 2026; self-describes as replacing the earlier framing |
-| 2 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Implementation architecture. Authoritative on *how* anything in scope is built. §17 (phase roadmap) and §18 (the 30 MVP criteria) are **superseded for v1** by rank 1 — see the note below |
-| 3 | [`../STATUS.md`](../STATUS.md) | What is actually built and tested. The factual baseline. |
-| 4 | [`MASTER_PLAN.md`](MASTER_PLAN.md) | Scope, phases, critical path, release criteria |
-| 5 | [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | v1 / seam / deferred / non-goal boundary |
-| 6 | The remaining `.plan/*.md` architecture documents | Per-subsystem design |
-| 7 | `phases/*/README.md` | Phase entry and exit conditions |
-| 8 | `tasks/QM-XXXX-*/TASK.md` | Executable unit of work |
+| 1 | [`../docs/decisions/ADR-0XX-*.md`](../docs/decisions/) marked **Accepted** with a `Departs from:` line | Overrides `ARCHITECTURE.md` **for exactly the section it names**, and nothing else. The code follows the ADR, not the superseded paragraph |
+| 2 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | **Implementation architecture — the single source of truth.** Authoritative on scope, sequencing, and how anything is built. §17.1 records the v1 scope decision and its source |
+| 3 | [`../STATUS.md`](../STATUS.md) | What is actually built and tested. The factual baseline |
+| 4 | [`../AGENTS.md`](../AGENTS.md) | Non-negotiable agent rules — notably architecture §19 and "never claim semantic understanding of weights" |
+| 5 | [`MASTER_PLAN.md`](MASTER_PLAN.md) | Scope, phases, critical path, release criteria |
+| 6 | [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md) | v1 / seam / deferred / non-goal boundary |
+| 7 | The remaining `.plan/*.md` architecture documents | Per-subsystem design |
+| 8 | `phases/*/README.md` | Phase entry and exit conditions |
+| 9 | `tasks/QM-XXXX-*/TASK.md` | Executable unit of work |
 
-**On the rank 1 / rank 2 conflict.** `ARCHITECTURE.md` §17–§18 and
-`MASTER_DOCUMENT.md` §2/§20 define the first MVP as the CesiumJS + matrix-workspace
-+ chat platform. The strategy document defines it as a single quantization-error
-diagnostic. They disagree, and the strategy document is newer and explicitly
-supersedes prior framing. This plan follows the strategy document and files
-[`QM-0167`](tasks/QM-0167-root-document-amendment/TASK.md) to amend the root
-documents so that a single source of truth is restored. Until that task is
-`Complete`, treat the disagreement as known and recorded, not as plan drift.
-[`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md) enumerates every affected claim.
+**Where the v1 scope decision came from.**
+[`../Quatricmorph - Standalone Business, Market, and Technical Strategy.md`](<../Quatricmorph - Standalone Business, Market, and Technical Strategy.md>)
+(August 2026) is the origin of the decision that v1 is one diagnostic rather than
+the visualization platform. That decision is now **recorded in
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md) §17.1**, where rank 2 carries it, and
+the root documents were amended to match by
+[`QM-0167`](tasks/QM-0167-root-document-amendment/TASK.md). The strategy document
+remains the place to read the reasoning, the market evidence, and the conditions
+that would reverse the decision; it is authoritative on *why*, not a rank in the
+table above. [`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md) is the
+reconciliation and records what the deferral costs.
 
 `decisions/ADR-CANDIDATE-*.md` are **not** authoritative. They are proposals with
 a recommended default and a decision deadline. A task that depends on an
@@ -153,7 +156,7 @@ never claiming a capability it has not exercised.
 **`Ready` is derived.** A `Blocked` task becomes `Ready` when every task ID in
 its `Dependencies` section has reached `Complete` and any ADR or hardware it
 names is available. The `## Status` field records the **current** state, not the
-transition — it always holds exactly one of the eight values above, on its own
+transition — it always holds exactly one of the nine values above, on its own
 line, so it can be parsed. Any blocker is named on the line *below* the value.
 At the start of the v1 plan, `QM-0100`, `QM-0001`, and `QM-0002` are `Ready`;
 every other task is `Blocked` or `Deferred`. See

@@ -49,7 +49,61 @@ The MVP must prove an end-to-end workflow using a manageable real SafeTensors fi
 
 # 2. Primary MVP Workflow
 
+## 2.1 v1 — Out-of-core quantization-error diagnostic (current release)
+
+The scope decision that makes this, and not the platform workflow in §2.2, the
+first release is recorded in [`ARCHITECTURE.md`](ARCHITECTURE.md) §17.1 and
+[`.plan/STRATEGY_ALIGNMENT.md`](.plan/STRATEGY_ALIGNMENT.md).
+
 The first working workflow is:
+
+```text
+Real open-weight SafeTensors checkpoint
+→ SafeTensors manifest and header inspection
+→ Architecture resolution
+→ Canonical tensor metadata
+→ Block-addressable tensor catalog
+→ Bounded streaming block reader under a configured resident-byte ceiling
+→ CPU/Metal quantization simulation, block by block (v1; CUDA is a post-v1 accelerator lane)
+→ Paired block reduction: base block against its simulated counterpart
+→ Per-channel, per-tensor, per-layer weight-space error aggregation
+→ Fragility ranking and a bytes-versus-error frontier
+→ Deterministic Markdown report + versioned JSON manifest
+→ One 2D diagnostic heat-map fed by that manifest
+```
+
+Executable subsystems (minimum):
+
+```text
+1. SafeTensors ingestion and metadata catalog
+2. Bounded streaming block runtime with named memory budgets
+3. Quantization simulation and the paired-reduction compute backend (CPU; Metal in v1)
+4. Diagnostic engine: aggregation, outlier attribution, ranking, frontier
+5. Report and manifest emitter, with CI/agent exit codes
+6. Local query and tensor-block service
+7. One lightweight diagnostic surface — no Cesium, no Three.js scene graph
+```
+
+**Concrete v1 transform-pipeline input:** `models/distilbert-distilgpt2/` — a
+local, single-file SafeTensors checkpoint (GPT-2/distilgpt2 architecture, 6
+layers, resolved via the generic resolver, not Qwen/Llama). It is not sharded, so
+it exercises the ingestion → conversion → diagnostic → report path end to end but
+does not exercise the sharded/trillion-manifest path — that remains covered by
+the synthetic fixtures in `fixtures/`
+(`crates/q-catalog/tests/trillion_scale_manifest.rs`). Larger MoE checkpoints are
+out of v1 scope; see [`.plan/MASTER_PLAN.md`](.plan/MASTER_PLAN.md) §4.
+
+v1 release gate: `V1-01` … `V1-32` in
+[`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md). v1 reports
+*weight-space* error, measured; it does not predict a downstream behavioural or
+benchmark delta, and that seam refuses with its requirement ID rather than
+estimating one ([`.plan/DIAGNOSTIC_ARCHITECTURE.md`](.plan/DIAGNOSTIC_ARCHITECTURE.md) §8).
+
+## 2.2 Platform workflow (the release that follows v1)
+
+Retained in full and still correct. Sequenced after v1
+([`ARCHITECTURE.md`](ARCHITECTURE.md) §17.3, Phases 0–6); its acceptance criteria
+are §20.2 below.
 
 ```text
 Local or sharded SafeTensors checkpoint
@@ -57,7 +111,7 @@ Local or sharded SafeTensors checkpoint
 → Architecture resolution
 → Canonical tensor metadata
 → Block-addressable tensor catalog
-→ CPU/Metal-accelerated statistics and visual encoding (v1; CUDA is a post-v1 accelerator lane)
+→ CPU/Metal-accelerated statistics and visual encoding (CUDA is a post-v1 accelerator lane)
 → Multiresolution tensor tiles
 → GLB tile content
 → tileset.json
@@ -73,7 +127,7 @@ Executable subsystems (minimum):
 
 ```text
 1. SafeTensors ingestion and metadata catalog
-2. CPU/Metal-accelerated tensor conversion pipeline (v1); CUDA-accelerated lane (next step)
+2. CPU/Metal-accelerated tensor conversion pipeline; CUDA-accelerated lane (next step)
 3. GLB, tensor-tile, and tileset compiler
 4. Local query and tensor-block service
 5. CesiumJS model viewer
@@ -81,7 +135,7 @@ Executable subsystems (minimum):
 7. Chat, selector, WeightQL, and KaTeX interface
 ```
 
-Concrete first MVP profile ([`ARCHITECTURE.md`](ARCHITECTURE.md) §18):
+Concrete platform MVP profile ([`ARCHITECTURE.md`](ARCHITECTURE.md) §18):
 
 ```text
 Model: 0.5B–7B SafeTensors
@@ -93,18 +147,9 @@ Query: exact scalar and tensor slice
 Math: one A @ B visualization
 ```
 
-**Concrete v1 transform-pipeline input:** `models/distilbert-distilgpt2/` — a
-local, single-file SafeTensors checkpoint (GPT-2/distilgpt2 architecture, 6
-layers, resolved via the generic resolver, not Qwen/Llama). It is smaller than
-the 0.5B–7B profile above and is not sharded, so it exercises the ingestion →
-conversion → tile → viewer path end to end but does not exercise the
-sharded/trillion-manifest path — that remains covered by the synthetic
-fixtures in `fixtures/` (`crates/q-catalog/tests/trillion_scale_manifest.rs`).
-The Qwen/Llama-like profile above remains the target family for later real
-checkpoints; a GPT-2 resolver may be added if `models/` grows beyond this one
-fixture.
-
-Immediate engineering wedge is **Phase 0 — Tensor Tiling Spike** (`ARCHITECTURE.md` §17; `docs/requirements/VIZ_MVP.md`).
+The Qwen/Llama-like profile remains the target family for later real checkpoints;
+a GPT-2 resolver may be added if `models/` grows beyond the one fixture named in
+§2.1.
 
 ---
 
@@ -796,7 +841,13 @@ MVP requires L0–L3. Cache keys include source model hash, tensor ID, logical s
 
 ---
 
-# 16. MVP User Interface
+# 16. MVP User Interface — Platform Release
+
+> **This describes the platform release's surface (§2.2), not v1's.** v1 ships
+> one lightweight 2D diagnostic heat-map fed by the report manifest — no Cesium
+> and no Three.js scene graph (§2.1;
+> [`.plan/MASTER_PLAN.md`](.plan/MASTER_PLAN.md) §5). The description below is
+> retained unchanged for the release that follows.
 
 ## Header
 
@@ -824,7 +875,12 @@ Chat input; WeightQL; KaTeX preview; candidate selector; cost estimate; execute/
 
 ---
 
-# 17. Explicitly Out of Scope (First MVP)
+# 17. Explicitly Out of Scope (Platform Release)
+
+Every item below is out of scope for v1 as well. v1 **additionally** defers the
+CesiumJS model viewer, the matrix-multiplication workspace, and the chat/KaTeX
+query interface to the platform release
+([`.plan/PRODUCT_SCOPE.md`](.plan/PRODUCT_SCOPE.md)).
 
 * Training visualization; automatic differentiation; gradient visualization.
 * Full inference runtime; token-conditioned hidden states; runtime attention probabilities; complete Q/K/V activation capture.
@@ -845,7 +901,15 @@ Extension points may remain for later phases; they are not first-MVP requirement
 
 # 18. Implementation Roadmap
 
-Aligned with [`ARCHITECTURE.md`](ARCHITECTURE.md) §17 and [`docs/ROADMAP.md`](docs/ROADMAP.md):
+Aligned with [`ARCHITECTURE.md`](ARCHITECTURE.md) §17 and [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+**Current release — v1, the out-of-core quantization-error diagnostic** (§2.1;
+`ARCHITECTURE.md` §17.2). Its tasks and sequence are
+[`.plan/MASTER_PLAN.md`](.plan/MASTER_PLAN.md) phases 10–14; its gate is
+[`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md).
+
+**Platform release — Phases 0–6, following v1.** Retained unchanged and not
+renumbered:
 
 | Phase | Name | Goal |
 | --- | --- | --- |
@@ -857,7 +921,10 @@ Aligned with [`ARCHITECTURE.md`](ARCHITECTURE.md) §17 and [`docs/ROADMAP.md`](d
 | 5 | Runtime Neural Observability | Hidden states, Q/K/V, attention, MoE routing, prompt-conditioned visualization |
 | 6 | Trillion-Scale Remote Execution | Object storage, distributed workers, streaming, shared workspaces, CDN summaries |
 
-Active default engineering track until Phase 1+ is explicitly started: **Phase 0** (`TILE-*` in `docs/requirements/VIZ_MVP.md`).
+Active engineering track: **v1** (`.plan/MASTER_PLAN.md`). Phases 0–6 above are
+deferred to the platform release; `TILE-*` in
+[`docs/requirements/VIZ_MVP.md`](docs/requirements/VIZ_MVP.md) is that release's
+Phase 0 checklist and is not the current coding target.
 
 ---
 
@@ -880,7 +947,22 @@ Commands and package-level conventions: [`docs/TESTING.md`](docs/TESTING.md).
 
 # 20. MVP Acceptance Criteria
 
-The MVP is complete only when:
+## 20.1 v1 acceptance criteria
+
+v1's release gate is `V1-01` … `V1-32` in
+[`.plan/DEFINITION_OF_DONE.md`](.plan/DEFINITION_OF_DONE.md), which is
+authoritative for the current release and also records the disposition of each
+criterion in §20.2 below. Five of the 32 are external and cannot be closed by
+writing code; one may not be waived.
+
+## 20.2 Platform-release acceptance criteria
+
+> **These are the acceptance criteria for the platform release (§2.2;
+> `ARCHITECTURE.md` §17.3), not for v1.** They are retained **unchanged** — still
+> correct, needed again when that release resumes — and their numbering is
+> preserved because other documents cite it.
+
+The platform MVP is complete only when:
 
 1. The application is branded as Quatricmorph.
 2. A local SafeTensors file can be opened.
@@ -913,7 +995,9 @@ The MVP is complete only when:
 29. Documentation accurately describes implemented capabilities and limitations.
 30. The product does not claim that one RTX 3090 can hold or fully compute a one-trillion-parameter model.
 
-Phase 0 spike acceptance is the stricter near-term gate (`ARCHITECTURE.md` §18; `docs/requirements/VIZ_MVP.md`). Do not mark Phase 1+ or morph/export complete based only on Phase 0 or legacy Three.js work.
+Within the platform release, Phase 0 spike acceptance is the stricter near-term
+gate (`ARCHITECTURE.md` §18; `docs/requirements/VIZ_MVP.md`). Do not mark Phase 1+
+or morph/export complete based only on Phase 0 or legacy Three.js work.
 
 ---
 
