@@ -511,3 +511,42 @@ against that cap and stay parallel. No new task is dispatched while
 uncommitted work; killing one would discard real work and leave a worktree in the
 same half-finished state Run 3 spent its first hour recovering from. They are
 allowed to drain.
+
+## Cutoff — T+4h45m. Merging stopped; three branches preserved intact
+
+Per the budget rule, merging stopped at T-15min. Work that completed after that
+point is **recorded, not merged**. Nothing on `main` changed after the final report
+commit describing `main`.
+
+| Branch | Head | Why it did not merge |
+| --- | --- | --- |
+| `task/qm-0001-baseline-verification` | `ee30636` | Independent review still running at cutoff |
+| `task/qm-0100-real-checkpoint-verification` | `94bc274` | Independent review still running at cutoff |
+| `task/qm-0002-plan-repo-reconciliation` | `6e99e62` | Implementation finished **after** the cutoff and was **never independently reviewed**. No review, no merge — §7.5 admits no exception, and there was no window to run one |
+
+All three worktrees remain attached with clean trees. `qm-0100`'s worktree holds a
+**337 MiB copy** of `models/distilbert-distilgpt2` (gitignored, nothing staged);
+delete it when that branch is done.
+
+### A near-miss QM-0002 caught, worth carrying into the next run
+
+The uncommitted WIP this run inherited in `qm-0002` had run `npm` from a base
+predating `QM-0006`'s directory rename (`1cfdc9c`). At that base the directory on
+disk is `matrix-workspace` while the lockfile already described
+`quatricmorph-workspace`, so npm "reconciled" `apps/web/package-lock.json`
+**backwards**, deleting 151 lines. **Committing it would have reverted the lockfile
+half of `1cfdc9c`.** The recovery agent reverted it.
+
+This is the second time in one run that stale-based inherited work would have
+reverted a merged or owner-authored change — the first being the discarded
+`QM-0100` branch, which would have reverted the owner's `579107f`. **The lesson is
+general: a branch cut before a rename or an owner amendment does not merely lack
+the change, it can actively undo it.** Every recovery in a future run should
+fast-forward to the integration branch *before* editing anything, which is what
+this agent did once it noticed.
+
+### Post-cutoff review verdicts
+
+Any review notification arriving after T+4h45m is appended to its task's evidence
+record and to this file. **It does not trigger a merge in this run.** The next run
+inherits the verdict and merges from it.

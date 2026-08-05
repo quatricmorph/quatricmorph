@@ -34,14 +34,26 @@ owner-amended path. Branch deleted, task rewritten, re-implemented from scratch.
 
 **46 v1 tasks** of 90 total (44 `Deferred`, untouched by design).
 
-| State | Count | Tasks |
+**Parsed `## Status` values across all 90 task files — these four sum to 90:**
+
+| `## Status` | Count | Notes |
 | --- | --- | --- |
-| **Complete** | 5 | `QM-0006` (prior run) · **`QM-0012`, `QM-0093`, `QM-0140`, `QM-0167`** (this run) |
-| **Merged, task deliberately still `Blocked`** | 1 | `QM-0160` — scaffolding merged; the task requires a human |
-| **Implemented, reviewed, NOT merged at cutoff** | 2 | `QM-0001` (head `ee30636`), `QM-0100` (head `94bc274`) — both complete with evidence, both in independent review when the merge window closed |
-| **In progress at cutoff** | 1 | `QM-0002` (branch `task/qm-0002-plan-repo-reconciliation`, 1 commit) |
-| **Blocked by dependency** | 37 | incl. `QM-0161`…`QM-0164` (human), `QM-0020`/`QM-0033`/`QM-0126` (dependency, not decision — see ADRs) |
-| **Deferred** | 44 | untouched by design |
+| **Complete** | **5** | `QM-0006` (prior run) · **`QM-0012`, `QM-0093`, `QM-0140`, `QM-0167`** (this run) |
+| **Blocked** | **37** | Includes `QM-0160`, whose scaffolding **was merged** (`e61d28e`) but which correctly stays `Blocked` on a human. Also `QM-0161`…`QM-0164` (human) and `QM-0020`/`QM-0033`/`QM-0126` (blocked by *dependency*, not by an undecided ADR — see below) |
+| **Ready** | **4** | `QM-0001`, `QM-0002`, `QM-0100`, `QM-0010` |
+| **Deferred** | **44** | Untouched by design |
+
+**Work in flight at cutoff, cross-cut against the table above** (these are the
+three `Ready` tasks that have real work on a branch; they are *not* additional
+tasks, and are counted once, above):
+
+| Task | Branch head | State at cutoff |
+| --- | --- | --- |
+| `QM-0001` | `ee30636` | Implemented + evidence complete; **independent review still running** when the merge window closed |
+| `QM-0100` | `94bc274` | Implemented + evidence complete; **independent review still running** when the merge window closed |
+| `QM-0002` | `6e99e62` | Implementation **finished after the merge cutoff**; **never independently reviewed**, so it could not merge regardless |
+
+`QM-0010` is `Ready` with no work started.
 
 ## Gates
 
@@ -187,6 +199,21 @@ dependency edges.
 2. `QM-0100` — branch `task/qm-0100-real-checkpoint-verification` head `94bc274`,
    review in flight. Merging it opens Lane P (`QM-0030` → the critical path).
    Its worktree holds a **337 MiB copy** of the checkpoint — delete it.
-3. `QM-0002` — branch `task/qm-0002-plan-repo-reconciliation`, mid-implementation.
+3. `QM-0002` — branch `task/qm-0002-plan-repo-reconciliation` head `6e99e62`.
+   **Implementation finished after the merge cutoff and was never independently
+   reviewed — review it before merging.** It reports 17 files changed, all under
+   `.plan/`, gates green (rust 318 / web 115 at its base), and the only expected
+   conflict is an append/append in `PLAN_CHANGELOG.md`.
+   **It caught a genuine near-miss worth carrying forward:** the inherited
+   uncommitted WIP had run `npm` at a base predating QM-0006's rename, which
+   "reconciled" `apps/web/package-lock.json` *backwards* and deleted 151 lines —
+   committing it **would have reverted the lockfile half of `1cfdc9c`**. It
+   reverted that, and also reverted an edit to `QM-0167/TASK.md` that would have
+   collided with the agent editing it concurrently.
+   It also states plainly that **its own AC1 is not met**: the criterion names
+   `scripts/check-plan-citations.sh`, but the task's `## Program Boundary` restricts
+   it to `.plan/` and `QM-0001` owns `scripts/` — a self-contradiction in the task
+   spec, recorded rather than resolved by widening its own scope. Its checker still
+   exits 1 with 8 unresolved citations, all owned by other tasks.
 4. Create the new task for the six unowned Phase-0 stale docs, and schedule it
    early — it protects every later agent run.
