@@ -7,6 +7,29 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+build = "build.rs"
+
+[features]
+default = []
+# `metal` — the Apple GPU backend (GPU-003, QM-0126).
+#
+# OFF BY DEFAULT AND NOTHING IN THIS WORKSPACE TURNS IT ON. `cargo build
+# --workspace` must succeed on a machine with no Metal toolchain, which is
+# acceptance criterion 1 of QM-0126 and what keeps CI green; `build.rs` returns
+# immediately unless `CARGO_FEATURE_METAL` is set.
+#
+# Enabling it requires macOS and the Xcode command line tools, because it
+# compiles `gpu/metal/paired_reduction.metal` with `xcrun metal` and
+# `gpu/metal/qm_metal_shim.m` with `clang`, and links `Metal.framework`. It adds
+# NO crates.io dependency: the Metal API is reached through an Objective-C shim
+# in this repository rather than a third-party binding, so `Cargo.lock` and the
+# `scripts/license-audit.sh` surface are unchanged whether the feature is on or
+# off.
+#
+# Enabling it does NOT change which backend anything selects. `default_backend`
+# returns `CpuBackend` either way, and `MetalBackend::hardware_verified` is
+# `false` until QM-0127 diffs the kernel against the CPU reference.
+metal = []
 
 [dependencies]
 q-source = { workspace = true }

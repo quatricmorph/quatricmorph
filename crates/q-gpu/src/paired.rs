@@ -219,7 +219,7 @@ pub struct PairedPartials {
 /// `O(1)` — it reads four `usize` fields and no element. Both refusals precede
 /// every read of `values`, which is what `TASK.md` §Error Handling means by
 /// *"before reading any value"*.
-fn validate_pair(base: &BlockData, counterpart: &BlockData) -> Result<()> {
+pub(crate) fn validate_pair(base: &BlockData, counterpart: &BlockData) -> Result<()> {
     if base.rows != counterpart.rows || base.columns != counterpart.columns {
         return Err(QError::QueryRejected(format!(
             "paired reduction shape mismatch: base is [{}, {}], counterpart is [{}, {}] \
@@ -254,7 +254,7 @@ fn validate_pair(base: &BlockData, counterpart: &BlockData) -> Result<()> {
 /// declaration. Both still precede every read of a value.
 ///
 /// `O(1)`: one multiplication and one length comparison per block.
-fn require_dense(block: &BlockData, role: &str) -> Result<()> {
+pub(crate) fn require_dense(block: &BlockData, role: &str) -> Result<()> {
     let declared = block.rows.checked_mul(block.columns);
     if declared != Some(block.values.len()) {
         return Err(QError::QueryRejected(format!(
@@ -278,7 +278,7 @@ fn require_dense(block: &BlockData, role: &str) -> Result<()> {
 /// `sum_sq_delta` `NaN` for the whole tensor, and a `max` comparison against
 /// `NaN` silently keeps the old value instead. Both would be reported as
 /// numbers.
-fn require_finite(block: &BlockData, role: &str) -> Result<()> {
+pub(crate) fn require_finite(block: &BlockData, role: &str) -> Result<()> {
     for (index, &value) in block.values.iter().enumerate() {
         if !value.is_finite() {
             let row = index / block.columns;

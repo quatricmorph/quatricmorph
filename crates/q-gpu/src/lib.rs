@@ -21,7 +21,11 @@
 //! |-------------------|-----------------------------------------------------------|
 //! | [`CpuBackend`]    | **Implemented and tested** — the reference for all others |
 //! | `q_cuda::CudaBackend` | Interface only; **Hardware-Unverified** (`CUDA-001`)  |
-//! | wgpu / Metal      | Not started (`GPU-003`)                                   |
+//! | [`metal::MetalBackend`] | Behind the off-by-default `metal` feature. One kernel — the paired reduction — compiled and dispatched on a real Apple GPU, but **not yet diffed against [`CpuBackend`]** (`GPU-003`; `QM-0127` is the diff) |
+//! | wgpu              | Not started; `gpu/wgsl/compute.wgsl` remains a placeholder |
+//!
+//! Selection is explicit. [`default_backend`] returns [`CpuBackend`] in every
+//! build, feature on or off; no code path picks a GPU on a caller's behalf.
 //!
 //! ## What a backend may promise
 //!
@@ -31,8 +35,12 @@
 //! [`Backend::check_workload`] refuses a workload that would not fit rather
 //! than discovering it mid-kernel.
 
+#[cfg(feature = "metal")]
+pub mod metal;
 pub mod paired;
 
+#[cfg(feature = "metal")]
+pub use metal::MetalBackend;
 pub use paired::{ChannelAxis, ChannelPartials, PairedPartials};
 
 use q_source::error::{QError, Result};
@@ -258,6 +266,21 @@ impl Backend for CpuBackend {
     }
 }
 
+/// The backend used when the caller has not named one.
+///
+/// Always [`CpuBackend`], in every build. This function exists so that
+/// "nothing selects a GPU implicitly" is a fact with a test attached
+/// (`the_default_backend_is_the_cpu_reference_whatever_features_are_enabled`)
+/// rather than an absence someone has to audit for.
+///
+/// A GPU backend is opted into by constructing it — `MetalBackend::probe()` —
+/// and by handling the `None` it returns where there is no device. That is the
+/// only way work reaches one, and it stays that way until a backend has been
+/// diffed against this reference (`QM-0127` for Metal, `CUDA-001` for CUDA).
+pub fn default_backend() -> CpuBackend {
+    CpuBackend
+}
+
 /// Convenience: statistics over a block with the default histogram resolution.
 pub fn block_statistics_default(
     backend: &dyn Backend,
@@ -288,6 +311,16 @@ mod tests {
         assert!(caps.hardware_verified);
         assert!(caps.supports_statistics && caps.supports_matmul && caps.supports_histogram);
         assert!(caps.caveat_requirement.is_none());
+    }
+
+    #[test]
+    fn the_default_backend_is_the_cpu_reference_whatever_features_are_enabled() {
+        // This test compiles identically with and without `--features metal`,
+        // which is the point: enabling a GPU backend must not change what an
+        // unopinionated caller gets. QM-0126 acceptance criterion 8.
+        let caps = default_backend().capabilities();
+        assert_eq!(caps.backend_id, CpuBackend::ID);
+        assert!(caps.hardware_verified);
     }
 
     #[test]

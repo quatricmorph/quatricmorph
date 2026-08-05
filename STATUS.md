@@ -185,7 +185,7 @@ signatures and launch geometry and have **never been compiled**. See
 | --- | --- | --- | --- | --- | --- |
 | GPU-001 | Compute-backend trait | Verified | — | `crates/q-gpu/src/lib.rs` | `tests::cpu_backend_declares_itself_verified_and_capable` |
 | GPU-002 | CPU reference backend (the ground truth for all others) | Verified | — | `crates/q-gpu/src/lib.rs` | 7 tests |
-| GPU-003 | wgpu / Metal backends | **Not Started** | — | `gpu/wgsl/`, `gpu/metal/` (placeholder shaders) | — |
+| GPU-003 | wgpu / Metal backends | **Metal: Implemented, Not Verified** (QM-0126) · **wgpu: Not Started** | QM-0126 | Metal: `crates/q-gpu/src/metal.rs`, `crates/q-gpu/build.rs`, `gpu/metal/paired_reduction.metal`, `gpu/metal/qm_metal_shim.m`. wgpu: `gpu/wgsl/compute.wgsl` (placeholder shader), `gpu/metal/compute.metal` (placeholder shader) | Metal: 9 tests behind the off-by-default `metal` feature. The shader compiles and the kernel was dispatched on a real Apple M3 Pro; it has **not** been diffed against `CpuBackend`, so `hardware_verified` is `false` and stays so until `QM-0127`. Evidence: `.plan/evidence/QM-0126.md`. wgpu: **none — not started** |
 | CUDA-001 | CUDA backend implements the compute trait | **Hardware-Unverified** | — | `crates/q-cuda/src/lib.rs` | `tests::every_operation_refuses_with_a_requirement_id_rather_than_faking_output` — refusal is tested; execution is not, and cannot be here |
 | CUDA-002 | Reduction kernels (min/max/sum/sum-of-squares) | **Hardware-Unverified** | — | `gpu/cuda/reduce.cu` | **none — never compiled or executed** |
 | CUDA-003 | Histogram kernel | **Hardware-Unverified** | — | `gpu/cuda/histogram.cu` | **none — never compiled or executed** |
@@ -274,16 +274,21 @@ page beside the canvas.
 
 ## Summary
 
-131 requirement rows:
+133 requirement rows:
 
 | Status | Count |
 | --- | --- |
-| Verified | 104 |
+| Verified | 105 |
 | Stub (returns `NotImplemented` carrying its own ID) | 10 |
-| Not Started | 9 |
+| Not Started | 8 |
 | Hardware-Unverified | 5 |
-| Implemented (works, no dedicated test) | 1 |
+| Implemented (works, no dedicated test) | 2 |
 | Partial | 2 |
+| Split status (`GPU-003` — Metal implemented and unverified, wgpu not started) | 1 |
+
+105 + 10 + 8 + 5 + 2 + 2 + 1 = 133. `GPU-003` is counted on its own line rather than
+folded into either neighbour: its two backends are at genuinely different stages, and
+filing the row under one of them would overstate the other.
 
 ## What a reader should not be surprised by
 
