@@ -1244,3 +1244,53 @@ owner has been amending `.plan/` during this run.
 **Dependency impact:** `QM-0031` queued behind `QM-0121`; no edge added.
 **Evidence:** the four tasks' `## Files Expected to Change` sections;
 `.plan/EXECUTION_ORDER.md` §6's table as it stands.
+
+## 2026-08-05 — QM-0150 — the manifest schema carries no per-channel error series, but the surface spec assumes one
+
+**Discovered during:** `QM-0150` spec reading, by `impl-agent-8`, **before** it
+wrote any code (it halted on a worktree conflict — see `ORCHESTRATION_STATE.md`).
+Recorded here regardless of which agent finishes the task, because it is a
+correctness question, not an implementation preference.
+
+**Defect.** `schemas/diagnostics/manifest.v1.json` (delivered by `QM-0140`, merged
+`f962028`) provides `layers[]` with a per-layer `error_aggregate`, plus
+`experts[]`, `tensors[]` (full projection only), `ranking[]`, `frontier` and
+`refusals[]`. **The string `channel` appears only in `granularity.kind:
+per_output_channel` and in prose — there is no per-channel error series anywhere in
+the schema.**
+
+But `SURF-001` / `V1-24` and `QM-0150`'s own `Cell` type (`channelStart`,
+`channelEnd`) describe a **layer × channel** grid.
+
+**Why this matters, and why it is not cosmetic.** Per-channel cells **cannot be
+populated from measured v1 data**. Painting a single layer's aggregate across, say,
+512 columns would render **structure that was never measured** — a reader would see
+horizontal banding and read it as a finding about channels. That is precisely
+`ARCHITECTURE.md` §19's *"a colour pattern is not a semantic concept"* failure, and
+it is the exact class of thing gate **G4** exists to catch. It would also be
+`sampled`/`approximate` data presented with the visual authority of `exact`.
+
+**The honest reading**, which also matches the task's own "loads the summary
+projection by default; per-tensor detail on demand":
+
+* The **summary** view is rows = layers, with a single aggregated column spanning
+  each layer's channel extent.
+* An explicit interaction fetches layer detail and expands that row into its
+  `tensors[]`.
+* The **channel** level of "model → layer → tensor → channel" is a **declared gap
+  carrying a requirement ID** in v1 — not fabricated columns.
+
+`MAX_HEATMAP_CELLS` binning then stays a pure, hand-computable function
+(12 × 512 = 6,144 renders directly; 100 × 8,192 = 819,200 aggregates), testable
+independently of where the values come from.
+
+**Correction:** whoever implements `QM-0150` must resolve this **deliberately and
+in writing** — either the schema gains a per-channel series (a `QM-0140` follow-up,
+and nothing produces that data yet since `QM-0123` does not exist), or the surface
+renders layer-level cells and **declares the channel gap**. It must not be resolved
+by interpolating a layer aggregate across channel columns.
+
+**Files changed:** none — recorded as a finding for the implementer and reviewer.
+**Dependency impact:** none mechanical. Bears directly on gate **G4**.
+**Evidence:** `schemas/diagnostics/manifest.v1.json` (no per-channel error series);
+`QM-0150`'s `Cell` type with `channelStart`/`channelEnd`; `ARCHITECTURE.md` §19.
