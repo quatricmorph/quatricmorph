@@ -217,3 +217,45 @@ dependency edges.
    exits 1 with 8 unresolved citations, all owned by other tasks.
 4. Create the new task for the six unowned Phase-0 stale docs, and schedule it
    early — it protects every later agent run.
+
+---
+
+## Post-hoc verification of this report (controller, 2026-08-05T02:1xZ)
+
+The report above was written at the merge cutoff. Every load-bearing claim in it
+has since been **re-measured from scratch on a clean `main` at `ae11873`**, by the
+controller, independently of the agents that produced the work. Results:
+
+| Claim in this report | Re-measured | Verdict |
+| --- | --- | --- |
+| `cargo test --workspace` → 415 passed; 0 failed | **415 passed; 0 failed; 0 ignored**, exit 0 | confirmed |
+| `cargo fmt --all -- --check` clean | exit 0 | confirmed |
+| `cargo clippy --workspace --all-targets -- -D warnings` clean | exit 0 | confirmed |
+| `npx vitest run` → 115 passed, 13 files | **Test Files 13 passed (13) / Tests 115 passed (115)**, exit 0 | confirmed |
+| Fixtures reproducible | `generate_fixtures.py` exit 0, `git diff --exit-code -- fixtures/` exit 0 | confirmed |
+| `scripts/baseline.json` does **not** exist on `main` | `scripts/` contains only `license-audit.sh` | confirmed — the floor guard genuinely did not land |
+| Status counts 5 / 37 / 4 / 44 = 90 | **5 Complete · 37 Blocked · 4 Ready · 44 Deferred = 90** | confirmed |
+| Every merge commit reachable from `main` | `git merge-base --is-ancestor` exit 0 for `1cfdc9c`, `e61d28e`, `4e0e85c`, `7ec7758`, `f962028`, `f132393` | confirmed |
+| Working tree clean | `git status --short` empty | confirmed |
+
+**No claim in this report was found to overstate the repository's actual state.**
+The fixtures gate was run with the scratch venv at
+`.../scratchpad/fxvenv/bin/python`, because the system `python3` has neither
+`numpy` nor `safetensors` (PEP 668 blocks `pip install --user`) — the same
+provenance caveat recorded when the baseline was first taken.
+
+### The exact next action, unchanged by this verification
+
+`QM-0001` (branch `task/qm-0001-baseline-verification`) and `QM-0100` (branch
+`task/qm-0100-real-checkpoint-acquisition`) both carry **`APPROVED`** verdicts from
+independent reviewers, recorded after the merge cutoff and therefore deliberately
+not merged. Both branches and worktrees are intact. `QM-0001` is the more
+consequential of the two: it installs `scripts/baseline.json`, whose absence is the
+single largest gap this run leaves behind.
+
+Whoever merges `QM-0001` must **re-measure and write the real counts** — `rust 415`
+(not the `290` its worktree was cut against) and `web 115`. The floor-staleness
+asymmetry recorded in `ORCHESTRATION_STATE.md` applies: `QM-0001`'s own guard fires
+only when the floor is set *above* the real count, never below, so a floor written
+from a stale worktree would be silently wrong in the permissive direction — exactly
+how `27 passed` read as green while 74 tests sat uncollected.
