@@ -1079,3 +1079,88 @@ scheduling.
 check for live writes before creating a worktree at a previously-used path; and treat a
 test count that does not reconcile as a **scheduling** alarm, not only an arithmetic
 one — that is what exposed `d81011d`.
+
+# Run 4 — 2026-08-05, 12:10Z start
+
+## Baseline, measured before any implementation file was touched
+
+`./scripts/verify-baseline.sh` on `main` at `39b3aa2`, **exit 0**:
+
+```
+rust: 744 passed; 0 failed; 0 ignored; 54 binaries
+ok    rust tests: measured 744, floor 744 — at floor
+ok    rust test binaries: measured 54, floor 54 — at floor
+web: 336/336 tests passed over 21/21 files
+ok    web tests: measured 336, floor 336 — at floor
+ok    web test files: measured 21, floor 21 — at floor
+cli goldens: tensors 111 · shards 2 · payload 1196736 · layers 0/9/24672/92544, 11/9/24672/92544
+```
+
+The environment defect that broke run 3's web leg (uninstalled `three@^0.185.1`) did
+not recur; no `npm install` was needed.
+
+## Frontier, derived — not read from a document
+
+Status distribution across the 90 task files: **16 Complete, 30 Blocked, 44
+Deferred, 0 Ready, 0 In Progress**. With no task carrying `Ready`, the frontier had
+to be derived from the prose unblock conditions in each `Blocked` task's `## Status`
+section, checked against the 16 `Complete` tasks. Four qualified:
+
+| Task | Unblock condition | Satisfied by |
+| --- | --- | --- |
+| `QM-0031` | `QM-0030` + `QM-0020` Complete | both Complete |
+| `QM-0122` | `QM-0121` Complete | Complete |
+| `QM-0126` | `QM-0121` Complete | Complete |
+| `QM-0153` | `QM-0150` Complete | Complete |
+
+Everything else downstream (`QM-0032`, `QM-0102`, `QM-0123`, `QM-0127`, `QM-0037`,
+`QM-0152` …) waits on one of these four, so the frontier is genuinely four wide.
+
+`QM-0160` remains correctly `Blocked`: *"Requires a human to send real messages to
+real people. No agent can satisfy this."* That is the §3.2 human blocker, not a
+dependency; it was not started and its scaffolding is already committed.
+
+**Recorded inconsistency.** `QM-0122`'s `## Blocks` names `QM-0126`, but `QM-0126`'s
+own `## Status` unblock line names only `QM-0121`. The `## Status` line is
+authoritative under the v1 rewiring, so `QM-0126` was treated as unblocked.
+
+## Three of four frontier tasks were unavailable to this session
+
+A **second, live controller session** claimed `QM-0031` and `QM-0122` within minutes
+of this session's start — full evidence and attribution in `PLAN_CHANGELOG.md` under
+*"Two independent controller sessions raced on one repository."* Confirmed live at
+`12:17:55Z`, when the canary polling those worktrees recorded the first dirty file
+in `qm0122-g2`.
+
+This controller **stood down from both** rather than racing: it did not remove,
+reset or check out the foreign worktrees, and did not touch their branches.
+
+`QM-0126` was additionally file-blocked for *merging* — it edits
+`crates/q-gpu/src/lib.rs`, which `QM-0031` also edits — so it was built but is not
+mergeable until `QM-0031` lands, which this session does not control.
+
+## Dispatched
+
+| Task | Worktree | Branch | Rationale |
+| --- | --- | --- | --- |
+| `QM-0153` | `r4-qm0153` | `task/qm-0153-rendering-ceiling` | The only frontier task with a fully disjoint file scope (`apps/web/diagnostics`) |
+| `QM-0126` | `r4-qm0126` | `task/qm-0126-metal-backend` | Unclaimed; Metal toolchain and M3 Pro verified present; blocks nothing on the critical path |
+
+Worktree paths carry an `r4-` prefix so they can never collide with a path used by
+an earlier run or by the other session, per the correction adopted after run 3.
+
+**Hardware verified before dispatching `QM-0126`**, rather than assumed:
+`xcrun -sdk macosx metal --version` → `Apple metal version 32023.883`, target
+`air64-apple-darwin25.5.0`; `system_profiler` → `Apple M3 Pro`, 14 GPU cores. Unlike
+`gpu/cuda/*.cu`, these kernels can actually be compiled and run here.
+
+## Merge discipline under a second session
+
+`main` pinned at `39b3aa2` (`== origin/main`) and re-checked immediately before any
+merge. If `main` has moved and this controller did not move it, the other session
+merged, and the floor is re-measured **on the merged tree** before proceeding — run
+3 twice recorded a merged floor that equalled neither branch's own measurement.
+
+Controller bookkeeping is committed on `chore/controller-r4-findings`, never appended
+directly to `main`, because both sessions append to `PLAN_CHANGELOG.md` and this file
+and concurrent appends to one file lose writes.

@@ -1363,3 +1363,133 @@ under-budget any per-channel pass by 20 %.
 **Dependency impact:** none mechanical; bears on memory budgeting for `QM-0122`+.
 **Evidence:** `.plan/DIAGNOSTIC_ARCHITECTURE.md` §5 vs the six-field
 `ChannelPartials` definition in `crates/q-gpu/src/paired.rs`.
+
+## 2026-08-05 — Two independent controller *sessions* raced on one repository — a new mechanism, not the previously diagnosed one
+
+**Discovered during:** run 4 Stage 0, before any implementation agent was dispatched.
+
+**What was observed.** At `12:10:56Z` this controller recorded `git worktree list`
+returning **only** `main`, and `git branch` carrying no `task/qm-0031-*` and no
+`task/qm-0122-*`. At `12:13:15Z` — under three minutes later, and before this
+controller had successfully created anything — the same commands returned two
+additional worktrees, `/Users/thanh/Quatricmorph/.qm-worktrees/qm0031-stats` and
+`.../qm0122-g2`, on new branches `task/qm-0031-cpu-statistics-pass` and
+`task/qm-0122-streaming-diagnostic-pass`, both at `39b3aa2`, both clean, both zero
+commits ahead.
+
+**They are not this controller's.** This controller's `git worktree add` invocations
+in that window **all failed** — the shell returned `command not found: git` for the
+loop's git calls (a transient PATH failure inside the tool sandbox); `ls -d
+.../r4-*` confirmed **no** worktree at any path this controller named. The observed
+paths carry a naming scheme this controller's script could not produce: it used an
+`r4-` prefix, while the observed names use a `-g2` gate label taken from
+`QM-0122`'s task file.
+
+**Attribution.** `ps` at `12:12Z` showed `claude daemon run` with
+`"cwd":"/Users/thanh/Quatricmorph/..."` at **1 h 00 m** elapsed and a
+`claude --dangerously-skip-permissions` at **50 m** elapsed, against this session's
+age of ~2 minutes. A controller started 50 minutes earlier would finish orientation
+plus a ~10-minute baseline and reach its dispatch point exactly when those two
+worktrees appeared. The conclusion is a **live second controller session**.
+
+**Why this is a distinct defect from the one already recorded.** The prior entry
+diagnosed *stale agents dispatched before a context summarisation, inside one
+session*, and adopted the correction "never reuse a worktree path within a run."
+That correction is real but **cannot** address this: the second controller is a
+**separate process with its own worktree namespace, its own agent inventory and its
+own view of `main`**. No amount of intra-session bookkeeping detects it. The two
+sessions independently selected the *same* frontier — `QM-0031` and `QM-0122` — which
+is not bad luck: the frontier is derived deterministically from task status, so any
+two correct controllers will always collide on it.
+
+**The blocking risk is the merge stage, not the worktrees.** Every serious incident
+in `ORCHESTRATION_STATE.md` — the foreign `reset: moving to main`, the unreviewed
+`d81011d` reaching `main`, floor counts that failed to reconcile — happened at
+`main`, and disjoint *task* selection gives no protection there.
+
+**Action taken by this controller — it stood down from the contested tasks rather
+than racing.**
+
+* `main` pinned at `39b3aa2` (`== origin/main`) and re-checked before any merge; a
+  `main` that moves without this controller moving it means the other session merged,
+  and the floor must then be re-measured on the merged tree.
+* The foreign worktrees were **not** removed, reset, or checked out. A clean worktree
+  at zero commits is indistinguishable from one whose agent is still reading.
+* `QM-0031` and `QM-0122` were **left to the other session**. `QM-0126` was withheld
+  as well: it edits `crates/q-gpu/src/lib.rs`, which `QM-0031` also edits, so it
+  cannot be merged without knowing when `QM-0031` lands.
+* Only `QM-0153` was dispatched — the sole frontier task with a disjoint file scope
+  (`apps/web/diagnostics` only) — in a uniquely named worktree, `r4-qm0153`.
+* This finding is committed **on a branch**, not appended to `main`: the other
+  controller appends to `PLAN_CHANGELOG.md` and `ORCHESTRATION_STATE.md` too, and
+  concurrent appends to one file lose writes.
+
+**Honest consequence, stated rather than engineered around.** The v1 frontier is four
+tasks; three were contested or file-blocked. This run's mergeable throughput was
+therefore **approximately one task**, and no amount of orchestration on this side
+raises it while a second session holds the other three.
+
+**Correction proposed (needs the owner, not an agent).** Controller sessions need a
+repository-level mutex — a committed lease file naming the session, its PID and an
+expiry, taken before worktree creation and checked before merge. Two controllers on
+one checkout is an owner-level operational decision, and no agent can prevent a
+second session from being started.
+
+**Files changed:** none outside `.plan/`; recorded as a finding.
+**Dependency impact:** none mechanical. `QM-0031`, `QM-0122`, `QM-0126` deliberately
+not advanced by this session.
+**Evidence:** `git worktree list` and `git branch` at `12:10:56Z` vs `12:13:15Z`;
+`ls -d .../r4-*` returning no match; `git reflog show
+task/qm-0122-streaming-diagnostic-pass` showing a single `branch: Created from main`;
+`ps -eo pid,etime,command` process ages.
+
+## 2026-08-05 — An account-level API quota exhausted mid-run and killed every dispatched agent, in both controller sessions
+
+**Discovered during:** run 4, minutes after the first two implementation agents were
+dispatched.
+
+**What happened.** Both agents — `QM-0153` and `QM-0126` — terminated within moments
+of starting, each with the same API error: *"You've hit your session limit · resets
+9:50pm (Asia/Saigon)"*. Neither reached a `Write`; `QM-0153`'s last recorded action
+was reading the canvas test harness and `QM-0126`'s was orienting in its worktree.
+Both worktrees were left at **zero commits and zero dirty files** — nothing was
+half-written, so nothing needed unwinding.
+
+**It was not confined to this session.** The canary polling the other controller's
+worktrees recorded `qm0122-g2` reaching **2 dirty files at 12:32Z and never changing
+again** through 12:39Z, and it remained frozen at exactly those two files
+(`.plan/tasks/QM-0122-.../TASK.md` modified, `python/reference/diagnose_reference.py`
+untracked, both **uncommitted**) when re-checked at 15:08Z — two and a half hours
+later. `qm0031-stats` was never written to at all. The same quota ceiling that killed
+this session's agents killed the other session's `QM-0122` agent mid-task, and left
+its partial work uncommitted on disk.
+
+**This is the sharpest available argument for the mutex proposed in the previous
+entry.** Two controllers do not merely duplicate *work* — they draw down **one shared
+account quota**. Running two sessions did not double throughput; it halved the budget
+available to each and then stopped both. The collision cost is not additive, it is
+multiplicative.
+
+**Consequence for the run.** Agent capacity was unavailable from roughly `12:20Z`
+until the `14:50Z` reset — about **2 h 30 m of a 5 h budget, or half the run**, lost
+to a ceiling no agent could route around. Work resumed at `15:08Z` with roughly 100
+minutes remaining before the deadline.
+
+**Action taken.** Both tasks were re-dispatched unchanged once the reset passed, with
+an added instruction to **commit early and often** so that a second interruption
+leaves recoverable work on a branch rather than nothing. The prior attempt's total
+loss is the reason that instruction now exists.
+
+**Not done, and deliberately so.** The other session's uncommitted `QM-0122` work was
+**not** adopted, committed, or cleaned up. Its controller process was still alive at
+`15:08Z` (2 h 58 m elapsed), so the worktree cannot be assumed abandoned merely
+because it has been quiet — quiet is exactly what a quota-throttled session looks
+like. Committing another session's uncommitted tree would also attach this
+controller's authorship to work it did not supervise and no reviewer has seen.
+
+**Files changed:** none outside `.plan/`; recorded as a finding.
+**Dependency impact:** `QM-0122` (gate G2) did not advance in either session.
+**Evidence:** two agent terminations carrying the identical session-limit error; the
+canary log at 1-minute resolution from `12:16:55Z` to `12:39:58Z`; `git status
+--short` in `qm0122-g2` identical at `12:32Z` and `15:08Z`; `ps -eo pid,etime`
+showing the other controller alive at 2 h 58 m.
