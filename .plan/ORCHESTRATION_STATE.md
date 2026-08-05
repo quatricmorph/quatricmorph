@@ -910,3 +910,52 @@ the brief exactly. `python/reference/` is **not** scope creep:
 `.plan/DIAGNOSTIC_ARCHITECTURE.md` §9 *requires* "a committed Python/NumPy script
 under `python/`, run in CI-equivalent form", and `quantise_reference.py` from
 `QM-0120` already established the convention beside it.
+
+## T+10h35m — a SECOND controller session is running. I am standing down from dispatch.
+
+**Confirmed, not inferred.** Two of my three dispatches collided with agents from a
+controller session I cannot see or signal:
+
+| Task | Owner | Evidence |
+| --- | --- | --- |
+| `QM-0150` | **`impl-agent-15`** (other session) | `TASK.md` carries a literal `Claimed by \`impl-agent-15\`` marker; fixture count grew 0 → 3 → 6 across three samples 45 s apart |
+| `QM-0011` | other session | `resolver_conformance.rs` grew 52,329 → 52,597 B at 17:14:33; `architectures/conformance.json` rewritten four times between 17:15:15 and 17:17:08; `## Status` already flipped to `In Progress` |
+| `QM-0121` | **`impl-agent-7`** (mine) | Committed `8154672` with the exact message my brief specified, 1,692 insertions across the three files I declared. Verified mine |
+
+Neither `qm-0011` nor `qm-0150` existed in `git worktree list` at my reconstruction.
+Both were created afterwards. **Two controllers reading the same plan compute the
+same readiness set and dispatch the same tasks** — the collision is structural, not
+accidental, and it will recur on every newly-unblocked task.
+
+**Both my agents behaved correctly and did no damage.** Each detected the live
+writer, **wrote nothing, committed nothing**, and halted with a full disclosure of
+its footprint. `impl-agent-9`'s single `Write` was *rejected* because the other
+agent's file already existed — that rejection is what surfaced the collision. The
+only side effects were two fast-forwards of clean trees (`e82fe98 → e49ac24`,
+verified ancestor, reflog checked, zero commits lost) and one purely additive
+`npm install` (+2/−1, adding `"diagnostics"` to the lockfile's `workspaces` array).
+
+### Decision
+
+**I stop dispatching implementation agents.** The other session owns `QM-0011` and
+`QM-0150`; both its agents are near completion and ahead of anything I could start.
+I finish, review and merge **`QM-0121` only** — my agent has committed real work
+there and abandoning it would waste 1,692 lines on the critical path.
+
+Racing a second controller does not produce more throughput. It produces two
+half-finished branches per task and a merge conflict in the file both touched, and
+on `QM-0150` that file is the surface gate **G4** depends on.
+
+### Two salvaged findings from agents that wrote no code
+
+* **`crates/q-nsir/src/resolver.rs` has a real defect**, independently reached by my
+  stood-down agent and by the live one: the `experts.` marker in `split_structure`
+  is an **unanchored substring search**, so `shared_experts.3.` is mis-filed as
+  routed expert 3. The live agent handled it exactly as required — a
+  **characterization test** recording the behaviour without blessing it, no
+  production change, citing the existing `PLAN_CHANGELOG.md:819` entry from
+  `QM-0010`. My agent verified that entry is real and already on `main`.
+* **`rust_binaries` must rise to 52**, not just `rust_tests`: my agent measured
+  `677 passed; 0 failed; 51 binaries` on `e49ac24` — exactly the recorded floor,
+  confirming it is accurate on `main` — and the conformance suite adds a 52nd test
+  binary.
