@@ -387,3 +387,47 @@ once per wave. A merge that clobbers an owner commit is worse than a slow run.
 **Files changed:** `.plan/ORCHESTRATION_STATE.md`
 **Dependency impact:** none.
 **Evidence:** the push transcript above; `git log 579107f..f4a07ef --stat`.
+
+## 2026-08-04 — QM-0093 — scheduled outside its wave, by lane and dependencies; and a real merge-order collision
+
+**Discovered during:** `QM-0093` implementation; the agent routed three decisions
+to the controller rather than guessing. All three are answered here.
+
+**1. Wave and lane.** `.plan/EXECUTION_ORDER.md` §2 places `QM-0093` in **Wave 6**;
+§4 assigns it **no lane at all**. The agent correctly wrote "not assigned" rather
+than inventing one.
+**Decision:** scheduling it in Wave 0/1 is correct and stays. §10's rewiring table
+gives `QM-0093` the v1 edge **"none — Ready"** ("a licence audit needs no
+pipeline"), so it has no dependencies to wait on, and the controller's §10 makes
+the wave table a *sequencing aid, not an allowlist*. A v1 task with satisfied
+dependencies is scheduled by lane and dependencies, never stranded for lack of a
+wave. The lane gap is a real plan defect and is recorded here for `QM-0002`.
+
+**2. Merge-order collision — genuine, and acted on.** `QM-0093` edits
+`.github/workflows/build.yaml` (adding a `licenses` job). `QM-0001` is expected to
+edit the same file. `.plan/ORCHESTRATION_STATE.md` had recorded the two as
+colliding over `scripts/` — that part is benign (different filenames:
+`license-audit.sh` vs `verify-baseline.sh`). **The CI workflow file is the real
+collision.**
+**Decision:** the two merges are **serialised**, and whichever lands second
+re-runs `scripts/license-audit.sh` **and** the full gate set on the merged `main`
+before its own merge is recorded as verified. This is the controller's job under
+§14, not either agent's.
+
+**3. Fail-threshold divergence inside the task itself.** `## Error Handling` says
+**any copyleft** fails the audit; acceptance criterion **6** says
+**GPL/AGPL/SSPL**. These are not the same rule. The agent implemented the
+criterion, downgraded MPL-2.0 to a reported-not-failed item, and documented the
+divergence in both the script header and the evidence record. Affected: twelve
+`lightningcss` MPL-2.0 **dev-only** binaries, and `r-efi`, which offers a
+permissive alternative under an `OR`.
+**Decision:** routed to the independent reviewer to rule on with reasoning, since
+it is a correctness question about which text is normative, not a taste question.
+The divergence between the two sections is itself a plan defect and is recorded
+here regardless of the ruling.
+
+**Files changed:** none — findings routed to `QM-0002` and to the reviewer.
+**Dependency impact:** `QM-0001` and `QM-0093` merges are now explicitly ordered.
+**Evidence:** `.plan/EXECUTION_ORDER.md` §2 (Wave 6) and §4 (no lane) vs §10
+("`QM-0093` licensing · `QM-0080` · none — **Ready**"); the task file's
+`## Error Handling` vs `## Acceptance Criteria` item 6.
