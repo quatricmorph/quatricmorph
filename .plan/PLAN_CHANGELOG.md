@@ -1123,3 +1123,27 @@ owning scope.
 against one identical probe corpus: pre-fix `E1 = 523` with the post-fence citation
 **unreported**; post-fix `E1 = 420` with it reported. Recorded in
 `.plan/evidence/QM-0002.md` §Independent review, second cycle.
+
+## 2026-08-05 — CONTROLLER ERROR — several agent briefs cited `.plan/TEST_STRATEGY.md` §6.3, which does not exist
+
+**Discovered during:** `QM-0101`, reported by `impl-agent-12` at the end of its run
+**Defect:** the controller cited **`.plan/TEST_STRATEGY.md` §6.3** as the authority
+for memory-residency testing in the task packets for `QM-0030`, `QM-0101`, `QM-0120`
+and others. **That section does not exist.** `## 6. CI` carries no subsections;
+`grep -nE '^#+ *6' .plan/TEST_STRATEGY.md` returns `243:## 6. CI` alone. The
+residency-testing direction the controller meant to invoke — peak-RSS assertion via
+`/usr/bin/time -l` — is carried by each task's own `TASK.md` and by
+`.plan/MEMORY_BUDGET.md`, not by `TEST_STRATEGY.md`.
+**Consequence:** none to the delivered work. Agents read the real documents and
+followed `TASK.md`'s direction; `impl-agent-12` explicitly flagged the bad citation
+rather than silently inventing a §6.3. That is the correct response to a defective
+brief, and it is recorded here as the reason the citation appears in evidence
+records.
+**Correction:** future packets cite `.plan/MEMORY_BUDGET.md` and the task's own
+`## Verification Plan` for residency, and `.plan/TEST_STRATEGY.md` §0 (the three
+properties) plus its §6 for CI. **A controller summary is never a substitute for the
+source document — this run's own rule, and the controller broke it.**
+**Files changed:** none.
+**Dependency impact:** none.
+**Evidence:** `grep -cE '^#+ *[0-9]+\.[0-9]' .plan/TEST_STRATEGY.md` → 9 subsections
+exist in the file, none of them under §6.
