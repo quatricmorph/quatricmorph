@@ -2,7 +2,9 @@
 
 ## Status
 
-In Progress
+Complete
+
+Merged to `main` as `7ec7758` (squash, Path L) and pushed to `origin`. Independent review by `review-agent-3` at reviewed SHA `6d04e00`: **APPROVED**. Licence audit re-run on merged `main`: `bash scripts/license-audit.sh` exit 0. Documentation-only exempt class, recorded by the reviewer.
 
 No longer waits on `QM-0080` (deferred). A licensing audit needs no running pipeline.
 
