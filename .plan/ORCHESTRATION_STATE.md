@@ -360,3 +360,73 @@ theirs.
 
 Floor updates therefore serialise through the controller, one merge at a time,
 which §14 already requires for this file.
+
+---
+
+# Run 3 — 2026-08-04T23:49:41Z → deadline 2026-08-05T04:49:41Z (5h00m)
+
+Controller checkout: `/Users/thanh/Quatricmorph/Quatricmorph`, branch `main`.
+Integration branch: **local `main`** — push to `origin` is unavailable (Run 2
+verified `remote: Permission to quatricmorph/quatricmorph.git denied to
+MarkdownOfficial`, and SSH-as-`hmthanh` stalls on pack upload). Every "on
+`origin/main`" dependency check reads "on the controller's local `main`".
+
+## What Run 3 inherited, verified against Git rather than the registry
+
+| Branch | Worktree | Real state at reconstruction | Disposition |
+| --- | --- | --- | --- |
+| `task/qm-0001-baseline-verification` | `qm-0001` | At `145257b`, an **ancestor of `main`**, zero commits ahead, clean. Run 2's claim that it "is writing `scripts/baseline.json`" is not borne out — nothing was committed | Branch **reset to `793e122`**, re-dispatched |
+| `task/qm-0002-plan-repo-reconciliation` | `qm-0002` | Zero commits ahead; **uncommitted** edits to three `TASK.md` files + `apps/web/package-lock.json`, untracked `.plan/tools/` | Re-dispatched as a **recovery** task: audit the WIP, don't inherit it |
+| `task/qm-0012-config-model-metadata` | `qm-0012` | **4 commits, clean**, 13 files / +1545. Real, complete-looking work | Dispatched to **independent review** |
+| `task/qm-0100-real-checkpoint-acquisition` | `qm-0100` | 1 commit; `fixtures/real-checkpoint-record.json` describes **Qwen1.5-MoE-A2.7B, 28.63 GB, 8 shards** — a checkpoint no longer on disk. Based at `0ef6ec5`, so squash-merging it would **revert the owner's `579107f`** | **Discarded.** Branch deleted, worktree removed, task rewritten, re-dispatched as `task/qm-0100-real-checkpoint-verification` |
+| `task/qm-0140-manifest-schema` | `qm-0140` | Zero commits ahead; **uncommitted** `crates/q-report/` (8 files), `schemas/diagnostics/`, `Cargo.toml`/`Cargo.lock` workspace-member edit, and a 567-line draft evidence record | Re-dispatched as a **recovery** task |
+| `task/qm-0160-design-partner-outreach` | `qm-0160` | **1 commit, clean**, 14 files / +1614 | Dispatched to **independent review**, with a mandatory fabrication audit |
+
+Only `qm-0100`'s branch touched an owner-amended path. The other five are clean of
+`.plan/MASTER_PLAN.md`, `.plan/ORCHESTRATION_STATE.md`, and
+`.plan/tasks/QM-0100-real-checkpoint-acquisition/TASK.md` — verified per-branch with
+`git diff main...<branch> --name-only`.
+
+## The owner's re-scope supersedes the controller prompt's premise
+
+Commit `579107f` (`Thanh Hoang-Minh`, the repository owner) rewrote
+`.plan/MASTER_PLAN.md` §4 and `QM-0100`'s TASK.md to direct the project at
+`models/distilbert-distilgpt2` and to **"ignore any larger MoE checkpoints"**, and
+deleted the 28.63 GB checkpoint Run 2 had downloaded. The controller prompt's §3.3
+premise — that `QM-0100` is a multi-hour download and the first task in the plan
+because of its lead time — **no longer holds**. There is no long-lead item in Run 3,
+so nothing is sequenced behind one. Full record and the coverage given up:
+`.plan/PLAN_CHANGELOG.md`, Run 3 section.
+
+## Baseline, re-measured on `main` @ `579107f`
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Rust tests | `cargo test --workspace` | **290 passed; 0 failed**, exit 0 — matches `STATUS.md` exactly |
+| Web tests | `cd apps/web && npx vitest run` | **115 passed across 13 files**, exit 0 — `STATUS.md` still says 101; **stale by 14** |
+
+`scripts/` does not exist, so **`scripts/baseline.json` does not exist and no floor
+guard is in force.** `QM-0001` is dispatched first for exactly that reason. Every
+task merged before `QM-0001` lands records "no floor guard in force at merge time;
+counts recorded in evidence only" in its evidence record.
+
+## Disk
+
+Measured 21 GB free at T+0 with 96 % capacity — far below the prompt's stated ~51 GB.
+By T+30m it read **52 GB free**: the owner's deletion of the 28.63 GB checkpoint had
+been held as APFS purgeable space and was reclaimed. `df -h .` is still run before
+every worktree creation per §3.3; the concurrency cap on Rust-building worktrees is
+lifted from three to what the lane structure needs, not to unbounded.
+
+## Wave 0/1 dispatch — eight agents
+
+| Task | Agent | Role | Worktree | Base |
+| --- | --- | --- | --- | --- |
+| QM-0012 | `review-agent-1` | Independent review | `qm-0012` | head `6f2d5eb` |
+| QM-0160 | `review-agent-2` | Independent review + fabrication audit | `qm-0160` | head `16ad32b` |
+| QM-0001 | `impl-agent-1` | Implement (floor guard, measured 290/115) | `qm-0001` | `793e122` |
+| QM-0093 | `impl-agent-2` | Implement (docs-only exempt class) | `qm-0093` | `793e122` |
+| QM-0167 | `impl-agent-3` | Implement (docs-only exempt class) | `qm-0167` | `793e122` |
+| QM-0100 | `impl-agent-4` | Implement (re-scoped to distilgpt2) | `qm-0100` | `04991e9` |
+| QM-0140 | `impl-agent-5` | Recover uncommitted WIP + finish | `qm-0140` | pre-`579107f` |
+| QM-0002 | `impl-agent-6` | Recover uncommitted WIP + finish | `qm-0002` | pre-`579107f` |
