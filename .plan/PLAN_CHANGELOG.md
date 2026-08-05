@@ -836,3 +836,35 @@ follow-up task rather than fixed opportunistically outside its owning scope.
 **Dependency impact:** none. Not a release blocker on current evidence.
 **Evidence:** `resolver.rs:64-77`; fixture assertion at `generate_fixtures.py`
 `:1057-1060` / `:1070` pinning the singular form only.
+
+## 2026-08-05 — ADR-011 amended — components are length-prefixed unconditionally; `TileId`/`CacheKey` are named frozen exceptions
+
+**Discovered during:** `QM-0020` implementation; adjudicated by `review-agent-9`;
+amendment recommended by that reviewer before `QM-0033` could re-litigate it
+**Defect:** ADR-011's construction rule said fixed-width components take no length
+prefix, **contradicting this ADR's own reference implementation.**
+`q_source::ids::digest16` (`crates/q-source/src/ids.rs:86-92`) prefixes every part
+unconditionally, and `TensorId::derive` (`:125-128`) routes a fixed-width `[u8;16]`
+model id through it — so every already-persisted `TensorId` is prefix-both. The
+superseded sentence justified itself by citing `TileId` and `CacheKey`, but
+**neither uses `digest16`**, and `TileId::for_block` omits `ID_SCHEME_VERSION`
+entirely, which ADR-011 separately freezes. The two constructions the rule appealed
+to were never governed by it.
+**Correction:** the rule now reads "every component → u64 little-endian length,
+then bytes", with `TileId` and `CacheKey` recorded as **named frozen exceptions**
+rather than instances of the rule. The superseded text is quoted in the amendment
+rather than deleted.
+**Why this direction:** decided by measurement. `review-agent-9` implemented BLAKE3
+from the specification in Python, validated it against four published test vectors,
+and computed both candidate layouts for `StatisticsId`:
+`prefix-both 4b0df4930f8ee4bb1637bcfbcf49499c` (shipped, and what `define_id!`
+emits) versus `no-prefix 7e771ceb5144f70c830c81281ef0de56`. Adopting the prose rule
+would have created the second id grammar ADR-011 exists to prevent **and** required
+a migration for ids already on disk. Correcting the prose costs nothing.
+**Files changed:** `docs/decisions/ADR-011-content-derived-identifiers.md`
+**Dependency impact:** none. Unblocks `QM-0033` from re-deriving the rule
+differently. `QM-0020`'s pinned digest needs no change.
+**Evidence:** the two digests above, computed by a third independent BLAKE3
+implementation — not the `blake3` crate the implementation and its in-test
+transcription both share, so the pinned literal is not the code asserting it equals
+itself. Recorded in `.plan/evidence/QM-0020.md` §Independent review.

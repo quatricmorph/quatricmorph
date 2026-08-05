@@ -47,14 +47,44 @@ differently:
 id = blake3( ID_SCHEME_VERSION ‖ domain ‖ 0x00 ‖ component* ).as_bytes()[..16]
 
 where each component is appended as:
-  variable-length (strings, byte slices)  →  u64 little-endian length, then bytes
-  fixed-width     (u8, u32, i64, [u8;16]) →  its little-endian bytes, no prefix
+  EVERY component (strings, byte slices, u8, u32, i64, [u8;16])
+      →  u64 little-endian length, then bytes
 ```
 
-Length-prefixing the variable-length components is what stops `("ab","c")` and
-`("a","bc")` hashing alike. Fixed-width components need no prefix because their
-width is not data-dependent, which is why the shipped `TileId` and `CacheKey`
-constructions append `lod` and `algorithm_version` bare.
+Length-prefixing is what stops `("ab","c")` and `("a","bc")` hashing alike.
+
+> **Amendment, 2026-08-05 — this paragraph previously said fixed-width components
+> take no prefix. That was wrong, and it contradicted this ADR's own reference
+> implementation.**
+>
+> `q_source::ids::digest16` (`crates/q-source/src/ids.rs:86-92`) length-prefixes
+> **every** part unconditionally, and `TensorId::derive` (`:125-128`) routes a
+> fixed-width `[u8;16]` model id through it. Every `TensorId` already persisted is
+> therefore prefix-both. The superseded sentence justified itself by citing
+> `TileId` and `CacheKey` — but **neither uses `digest16`**, and `TileId::for_block`
+> omits `ID_SCHEME_VERSION` entirely, which this ADR separately freezes. So the
+> two constructions the rule appealed to were never governed by it.
+>
+> **`TileId` and `CacheKey` remain frozen exactly as shipped** — named exceptions,
+> not instances of the rule. Every id built through `define_id!` / `digest16`,
+> including every new kind, prefixes unconditionally.
+>
+> **Decided by measurement, not by preference.** During `QM-0020`, `review-agent-9`
+> implemented BLAKE3 from the specification in Python, validated it against four
+> published test vectors, and computed both candidate layouts for
+> `StatisticsId(subject_id, algorithm_version)`:
+>
+> ```text
+> prefix-both  4b0df4930f8ee4bb1637bcfbcf49499c   ← shipped, and what define_id! emits
+> no-prefix    7e771ceb5144f70c830c81281ef0de56
+> ```
+>
+> `QM-0020` pinned the prefix-both digest. Adopting the prose rule would have
+> created the second id grammar this ADR exists to prevent, and would have required
+> a data migration for ids already on disk. Correcting the prose costs nothing,
+> because the code, `QM-0020/TASK.md` §Scope's explicit
+> `len‖subject_id ‖ len‖algorithm_version`, and this ADR's own `define_id!` mandate
+> all already agreed with each other.
 
 Per-kind domains and inputs:
 
