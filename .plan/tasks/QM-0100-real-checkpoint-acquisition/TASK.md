@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Complete
 
 **Re-scoped by the repository owner in commit `579107f`.** The original task
 acquired a ≥ 24 GB sharded MoE checkpoint over a multi-hour download. The owner
