@@ -2,9 +2,11 @@
 
 ## Status
 
-Blocked
+In Progress
 
-Unblocks when `QM-0120` reaches `Complete`.
+Unblock condition **met**: `QM-0120` reached `Complete` (merged `539c41c`, floor
+raised to 598/49, later 677/51). Dispatched by the controller on the critical path
+— `QM-0122` behind this task carries gate **G2**.
 
 ## Phase
 
