@@ -1,6 +1,6 @@
 {
   "_comment": "QM-0001 test floor, enforced by scripts/verify-baseline.sh. The floor may only ever be RAISED; a task that lowers it is rejected in review. Counts were measured on the commit below by running `cargo test --workspace` and `cd apps/web && npx vitest run`. Derivations for every cli_golden value are in .plan/evidence/QM-0001.md.",
-  "commit": "PENDING",
+  "commit": "703903d",
   "_commit_field_note": "The _comment above says the counts were measured on `commit`, so this field is repinned in the same change that moves a count. QM-0030 measured 477/45 on f4fba1e, its implementation commit. 6fb593a ('pin baseline.json to its merge commit') shows the controller may repin this to the merge commit when the branch lands; that is a repin of a true value, not a correction of a false one. Web counts were NOT re-measured on f4fba1e beyond confirming they are unchanged at 115/13, because QM-0030 changed no web file.",
   "_rust_floor_raised_by": "QM-0030 — 434 tests over 43 binaries measured on base 6fb593a, raised to 477 over 45 after adding the bounded streaming block reader. The two new binaries are crates/q-tensor-runtime/tests/bounded_residency.rs and crates/q-tensor-runtime/tests/real_fixture_blocks.rs. Derivation in .plan/evidence/QM-0030.md. Web counts are untouched: QM-0030 changed no web file.",
   "rust_tests": 545,
