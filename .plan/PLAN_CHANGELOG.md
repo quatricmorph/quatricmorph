@@ -694,3 +694,50 @@ the manifest types and the schema, neither of which changed shape.
 `## Verification Plan` "**Automated** — schema validation, round trip, version
 refusal, ordering, formatting"; `## Files Expected to Add` as written listed five
 paths, none under `tests/`.
+## 2026-08-05 — QM-0001 — `scripts/verify-baseline.test.sh` added to the declared file scope
+
+**Discovered during:** implementing `QM-0001`
+**Defect:** `QM-0001`'s `## Files Expected to Add` named only
+`scripts/verify-baseline.sh` and `scripts/baseline.json`. Controller §6 requires
+the guard's behaviour to be demonstrated by tests written failing-first, and the
+guard is a shell script — there was no declared home for its tests.
+**Correction:** `scripts/verify-baseline.test.sh` added to `## Files Expected to
+Add` in `.plan/tasks/QM-0001-baseline-verification/TASK.md`. It holds 46 unit
+tests over the guard's parsing, JSON-validation and floor-comparison functions,
+and `verify-baseline.sh` runs it as a preflight step so it cannot rot unnoticed.
+
+**Why it is not a `cargo test` or a `vitest` test:** either would raise the very
+counts `scripts/baseline.json` records, making the floor self-referential and
+forcing the recorded floor to differ from the measured baseline. Keeping the
+tests in shell lets the floor equal reality exactly — `cargo test --workspace`
+still measures 290 and `npx vitest run` still measures 115 at this task's head.
+
+**Files changed:** `.plan/tasks/QM-0001-baseline-verification/TASK.md`
+**Dependency impact:** none. No other task references `scripts/`.
+**Evidence:** `.plan/evidence/QM-0001.md` — `## Tests added` (46 tests) and
+`## Validation evidence` §1 (the harness seen failing before the guard existed).
+
+## 2026-08-05 — QM-0001 — the recorded floor is measured at `793e122` and is stale relative to `main`
+
+**Discovered during:** the controller's mid-task correction to `impl-agent-1`
+**Defect:** `QM-0001`'s worktree was cut at `793e122`. `QM-0012` has since merged
+to `main` as `4e0e85c`, adding 28 Rust tests; the controller measures **318
+passed** on `main` at `9a5398d`. The floor this task commits records **290**,
+which is the honest measurement of its own base commit but sits 28 below `main`.
+**Why it matters:** this is the floor-staleness asymmetry in a concrete instance.
+A floor ABOVE the real count fails loudly — `QM-0001` demonstrates exactly that
+with its `999` run (`baseline regression: 290 < 999`). A floor BELOW reality is
+**silent**: it does not fail, it simply stops protecting the difference.
+**Correction:** `290` is committed unchanged, because `318` cannot be verified
+from this worktree and writing an unverified number is the failure mode the task
+exists to prevent. **The controller re-measures on the merged `main` and corrects
+`scripts/baseline.json` in the same squash commit at merge time.**
+**Mitigation added:** `scripts/verify-baseline.sh` now reports a stale floor
+explicitly — `FLOOR IS STALE by 28; it sits below reality and protects nothing
+above 262` — printing measured and floor side by side on every run, success or
+failure. The staleness is visible in the log rather than invisible. It remains
+non-fatal: raising the floor is the job of the task that added the tests.
+**Files changed:** none in `.plan/` beyond this entry; `scripts/baseline.json`
+carries the measured `793e122` value.
+**Dependency impact:** none.
+**Evidence:** `.plan/evidence/QM-0001.md` §10 and `## Claim limits` 1–2.

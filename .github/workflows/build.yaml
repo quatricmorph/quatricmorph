@@ -41,6 +41,22 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # QM-0001. Re-runs the gates above and asserts the measured test counts
+      # have not fallen below the floor in scripts/baseline.json, plus the CLI
+      # golden values from fixtures/tiny-llama-2shard. It needs apps/web's
+      # dependencies for the vitest half of the floor, and reaches no network
+      # of its own.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install web dependencies for the baseline guard
+        run: npm install --no-audit --no-fund
+        working-directory: apps/web
+
+      - name: Verify the recorded test baseline
+        run: ./scripts/verify-baseline.sh
+
   fixtures:
     name: Fixtures are reproducible
     runs-on: ubuntu-latest
@@ -122,7 +138,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quatricmorph-quatricmorph-workspace
+          name: quatricmorph-workspace
           path: apps/web/quatricmorph-workspace/dist/
           if-no-files-found: error
           retention-days: 7
