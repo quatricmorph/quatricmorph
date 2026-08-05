@@ -1294,3 +1294,72 @@ by interpolating a layer aggregate across channel columns.
 **Dependency impact:** none mechanical. Bears directly on gate **G4**.
 **Evidence:** `schemas/diagnostics/manifest.v1.json` (no per-channel error series);
 `QM-0150`'s `Cell` type with `channelStart`/`channelEnd`; `ARCHITECTURE.md` §19.
+
+## 2026-08-05 — QM-0121 — a "pre-existing web failure" that is actually a worktree artifact; corrected before it could lower a floor
+
+**Discovered during:** controller verification of `QM-0121`'s reported gate results.
+**Defect (in the report, not the code):** `impl-agent-7` reported `npx vitest run`
+**exit 1** and `./scripts/verify-baseline.sh` **exit 1**, and concluded the web
+failure **"pre-exists on `main`"** because the npm package `three` is "installed
+nowhere in the checkout". It supported this by checking out `e49ac24` and
+reproducing the same failure.
+
+**That conclusion is wrong for `main`.** Measured by the controller in the
+controller checkout, at `main`:
+
+```
+$ cd apps/web && npx vitest run
+ Test Files  13 passed (13)
+      Tests  115 passed (115)          exit 0
+$ ls apps/web/node_modules/three       → absent
+```
+
+**vitest passes on `main` while `apps/web/node_modules/three` is absent**, because
+`three` resolves through **npm workspace hoisting** to the repository-root
+`node_modules`. Its absence from the package-local directory is not a break. The
+agent's reproduction failed in a *worktree* whose `node_modules` was never fully
+installed, and a fresh `git checkout` of `e49ac24` inherits that same incomplete
+tree — so the experiment could not distinguish "broken on main" from "incomplete
+install in this working directory."
+
+**Why this mattered enough to record.** A believed-pre-existing web failure is
+exactly the reasoning that leads an agent to lower `web_tests`/`web_files` "because
+it was already broken." **It did not do that** — it explicitly declined to lower the
+web floor and declined to run `npm install` (network) — so no harm resulted. But the
+inference was one step from silently weakening the guard, and the guard's whole
+purpose is to make that step impossible.
+
+**Correction:** `QM-0121` changes **no** file under `apps/web/`
+(`git diff e49ac24..HEAD -- apps/web` is empty), so the web counts cannot have moved
+and `web_tests: 115` / `web_files: 13` stand. **General rule: a gate failure inside a
+worktree is not evidence about `main` until it is reproduced in a tree with a
+complete dependency install.**
+
+**Files changed:** none — the floor was correctly left alone.
+**Dependency impact:** none.
+**Evidence:** the vitest transcript above at `main`; `ls apps/web/node_modules/three`
+absent; `git diff e49ac24..HEAD -- apps/web` empty.
+
+## 2026-08-05 — DIAGNOSTIC_ARCHITECTURE §5 — per-channel allocation documented as 40 B; the struct is 48 B
+
+**Discovered during:** `QM-0121` implementation, flagged to the controller rather
+than fixed out of scope.
+**Defect:** `.plan/DIAGNOSTIC_ARCHITECTURE.md` §5 states the per-channel partials
+allocation as `channels × 40 B`. The `ChannelPartials` struct has **six** fields and
+measures **48 B**. `QM-0121`'s acceptance criterion 6 requires allocation
+proportional to channel count and is asserted by
+`paired_reduction_allocates_per_channel_and_never_per_element`, so **48 is the
+measured figure** and the document is stale by 8 B per channel — a 20 %
+understatement of what a per-channel pass costs.
+
+**Correction:** not fixed inline. `.plan/DIAGNOSTIC_ARCHITECTURE.md` is outside
+`QM-0121`'s declared scope, and the agent correctly refused to widen scope to reach
+it. Routed to whichever task owns that document; the reviewer was asked to confirm
+both halves so the fix rests on a verified measurement rather than a report.
+**This matters beyond tidiness**: memory-budget figures derived from §5 would
+under-budget any per-channel pass by 20 %.
+
+**Files changed:** none — recorded as a finding.
+**Dependency impact:** none mechanical; bears on memory budgeting for `QM-0122`+.
+**Evidence:** `.plan/DIAGNOSTIC_ARCHITECTURE.md` §5 vs the six-field
+`ChannelPartials` definition in `crates/q-gpu/src/paired.rs`.
