@@ -1072,3 +1072,54 @@ in place rather than superseded, because it had never merged. The corrections:
    change nothing anyone claimed. Contrast finding 2: `QM-0006`'s path was *accurate
    as a pre-rename record*, whereas these three were never correct from any
    directory.
+
+## 2026-08-05 — CONTROLLER — the citation checker's first run on the merged corpus finds 18 unresolved; 16 are real
+
+**Discovered during:** post-merge verification of `QM-0002`, running
+`.plan/tools/check-plan-citations.py` against `main` at `8b0db9d`
+**Result:** `184 markdown files scanned · E1 420 · E2 117 · FAIL — 18 unresolved`,
+exit 1. `QM-0002`'s branch corpus measured 2; the merged corpus is larger because
+`QM-0010`, `QM-0020`, `QM-0030` and the ADR-011 amendment landed in between. **This
+is the deliverable working, not a regression** — the checker's whole purpose is to
+find exactly this.
+
+**Breakdown, verified rather than assumed:**
+
+| Count | Class | Disposition |
+| --- | --- | --- |
+| 15 | Bare `tests/<name>.rs` citations written **crate-relative** instead of repo-anchored, in `QM-0020`'s and `QM-0030`'s evidence and in `QM-0030/TASK.md:217` | **Real defects.** The files exist: `crates/q-tensor-runtime/tests/bounded_residency.rs`, `crates/q-tensor-runtime/tests/real_fixture_blocks.rs`, `crates/q-catalog/tests/trillion_scale_manifest.rs`. Confirmed by `find`. Cosmetic but exactly what the checker is for |
+| 1 | `.plan/evidence/QM-0020.md:835` cites `crates/q-daemon/src/lib.rs:1191` | **Real** — a `:NN` line suffix the checker does not strip. Either anchor the citation or teach the checker to strip line suffixes |
+| 1 | `.plan/evidence/QM-0020.md:627` cites the glob `tests/*.rs` | **Real** — a glob is not a path; reword |
+| 1 | `.plan/tasks/QM-0006-web-workspace-path-repair/TASK.md:40` cites `apps/web/matrix-workspace/package.json` | **Deliberate.** A historical pre-rename record of the defect `QM-0006` fixed. Correct as written |
+| 1 | `.plan/evidence/QM-0002.md:1114` cites `.plan/zz-review-probe` | **Deliberate.** A reviewer's probe, since deleted, inside the frozen `## Independent review` section |
+
+**Why this was not a merge blocker for `QM-0002`:** none of the 16 real defects are
+in `QM-0002`'s own output. They are citations in other tasks' already-merged
+evidence, surfaced *because* `QM-0002` shipped the tool that can see them. Blocking
+`QM-0002` on defects its own deliverable discovered elsewhere would be incoherent.
+**Correction:** the 16 are recorded here for a follow-up citation-anchoring pass; the
+2 deliberate residues are documented as permanent exemptions.
+
+## 2026-08-05 — CONTROLLER — the citation checker has no self-guard against fence parity
+
+**Discovered during:** `review-agent-11`'s second-cycle review of `QM-0002`, carried
+forward at that reviewer's explicit request
+**Defect:** `QM-0002` fixed the specific laundering bug — a `## ` heading quoted
+inside a code fence setting the document section for the rest of the file, silently
+exempting ~102 citations through E1 — and swept all 181 `.plan/` files for zero odd
+fence parity. **But the sweep is a snapshot, not an invariant.** The checker asserts
+nothing about its own fence parity, so a single future line-initial triple backtick
+reopens the same silent-underreport class, and the failure is invisible: the tool
+still exits 0 while verifying less than it claims.
+**Correction:** a follow-up task should make the checker assert **even fence parity
+per file** and fail loudly on an odd count, so the guard cannot silently degrade.
+This is the same principle the test floor already enforces — a check that can quietly
+verify less than it claims is the failure mode this run has now hit twice
+(`27 passed` reading as green, and ~102 laundered citations).
+**Files changed:** none — recorded for a follow-up task rather than fixed outside its
+owning scope.
+**Dependency impact:** none. Not a release blocker.
+**Evidence:** `review-agent-11` reproduced the laundering with both tool versions
+against one identical probe corpus: pre-fix `E1 = 523` with the post-fence citation
+**unreported**; post-fix `E1 = 420` with it reported. Recorded in
+`.plan/evidence/QM-0002.md` §Independent review, second cycle.
