@@ -63,6 +63,39 @@ jobs:
           git diff --exit-code -- fixtures/ \
             || (echo "::error::fixtures/ drifted from fixtures/generate_fixtures.py" && exit 1)
 
+  licenses:
+    name: Attribution and licence audit
+    runs-on: ubuntu-latest
+    steps:
+      # `fetch-depth: 0` is required: scripts/license-audit.sh diffs `mm/`
+      # against the baseline commit named in
+      # .plan/tasks/QM-0093-attribution-license-audit/TASK.md, which a shallow
+      # clone does not contain. The script fails loudly rather than silently
+      # skipping if that commit is absent.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Reads declared licences only: `cargo metadata` for Cargo.lock and `jq`
+      # over the checked-in package-lock.json files. It installs nothing and it
+      # runs no npm dependency.
+      - name: Audit attributions and licences
+        run: scripts/license-audit.sh
+
+      - name: Record the audit as a JSON artifact
+        run: scripts/license-audit.sh --json > license-audit.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: license-audit
+          path: license-audit.json
+          if-no-files-found: error
+          retention-days: 7
+
   web:
     name: Web applications
     runs-on: ubuntu-latest

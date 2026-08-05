@@ -124,3 +124,19 @@ Rust and web code: `MIT OR Apache-2.0`.
 `apps/web/quatricmorph-workspace` derives from **mm** by Meta Platforms, Inc.; its MIT
 license is reproduced at `apps/web/quatricmorph-workspace/LICENSE` with attribution in
 `apps/web/quatricmorph-workspace/NOTICE.md`. `mm/` retains its original license.
+
+Third-party attributions are aggregated in [`NOTICE`](NOTICE): every Rust crate
+in `Cargo.lock`, every npm package in the checked-in `package-lock.json` files,
+the code vendored inside `mm/`, the SQLite amalgamation compiled in through
+`libsqlite3-sys`, and the DistilGPT2 model card under `models/`. `NOTICE` §9
+also lists what could **not** be verified from a file in this tree — read it
+before redistributing anything.
+
+`scripts/license-audit.sh` checks that record and runs in CI (the `licenses`
+job in `.github/workflows/build.yaml`). It asserts `mm/` is unmodified, that the
+reproduced LICENSE still matches `mm/LICENSE`, that every dependency declares a
+licence, and that no dependency is GPL/LGPL/AGPL/SSPL-only. It records declared
+licences; it is not legal advice and not a licence clearance.
+
+**Not distributed here:** the repository root carries no `LICENSE-MIT` or
+`LICENSE-APACHE` text — see `NOTICE` §8.

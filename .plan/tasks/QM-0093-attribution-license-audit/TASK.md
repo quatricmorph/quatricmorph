@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+In Progress
 
 No longer waits on `QM-0080` (deferred). A licensing audit needs no running pipeline.
 
@@ -167,3 +167,70 @@ npx license-checker --json --production
 * The full dependency-license table.
 * The generated `NOTICE`.
 * The CI audit run.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | `Awaiting Independent Review` |
+| Lane | **not assigned** — `.plan/EXECUTION_ORDER.md` §4 lists lanes P, Q, R, S, T, U, V and QM-0093 appears in none of them. Not invented here. (`Merge path` below is `L`; that is a different field.) |
+| Wave | **6** — `.plan/EXECUTION_ORDER.md` §2, *"Wave 6 — release"*, lists `QM-0093 attribution and licensing` in the `parallel:` block with `QM-0090`, `QM-0092`, `QM-0167` |
+| Branch | `task/qm-0093-attribution-license-audit` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0093` |
+| Base commit | `793e122` |
+| Implementation commit | `358f008` — `docs(legal): record dependency attribution and licence audit [QM-0093]` |
+| Head commit | the documentation-only commit that adds this section, sitting directly on top of `358f008`. Its SHA cannot appear inside itself; resolve with `git rev-parse task/qm-0093-attribution-license-audit`. **The commit to review is `358f008`.** |
+| Implementation agent | `impl-agent-2` |
+| Evidence record | `.plan/evidence/QM-0093.md` |
+| Merge path | L |
+| Tests added | **none — Documentation-only exempt class (controller §6.1)** |
+
+All four changed files are in `358f008`
+(`NOTICE`, `scripts/license-audit.sh`, `.github/workflows/build.yaml`,
+`README.md`). The head commit adds only `.plan/evidence/QM-0093.md` and the
+`## Status` and `## Orchestration` edits to this file, so
+`git diff 358f008..HEAD` touches nothing outside `.plan/`.
+
+**Floor, measured on `358f008`, unchanged in both directions:**
+
+| Gate | Floor | Measured | Exit |
+| --- | --- | --- | --- |
+| `cargo fmt --all -- --check` | — | no output | 0 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | — | no warnings | 0 |
+| `cargo test --workspace` | 290 passed / 0 failed | **290 passed / 0 failed** | 0 |
+| `cd apps/web && npx vitest run` | 115 passed / 13 files | **115 passed / 13 files** | 0 |
+| `scripts/license-audit.sh` (new) | — | 11 checks ok, 13 non-fatal copyleft notes | 0 |
+
+No test was added, and none was removed. The Documentation-only exemption is
+discharged by tracing every claim in `NOTICE` to a file citation, to package
+metadata resolved by a lockfile, or to an explicit **not verified** marker —
+`NOTICE` §9 tabulates the split and §9.1 lists all 11 gaps by name. The audit
+script's nine failure paths are exercised in `.plan/evidence/QM-0093.md`
+§`Negative paths tested`.
+
+`scripts/baseline.json` was neither created nor edited — `QM-0001` owns it. The
+counts above are this run's measurements, recorded in evidence only.
+
+**Merge-order warning for the controller.**
+`.plan/ORCHESTRATION_STATE.md` "Sequencing decisions (file-scope conflicts)"
+already holds `QM-0093` behind `QM-0001` because *"Both create files under
+`scripts/`"* — that part is benign: this branch adds only
+`scripts/license-audit.sh`, `QM-0001` adds only `scripts/baseline.json`, and
+`scripts/` did not exist before either. The row **above** it is the live risk:
+`QM-0001` is itself held behind `QM-0006` because *"Both edit
+`.github/workflows/build.yaml`"*, and this branch now edits that same file. It
+appends a self-contained `licenses:` job immediately before the existing `web:`
+job and changes no existing line, so a textual conflict is unlikely but not
+impossible. **Whichever of `QM-0001` and `QM-0093` merges second must re-run
+`scripts/license-audit.sh` and the full gate set after the merge**, not before.
+
+**For the reviewer, the two findings most worth a second opinion:**
+
+1. `apps/web/quatricmorph-workspace/src/assets/droid_sans_regular.typeface.js`
+   ships in the built product and its own embedded metadata states a proprietary
+   Ascender Corporation EULA, not the Apache-2.0 licence usually associated with
+   Droid Sans. `NOTICE` §2.1 records the conflict and asserts neither licence.
+2. The audit fails on GPL/LGPL/AGPL/SSPL-with-no-permissive-alternative
+   (acceptance criterion 6) rather than on any copyleft at all
+   (`## Error Handling`). Twelve `lightningcss` MPL-2.0 dev binaries sit in the
+   gap between those two readings and are reported, not failed.

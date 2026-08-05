@@ -1,0 +1,640 @@
+# NOTICE — third-party attributions
+
+Quatricmorph's own source is licensed `MIT OR Apache-2.0`
+(`Cargo.toml` `[workspace.package] license`; every crate and the `tests` crate
+inherit it with `license.workspace = true`).
+
+This file records **what this repository's own files and the checked-in package
+metadata state** about third-party licences. It is a provenance record, not
+legal advice and not a licence clearance. Where no file in this tree states a
+licence, the entry says **not verified** rather than guessing one.
+
+Regenerate the dependency tables below with:
+
+```bash
+scripts/license-audit.sh --generate     # rewrite the generated blocks
+scripts/license-audit.sh                # verify them, and every other check
+scripts/license-audit.sh --json         # emit the QM-0093 data contract
+```
+
+---
+
+## 1. `mm/` — Meta Platforms, Inc.
+
+`mm/` is a read-only historical reference (`AGENTS.md`, "Current codebase":
+*"Historical matrix-viz reference — read-only; do not delete; not product
+surface"*). It is unchanged since commit `5ca434d`, and `git log -- mm/` shows
+exactly one commit ever touched it (`c7b1f7e feat: add mm`).
+
+* **Licence** — MIT. `mm/LICENSE`: *"Copyright (c) Meta Platforms, Inc. and
+  affiliates."*
+* **SHA-256 of `mm/LICENSE`** —
+  `cf9b17822d1fcd4ff32ccbe14183386fb3adf6f2ff92dc184130823f7fc28173`
+* **Upstream** — `mm/README.md` links <https://bhosmer.github.io/mm> and
+  <https://bhosmer.github.io/mm/ref.html>. No upstream repository URL, commit,
+  or version is recorded anywhere in this tree: the upstream revision `mm/` was
+  taken from is **not verified**.
+
+`apps/web/quatricmorph-workspace` is derived from `mm/`. Its
+`LICENSE` reproduces `mm/LICENSE` byte for byte (identical SHA-256, above) and
+`apps/web/quatricmorph-workspace/NOTICE.md` records what was carried over,
+file by file, and what was deliberately not. `package.json` there declares
+`"license": "MIT"`.
+
+**Recorded gap.** No file under `apps/web/quatricmorph-workspace/src/` carries a
+per-file copyright header; the MIT notice is present once, in the sibling
+`LICENSE`, with the derivation stated in `NOTICE.md` and in `README.md`
+§License. Whether that placement is sufficient for a given redistribution is
+**not assessed here**.
+
+---
+
+## 2. Third-party code vendored inside `mm/`
+
+`mm/` ships five JavaScript files and one font that it did not author. `mm/` is
+MIT as a whole, but these files have their own upstream provenance.
+
+| File | Upstream | Licence stated **in the file** |
+| --- | --- | --- |
+| `mm/lib/three.module.js` | three.js r152 (`const REVISION = '152'`) | **MIT** — header: `@license` / `Copyright 2010-2023 Three.js Authors` / `SPDX-License-Identifier: MIT` |
+| `mm/lib/lil-gui.js` | lil-gui 0.18.1, bundled by jsDelivr from `/npm/lil-gui@0.18.1/dist/lil-gui.esm.js` | **MIT** — header: `@author George Michael Brower` / `@license MIT` |
+| `mm/lib/jsm/controls/OrbitControls.js` | a three.js `examples/jsm` addon (imports from the three core) | **not verified** — the file carries no licence header and no SPDX line, and this tree contains no licence file covering it |
+| `mm/lib/jsm/loaders/FontLoader.js` | a three.js `examples/jsm` addon | **not verified** — same: no licence header, no covering licence file in this tree |
+| `mm/lib/es-module-shims.js` | ES Module Shims 1.3.6 (only the string `/* ES Module Shims 1.3.6 */`) | **not verified** — no licence header, no covering licence file in this tree |
+| `mm/assets/ball.png` and the 32 files in `mm/intro/assets/` (PNG and MOV) | mm's own illustrative assets | no per-asset licence statement exists in this tree; they arrive under `mm/LICENSE` (MIT) as part of the `mm` distribution. All 33 are copied into `apps/web/quatricmorph-workspace/public/` |
+
+### 2.1 `droid_sans_regular.typeface.js` — an unresolved licence
+
+This font is present **twice**: at `mm/assets/droid_sans_regular.typeface.js`
+(reference) and at
+`apps/web/quatricmorph-workspace/src/assets/droid_sans_regular.typeface.js`,
+where it is a live import (`src/util/text.ts:4`, parsed by `FontLoader` at
+`src/util/text.ts:6`) and therefore ships in the built product.
+
+The metadata embedded in the file itself records:
+
+* `familyName` — `Droid Sans`
+* `copyright` — *"Digitized data copyright © 2006, Google Corporation."*
+* `trademark` — *"Droid is a trademark of Google and may be registered in
+  certain jurisdictions."*
+* `license_url` — `http://ascendercorp.com/eula10.html`
+* `license_description` — *"This font software is the valuable property of
+  Ascender Corporation and/or its suppliers and its use by you is covered under
+  the terms of a license agreement. … Except as specifically permitted by the
+  license, you may not copy this font software."*
+
+**Status: not verified, and flagged.** The Droid family is widely distributed
+under Apache-2.0, but *this file's own embedded metadata states a proprietary
+Ascender Corporation EULA, not Apache-2.0*, and no Apache-2.0 notice for it
+exists anywhere in this tree. This audit therefore records a conflict between
+the commonly-assumed licence and the file's own contents, and **does not assert
+either one**. Resolving it needs the upstream source of this specific converted
+`typeface.js`, which is not recorded in this repository.
+
+---
+
+## 3. Model checkpoint — `models/distilbert-distilgpt2/`
+
+* **Model** — DistilGPT2, developed by Hugging Face.
+* **Licence** — **Apache-2.0**, stated twice in
+  `models/distilbert-distilgpt2/README.md`: the model-card front matter
+  (`license: apache-2.0`) and the Model Details list (`**License:** Apache 2.0`).
+* **What this repository redistributes.** The model card and tokenizer/config
+  files **are** committed: `README.md`, `config.json`, `generation_config.json`,
+  `generation_config_for_text_generation.json`, `gitattributes`, `merges.txt`,
+  `tokenizer.json`, `tokenizer_config.json`, `vocab.json`.
+* **What it does not.** The weights are **not** committed. `.gitignore:22`
+  (`/models/`) matches `models/distilbert-distilgpt2/model.safetensors`, and
+  `git ls-tree -r HEAD models/` does not list it. Anyone using this repository
+  supplies the weights themselves.
+* The `gitattributes` file is the upstream Hugging Face LFS attribute list,
+  carried over verbatim and renamed (no leading dot), so it is inert here.
+
+---
+
+## 4. Fixtures
+
+`fixtures/tiny-llama-single/` and `fixtures/tiny-llama-2shard/` contain
+**synthetic** tensors generated by `fixtures/generate_fixtures.py`; they embed no
+third-party weights and are covered by the project licence. The generator's
+docstring states the design: the bytes are hand-written and read back with the
+official Python `safetensors` library so the round-trip is an independent
+cross-check.
+
+The generator imports `numpy`, and `.github/workflows/build.yaml` installs
+`numpy` and `safetensors` for the `fixtures` job. **Not verified**: this
+repository pins no Python dependency versions and contains no licence
+information for `numpy` or `safetensors` — no `requirements.txt`, no lockfile,
+and `python/pyproject.toml` declares no `dependencies` and no `license` (only
+`python/setup.py` declares `license="MIT OR Apache-2.0"`). These packages are
+build-time only for a CI job and are not redistributed by this repository.
+
+---
+
+## 5. Continuous-integration actions
+
+`.github/workflows/build.yaml` uses `actions/checkout@v4`,
+`actions/setup-node@v4`, `actions/setup-python@v5`,
+`actions/upload-artifact@v4`, `dtolnay/rust-toolchain@stable`, and
+`Swatinem/rust-cache@v2`. **Not verified**: these are fetched by GitHub at
+workflow run time, no licence file for any of them exists in this tree, and none
+of their code is redistributed by this repository.
+
+---
+
+## 6. Rust dependencies
+
+Read from `cargo metadata --format-version 1`, which resolves `Cargo.lock`, and
+restricted to packages with a non-null `source` (that is, third-party packages —
+the 17 workspace crates and the `tests` crate are excluded because they are
+Quatricmorph's own code). The set is the **union across all target platforms**,
+so it includes Windows- and Linux-only crates that never build on any one host.
+
+`scripts/license-audit.sh` fails if any entry below has no declared licence, or
+if any licence expression offers no permissive alternative while naming
+GPL / LGPL / AGPL / SSPL.
+
+Noted, not fatal: `r-efi` offers `MIT OR Apache-2.0 OR LGPL-2.1-or-later` — a
+permissive alternative is available under the `OR`, so no copyleft obligation
+arises from choosing MIT or Apache-2.0.
+
+### 6.1 SQLite, vendored through `libsqlite3-sys`
+
+`Cargo.toml` enables `rusqlite = { version = "0.32", features = ["bundled"] }`,
+so `libsqlite3-sys` 0.30.1 compiles a C copy of SQLite **into every binary this
+workspace produces**. The table below records `libsqlite3-sys`'s own crate
+licence (MIT — its `LICENSE` file reads *"Copyright (c) 2014-2021 The rusqlite
+developers"*), which is not the licence of the C code it carries.
+
+The vendored amalgamation is **SQLite 3.46.0**
+(`sqlite3/sqlite3.c`: `#define SQLITE_VERSION "3.46.0"`), and that file's own
+header states its terms:
+
+> The author disclaims copyright to this source code. In place of a legal
+> notice, here is a blessing: May you do good and not evil. May you find
+> forgiveness for yourself and forgive others. May you share freely, never
+> taking more than you give.
+
+That is SQLite's public-domain dedication. Verified from
+`sqlite3/sqlite3.c` lines 30–38 inside the `libsqlite3-sys` 0.30.1 crate source
+as resolved by `Cargo.lock`; the C source is not checked into this repository.
+
+<!-- BEGIN GENERATED: rust-dependencies -->
+| Package | Version | Declared licence |
+| --- | --- | --- |
+| `ahash` | 0.8.12 | MIT OR Apache-2.0 |
+| `aho-corasick` | 1.1.5 | Unlicense OR MIT |
+| `allocator-api2` | 0.2.21 | MIT OR Apache-2.0 |
+| `anstream` | 1.0.0 | MIT OR Apache-2.0 |
+| `anstyle` | 1.0.14 | MIT OR Apache-2.0 |
+| `anstyle-parse` | 1.0.0 | MIT OR Apache-2.0 |
+| `anstyle-query` | 1.1.5 | MIT OR Apache-2.0 |
+| `anstyle-wincon` | 3.0.11 | MIT OR Apache-2.0 |
+| `arrayref` | 0.3.9 | BSD-2-Clause |
+| `arrayvec` | 0.7.8 | MIT OR Apache-2.0 |
+| `async-trait` | 0.1.91 | MIT OR Apache-2.0 |
+| `atomic-waker` | 1.1.2 | Apache-2.0 OR MIT |
+| `axum` | 0.7.9 | MIT |
+| `axum-core` | 0.4.5 | MIT |
+| `bitflags` | 2.13.1 | MIT OR Apache-2.0 |
+| `blake3` | 1.8.5 | CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception |
+| `bytes` | 1.12.1 | MIT |
+| `cc` | 1.4.0 | MIT OR Apache-2.0 |
+| `cfg-if` | 1.0.4 | MIT OR Apache-2.0 |
+| `clap` | 4.6.5 | MIT OR Apache-2.0 |
+| `clap_builder` | 4.6.5 | MIT OR Apache-2.0 |
+| `clap_derive` | 4.6.4 | MIT OR Apache-2.0 |
+| `clap_lex` | 1.1.0 | MIT OR Apache-2.0 |
+| `colorchoice` | 1.0.5 | MIT OR Apache-2.0 |
+| `constant_time_eq` | 0.4.2 | CC0-1.0 OR MIT-0 OR Apache-2.0 |
+| `cpufeatures` | 0.3.0 | MIT OR Apache-2.0 |
+| `equivalent` | 1.0.2 | Apache-2.0 OR MIT |
+| `errno` | 0.3.14 | MIT OR Apache-2.0 |
+| `fallible-iterator` | 0.3.0 | MIT/Apache-2.0 |
+| `fallible-streaming-iterator` | 0.1.9 | MIT/Apache-2.0 |
+| `fastrand` | 2.5.0 | Apache-2.0 OR MIT |
+| `find-msvc-tools` | 0.1.9 | MIT OR Apache-2.0 |
+| `foldhash` | 0.1.5 | Zlib |
+| `form_urlencoded` | 1.2.2 | MIT OR Apache-2.0 |
+| `futures-channel` | 0.3.33 | MIT OR Apache-2.0 |
+| `futures-core` | 0.3.33 | MIT OR Apache-2.0 |
+| `futures-task` | 0.3.33 | MIT OR Apache-2.0 |
+| `futures-util` | 0.3.33 | MIT OR Apache-2.0 |
+| `getrandom` | 0.4.3 | MIT OR Apache-2.0 |
+| `hashbrown` | 0.14.5 | MIT OR Apache-2.0 |
+| `hashbrown` | 0.15.5 | MIT OR Apache-2.0 |
+| `hashbrown` | 0.17.1 | MIT OR Apache-2.0 |
+| `hashlink` | 0.9.1 | MIT OR Apache-2.0 |
+| `heck` | 0.5.0 | MIT OR Apache-2.0 |
+| `http` | 1.5.0 | MIT OR Apache-2.0 |
+| `http-body` | 1.1.0 | MIT |
+| `http-body-util` | 0.1.4 | MIT |
+| `httparse` | 1.10.1 | MIT OR Apache-2.0 |
+| `httpdate` | 1.0.3 | MIT OR Apache-2.0 |
+| `hyper` | 1.11.0 | MIT |
+| `hyper-util` | 0.1.20 | MIT |
+| `indexmap` | 2.14.0 | Apache-2.0 OR MIT |
+| `is_terminal_polyfill` | 1.70.2 | MIT OR Apache-2.0 |
+| `itoa` | 1.0.18 | MIT OR Apache-2.0 |
+| `lazy_static` | 1.5.0 | MIT OR Apache-2.0 |
+| `libc` | 0.2.189 | MIT OR Apache-2.0 |
+| `libsqlite3-sys` | 0.30.1 | MIT |
+| `linux-raw-sys` | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| `log` | 0.4.33 | MIT OR Apache-2.0 |
+| `lru` | 0.12.5 | MIT |
+| `matchers` | 0.2.0 | MIT |
+| `matchit` | 0.7.3 | MIT AND BSD-3-Clause |
+| `memchr` | 2.8.3 | Unlicense OR MIT |
+| `memmap2` | 0.9.11 | MIT OR Apache-2.0 |
+| `mime` | 0.3.17 | MIT OR Apache-2.0 |
+| `mio` | 1.2.2 | MIT |
+| `nu-ansi-term` | 0.50.3 | MIT |
+| `once_cell` | 1.21.4 | MIT OR Apache-2.0 |
+| `once_cell_polyfill` | 1.70.2 | MIT OR Apache-2.0 |
+| `percent-encoding` | 2.3.2 | MIT OR Apache-2.0 |
+| `pin-project-lite` | 0.2.17 | Apache-2.0 OR MIT |
+| `pkg-config` | 0.3.33 | MIT OR Apache-2.0 |
+| `proc-macro2` | 1.0.107 | MIT OR Apache-2.0 |
+| `quote` | 1.0.47 | MIT OR Apache-2.0 |
+| `r-efi` | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
+| `regex-automata` | 0.4.16 | MIT OR Apache-2.0 |
+| `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 |
+| `rusqlite` | 0.32.1 | MIT |
+| `rustix` | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| `rustversion` | 1.0.23 | MIT OR Apache-2.0 |
+| `ryu` | 1.0.23 | Apache-2.0 OR BSL-1.0 |
+| `serde` | 1.0.229 | MIT OR Apache-2.0 |
+| `serde_core` | 1.0.229 | MIT OR Apache-2.0 |
+| `serde_derive` | 1.0.229 | MIT OR Apache-2.0 |
+| `serde_json` | 1.0.151 | MIT OR Apache-2.0 |
+| `serde_path_to_error` | 0.1.20 | MIT OR Apache-2.0 |
+| `serde_spanned` | 0.6.9 | MIT OR Apache-2.0 |
+| `serde_urlencoded` | 0.7.1 | MIT/Apache-2.0 |
+| `sharded-slab` | 0.1.7 | MIT |
+| `shlex` | 2.0.1 | MIT OR Apache-2.0 |
+| `signal-hook-registry` | 1.4.8 | MIT OR Apache-2.0 |
+| `slab` | 0.4.12 | MIT |
+| `smallvec` | 1.15.2 | MIT OR Apache-2.0 |
+| `socket2` | 0.6.5 | MIT OR Apache-2.0 |
+| `strsim` | 0.11.1 | MIT |
+| `syn` | 2.0.119 | MIT OR Apache-2.0 |
+| `syn` | 3.0.3 | MIT OR Apache-2.0 |
+| `sync_wrapper` | 1.0.2 | Apache-2.0 |
+| `tempfile` | 3.27.0 | MIT OR Apache-2.0 |
+| `thiserror` | 1.0.69 | MIT OR Apache-2.0 |
+| `thiserror-impl` | 1.0.69 | MIT OR Apache-2.0 |
+| `thread_local` | 1.1.10 | MIT OR Apache-2.0 |
+| `tokio` | 1.53.1 | MIT |
+| `tokio-macros` | 2.7.2 | MIT |
+| `toml` | 0.8.23 | MIT OR Apache-2.0 |
+| `toml_datetime` | 0.6.11 | MIT OR Apache-2.0 |
+| `toml_edit` | 0.22.27 | MIT OR Apache-2.0 |
+| `toml_write` | 0.1.2 | MIT OR Apache-2.0 |
+| `tower` | 0.5.3 | MIT |
+| `tower-layer` | 0.3.3 | MIT |
+| `tower-service` | 0.3.3 | MIT |
+| `tracing` | 0.1.44 | MIT |
+| `tracing-attributes` | 0.1.31 | MIT |
+| `tracing-core` | 0.1.36 | MIT |
+| `tracing-log` | 0.2.0 | MIT |
+| `tracing-subscriber` | 0.3.23 | MIT |
+| `unicode-ident` | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 |
+| `utf8parse` | 0.2.2 | Apache-2.0 OR MIT |
+| `valuable` | 0.1.1 | MIT |
+| `vcpkg` | 0.2.15 | MIT/Apache-2.0 |
+| `version_check` | 0.9.5 | MIT/Apache-2.0 |
+| `wasi` | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| `windows-link` | 0.2.1 | MIT OR Apache-2.0 |
+| `windows-sys` | 0.61.2 | MIT OR Apache-2.0 |
+| `winnow` | 0.7.15 | MIT |
+| `zerocopy` | 0.8.55 | BSD-2-Clause OR Apache-2.0 OR MIT |
+| `zerocopy-derive` | 0.8.55 | BSD-2-Clause OR Apache-2.0 OR MIT |
+| `zmij` | 1.0.23 | MIT |
+<!-- END GENERATED: rust-dependencies -->
+
+---
+
+## 7. npm dependencies
+
+Read from the `license` field that npm records for every package in the two
+checked-in npm lockfiles, deduplicated on name + version + licence.
+Quatricmorph's own workspace packages are excluded (they appear as
+`"link": true` entries).
+
+| Lockfile | Version | Unique third-party packages | Role |
+| --- | --- | --- | --- |
+| `apps/web/package-lock.json` | 3 | 128 | the set CI installs — `.github/workflows/build.yaml` runs `npm install` in `apps/web` |
+| `apps/web/quatricmorph-workspace/package-lock.json` | 3 | 169 | a **divergent** lockfile, audited here for completeness (see below) |
+| union, deduplicated | — | **203** | the table below |
+
+Only three name+version pairs across both lockfiles are runtime dependencies of
+a shipped product, and all three are MIT: `three` 0.185.1, `lil-gui` 0.19.2
+(what `apps/web/package-lock.json` resolves for
+`apps/web/quatricmorph-workspace/package.json`), and `lil-gui` 0.21.0 (what the
+divergent nested lockfile resolves). Every other entry in the table is
+`"dev": true` — TypeScript, Vite, Vitest and their transitive tooling.
+
+**The nested lockfile does not match its own `package.json`.**
+`apps/web/quatricmorph-workspace/package.json` declares
+`"name": "quatricmorph-workspace"`, `"version": "0.1.0"`, `lil-gui ^0.19.2`,
+`vite ^7.1.14`, `vitest ^4.1.10`. The root entry of
+`apps/web/quatricmorph-workspace/package-lock.json` declares
+`"name": "quatricmorph"`, `"version": "0.0.0"`, `lil-gui ^0.21.0`,
+`vite ^8.2.0`, `typescript ~7.0.2`, `vitest ^3.2.7`. It is therefore stale
+relative to the manifest beside it. Its packages are included in the table
+because it is checked in and its licence metadata is readable; they are **not**
+the set any documented command installs.
+
+A **third** lockfile, `apps/web/quatricmorph-workspace/bun.lock`, also names the
+package `quatricmorph` and pins `lil-gui ^0.21.0`, `three ^0.185.1`,
+`@types/three ^0.185.3`, `typescript ~7.0.2`, `vite ^8.2.0`, `vitest ^4.1.10`.
+**Not verified**: bun's lockfile format carries no per-package `license` field
+(and is not strict JSON — `jq` rejects it on trailing commas), so no licence can
+be read from it. It is not the dependency set CI installs.
+
+Noted, not fatal: the twelve `lightningcss*` packages at 1.33.0 are **MPL-2.0**,
+a file-level (weak) copyleft licence. They are `"dev": true` — optional platform
+binaries in Vite's toolchain — and no MPL-2.0 file is redistributed in any build
+artifact this repository produces.
+
+<!-- BEGIN GENERATED: npm-dependencies -->
+| Package | Version | Declared licence |
+| --- | --- | --- |
+| `@dimforge/rapier3d-compat` | 0.12.0 | Apache-2.0 |
+| `@emnapi/core` | 2.0.0-alpha.3 | MIT |
+| `@emnapi/runtime` | 2.0.0-alpha.3 | MIT |
+| `@emnapi/wasi-threads` | 2.0.1 | MIT |
+| `@esbuild/aix-ppc64` | 0.28.1 | MIT |
+| `@esbuild/android-arm` | 0.28.1 | MIT |
+| `@esbuild/android-arm64` | 0.28.1 | MIT |
+| `@esbuild/android-x64` | 0.28.1 | MIT |
+| `@esbuild/darwin-arm64` | 0.28.1 | MIT |
+| `@esbuild/darwin-x64` | 0.28.1 | MIT |
+| `@esbuild/freebsd-arm64` | 0.28.1 | MIT |
+| `@esbuild/freebsd-x64` | 0.28.1 | MIT |
+| `@esbuild/linux-arm` | 0.28.1 | MIT |
+| `@esbuild/linux-arm64` | 0.28.1 | MIT |
+| `@esbuild/linux-ia32` | 0.28.1 | MIT |
+| `@esbuild/linux-loong64` | 0.28.1 | MIT |
+| `@esbuild/linux-mips64el` | 0.28.1 | MIT |
+| `@esbuild/linux-ppc64` | 0.28.1 | MIT |
+| `@esbuild/linux-riscv64` | 0.28.1 | MIT |
+| `@esbuild/linux-s390x` | 0.28.1 | MIT |
+| `@esbuild/linux-x64` | 0.28.1 | MIT |
+| `@esbuild/netbsd-arm64` | 0.28.1 | MIT |
+| `@esbuild/netbsd-x64` | 0.28.1 | MIT |
+| `@esbuild/openbsd-arm64` | 0.28.1 | MIT |
+| `@esbuild/openbsd-x64` | 0.28.1 | MIT |
+| `@esbuild/openharmony-arm64` | 0.28.1 | MIT |
+| `@esbuild/sunos-x64` | 0.28.1 | MIT |
+| `@esbuild/win32-arm64` | 0.28.1 | MIT |
+| `@esbuild/win32-ia32` | 0.28.1 | MIT |
+| `@esbuild/win32-x64` | 0.28.1 | MIT |
+| `@jridgewell/sourcemap-codec` | 1.5.5 | MIT |
+| `@napi-rs/lzma-linux-x64-gnu` | 1.5.1 | MIT |
+| `@napi-rs/wasm-runtime` | 1.2.2 | MIT |
+| `@oxc-project/types` | 0.142.0 | MIT |
+| `@rolldown/binding-android-arm64` | 1.2.1 | MIT |
+| `@rolldown/binding-android-arm64` | 1.2.2 | MIT |
+| `@rolldown/binding-darwin-arm64` | 1.2.1 | MIT |
+| `@rolldown/binding-darwin-arm64` | 1.2.2 | MIT |
+| `@rolldown/binding-darwin-x64` | 1.2.1 | MIT |
+| `@rolldown/binding-darwin-x64` | 1.2.2 | MIT |
+| `@rolldown/binding-freebsd-x64` | 1.2.1 | MIT |
+| `@rolldown/binding-freebsd-x64` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-arm-gnueabihf` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-arm-gnueabihf` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-arm64-gnu` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-arm64-gnu` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-arm64-musl` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-arm64-musl` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-ppc64-gnu` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-ppc64-gnu` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-s390x-gnu` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-s390x-gnu` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-x64-gnu` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-x64-gnu` | 1.2.2 | MIT |
+| `@rolldown/binding-linux-x64-musl` | 1.2.1 | MIT |
+| `@rolldown/binding-linux-x64-musl` | 1.2.2 | MIT |
+| `@rolldown/binding-openharmony-arm64` | 1.2.1 | MIT |
+| `@rolldown/binding-openharmony-arm64` | 1.2.2 | MIT |
+| `@rolldown/binding-wasm32-wasi` | 1.2.1 | MIT |
+| `@rolldown/binding-win32-arm64-msvc` | 1.2.1 | MIT |
+| `@rolldown/binding-win32-arm64-msvc` | 1.2.2 | MIT |
+| `@rolldown/binding-win32-x64-msvc` | 1.2.1 | MIT |
+| `@rolldown/binding-win32-x64-msvc` | 1.2.2 | MIT |
+| `@rolldown/pluginutils` | 1.0.1 | MIT |
+| `@rollup/rollup-android-arm-eabi` | 4.62.4 | MIT |
+| `@rollup/rollup-android-arm64` | 4.62.4 | MIT |
+| `@rollup/rollup-darwin-arm64` | 4.62.4 | MIT |
+| `@rollup/rollup-darwin-x64` | 4.62.4 | MIT |
+| `@rollup/rollup-freebsd-arm64` | 4.62.4 | MIT |
+| `@rollup/rollup-freebsd-x64` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-arm-gnueabihf` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-arm-musleabihf` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-arm64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-arm64-musl` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-loong64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-loong64-musl` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-ppc64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-ppc64-musl` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-riscv64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-riscv64-musl` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-s390x-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-x64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-linux-x64-musl` | 4.62.4 | MIT |
+| `@rollup/rollup-openbsd-x64` | 4.62.4 | MIT |
+| `@rollup/rollup-openharmony-arm64` | 4.62.4 | MIT |
+| `@rollup/rollup-win32-arm64-msvc` | 4.62.4 | MIT |
+| `@rollup/rollup-win32-ia32-msvc` | 4.62.4 | MIT |
+| `@rollup/rollup-win32-x64-gnu` | 4.62.4 | MIT |
+| `@rollup/rollup-win32-x64-msvc` | 4.62.4 | MIT |
+| `@standard-schema/spec` | 1.1.0 | MIT |
+| `@tweenjs/tween.js` | 23.1.3 | MIT |
+| `@tybys/wasm-util` | 0.10.3 | MIT |
+| `@types/chai` | 5.2.3 | MIT |
+| `@types/deep-eql` | 4.0.2 | MIT |
+| `@types/estree` | 1.0.9 | MIT |
+| `@types/stats.js` | 0.17.4 | MIT |
+| `@types/three` | 0.185.3 | MIT |
+| `@types/webxr` | 0.5.24 | MIT |
+| `@typescript/typescript-aix-ppc64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-darwin-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-darwin-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-freebsd-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-freebsd-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-arm` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-loong64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-mips64el` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-ppc64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-riscv64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-s390x` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-linux-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-netbsd-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-netbsd-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-openbsd-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-openbsd-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-sunos-x64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-win32-arm64` | 7.0.2 | Apache-2.0 |
+| `@typescript/typescript-win32-x64` | 7.0.2 | Apache-2.0 |
+| `@vitest/expect` | 3.2.7 | MIT |
+| `@vitest/expect` | 4.1.10 | MIT |
+| `@vitest/mocker` | 3.2.7 | MIT |
+| `@vitest/mocker` | 4.1.10 | MIT |
+| `@vitest/pretty-format` | 3.2.7 | MIT |
+| `@vitest/pretty-format` | 4.1.10 | MIT |
+| `@vitest/runner` | 3.2.7 | MIT |
+| `@vitest/runner` | 4.1.10 | MIT |
+| `@vitest/snapshot` | 3.2.7 | MIT |
+| `@vitest/snapshot` | 4.1.10 | MIT |
+| `@vitest/spy` | 3.2.7 | MIT |
+| `@vitest/spy` | 4.1.10 | MIT |
+| `@vitest/utils` | 3.2.7 | MIT |
+| `@vitest/utils` | 4.1.10 | MIT |
+| `assertion-error` | 2.0.1 | MIT |
+| `cac` | 6.7.14 | MIT |
+| `chai` | 5.3.3 | MIT |
+| `chai` | 6.2.2 | MIT |
+| `check-error` | 2.1.3 | MIT |
+| `convert-source-map` | 2.0.0 | MIT |
+| `debug` | 4.4.3 | MIT |
+| `deep-eql` | 5.0.2 | MIT |
+| `detect-libc` | 2.1.2 | Apache-2.0 |
+| `es-module-lexer` | 1.7.0 | MIT |
+| `es-module-lexer` | 2.3.1 | MIT |
+| `esbuild` | 0.28.1 | MIT |
+| `estree-walker` | 3.0.3 | MIT |
+| `expect-type` | 1.4.0 | Apache-2.0 |
+| `fdir` | 6.5.0 | MIT |
+| `fflate` | 0.8.3 | MIT |
+| `fsevents` | 2.3.3 | MIT |
+| `js-tokens` | 9.0.1 | MIT |
+| `lightningcss` | 1.33.0 | MPL-2.0 |
+| `lightningcss-android-arm64` | 1.33.0 | MPL-2.0 |
+| `lightningcss-darwin-arm64` | 1.33.0 | MPL-2.0 |
+| `lightningcss-darwin-x64` | 1.33.0 | MPL-2.0 |
+| `lightningcss-freebsd-x64` | 1.33.0 | MPL-2.0 |
+| `lightningcss-linux-arm-gnueabihf` | 1.33.0 | MPL-2.0 |
+| `lightningcss-linux-arm64-gnu` | 1.33.0 | MPL-2.0 |
+| `lightningcss-linux-arm64-musl` | 1.33.0 | MPL-2.0 |
+| `lightningcss-linux-x64-gnu` | 1.33.0 | MPL-2.0 |
+| `lightningcss-linux-x64-musl` | 1.33.0 | MPL-2.0 |
+| `lightningcss-win32-arm64-msvc` | 1.33.0 | MPL-2.0 |
+| `lightningcss-win32-x64-msvc` | 1.33.0 | MPL-2.0 |
+| `lil-gui` | 0.19.2 | MIT |
+| `lil-gui` | 0.21.0 | MIT |
+| `loupe` | 3.2.1 | MIT |
+| `magic-string` | 0.30.21 | MIT |
+| `meshoptimizer` | 1.1.1 | MIT |
+| `ms` | 2.1.3 | MIT |
+| `nanoid` | 3.3.16 | MIT |
+| `nanoid` | 3.3.17 | MIT |
+| `obug` | 2.1.4 | MIT |
+| `pathe` | 2.0.3 | MIT |
+| `pathval` | 2.0.1 | MIT |
+| `picocolors` | 1.1.1 | ISC |
+| `picomatch` | 4.0.5 | MIT |
+| `postcss` | 8.5.25 | MIT |
+| `rolldown` | 1.2.1 | MIT |
+| `rolldown` | 1.2.2 | MIT |
+| `rollup` | 4.62.4 | MIT |
+| `siginfo` | 2.0.0 | ISC |
+| `source-map-js` | 1.2.1 | BSD-3-Clause |
+| `stackback` | 0.0.2 | MIT |
+| `std-env` | 3.10.0 | MIT |
+| `std-env` | 4.2.0 | MIT |
+| `strip-literal` | 3.1.0 | MIT |
+| `three` | 0.185.1 | MIT |
+| `tinybench` | 2.9.0 | MIT |
+| `tinyexec` | 0.3.2 | MIT |
+| `tinyexec` | 1.3.0 | MIT |
+| `tinyglobby` | 0.2.17 | MIT |
+| `tinypool` | 1.1.1 | MIT |
+| `tinyrainbow` | 2.0.0 | MIT |
+| `tinyrainbow` | 3.1.1 | MIT |
+| `tinyspy` | 4.0.4 | MIT |
+| `tslib` | 2.8.1 | 0BSD |
+| `typescript` | 5.9.3 | Apache-2.0 |
+| `typescript` | 7.0.2 | Apache-2.0 |
+| `vite` | 7.3.6 | MIT |
+| `vite` | 8.2.0 | MIT |
+| `vite-node` | 3.2.4 | MIT |
+| `vitest` | 3.2.7 | MIT |
+| `vitest` | 4.1.10 | MIT |
+| `why-is-node-running` | 2.3.0 | MIT |
+<!-- END GENERATED: npm-dependencies -->
+
+---
+
+## 8. Quatricmorph's own licence declarations
+
+| Declaration site | Declares | Verified |
+| --- | --- | --- |
+| `Cargo.toml` `[workspace.package]` | `license = "MIT OR Apache-2.0"` | yes |
+| `crates/q-*/Cargo.toml` (17 crates) and `tests/Cargo.toml` | `license.workspace = true` | yes — all 18 |
+| `apps/web/quatricmorph-workspace/package.json` | `"license": "MIT"` | yes |
+| `python/setup.py` | `license="MIT OR Apache-2.0"` | yes |
+| `apps/web/package.json` | none | **absent** (`"private": true`) |
+| `apps/web/model-viewer/package.json` | none | **absent** (`"private": true`) |
+| `apps/web/query-interface/package.json` | none | **absent** (`"private": true`) |
+| `python/pyproject.toml` | none | **absent** — `[project]` has no `license` key, unlike `setup.py` |
+
+**Recorded gap.** The repository root contains **no `LICENSE`, `LICENSE-MIT`, or
+`LICENSE-APACHE` file** (`git ls-files` at the root lists none). `Cargo.toml`
+declares `MIT OR Apache-2.0` and `README.md` §License restates it, but neither
+licence's full text is distributed with this repository. The only complete
+licence text in the tree is the MIT text of `mm/LICENSE`, reproduced at
+`apps/web/quatricmorph-workspace/LICENSE`, and that one carries Meta's copyright
+line, not Quatricmorph's. Adding the two texts is out of scope for QM-0093
+(`## Out of Scope`: *"Changing the project's license"*); it is recorded here so
+it is not mistaken for a verified state.
+
+---
+
+## 9. What is verified, and what is not
+
+Every row of this file is traceable to a file in this tree, to crate source
+resolved by `Cargo.lock`, or to a lockfile's own package metadata. Nothing here
+is inferred from a licence's usual association with a project name.
+
+| Class | Enumerated | Licence read from a file | Not verified |
+| --- | --- | --- | --- |
+| Rust third-party crates (`Cargo.lock`, all platforms) | 128 | 128 | 0 |
+| npm third-party packages (2 lockfiles, deduplicated) | 203 | 203 | 0 |
+| C source vendored into the binary (SQLite 3.46.0 via `libsqlite3-sys`) | 1 | 1 | 0 |
+| Quatricmorph's own declaration sites (§8) | 8 | 4 | 4 declare nothing |
+| `mm/` as a whole | 1 | 1 | 0 |
+| Third-party files vendored inside `mm/` (§2) | 6 | 2 | 4 |
+| `mm/` illustrative assets (§2) | 33 | 0 per-asset — covered by `mm/LICENSE` | — |
+| Model-checkpoint metadata (§3) | 1 | 1 | 0 |
+| Fixture data (§4) | 2 | 2 (synthetic; project licence) | 0 |
+| Python generation-time packages (§4) | 2 | 0 | 2 |
+| GitHub Actions used by CI (§5) | 6 | 0 | 6 |
+| `bun.lock` dependency set (§7) | 1 lockfile | 0 | 1 |
+
+### 9.1 The gap register
+
+1. The upstream revision `mm/` was copied from — **not recorded anywhere in this
+   tree** (§1).
+2. `mm/lib/jsm/controls/OrbitControls.js` — no licence in the file (§2).
+3. `mm/lib/jsm/loaders/FontLoader.js` — no licence in the file (§2).
+4. `mm/lib/es-module-shims.js` — no licence in the file (§2).
+5. `droid_sans_regular.typeface.js` — the file's own embedded metadata states a
+   proprietary Ascender Corporation EULA. This is the one gap that touches a
+   **shipped product file**, not just the read-only reference (§2.1).
+6. `numpy` — licence not stated or pinned anywhere in this repository (§4).
+7. `safetensors` (Python) — same (§4).
+8. Six GitHub Actions — no licence file for any of them in this tree (§5).
+9. `apps/web/quatricmorph-workspace/bun.lock` — the format carries no licence
+   metadata (§7).
+10. No `LICENSE`/`LICENSE-MIT`/`LICENSE-APACHE` text at the repository root (§8).
+11. `python/pyproject.toml` declares no `license`, while `python/setup.py` does
+    (§8).
+
+### 9.2 Claim limit
+
+This file records **what this repository's own files and package metadata say**
+about licences. It is not a legal clearance, it is not legal advice, and it does
+not certify that redistribution of any artifact is permitted. Items 1–11 above
+are open questions, not resolved ones.
