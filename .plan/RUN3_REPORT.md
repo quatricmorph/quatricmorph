@@ -49,7 +49,7 @@ tasks, and are counted once, above):
 
 | Task | Branch head | State at cutoff |
 | --- | --- | --- |
-| `QM-0001` | `ee30636` | Implemented + evidence complete; **independent review still running** when the merge window closed |
+| `QM-0001` | `ee30636` | Implemented + evidence complete. **Independent review returned `APPROVED` at T+4h55m — after the merge cutoff, so it was recorded and not merged.** Zero blocking findings; both guard-firing demonstrations re-run by the reviewer |
 | `QM-0100` | `94bc274` | Implemented + evidence complete; **independent review still running** when the merge window closed |
 | `QM-0002` | `6e99e62` | Implementation **finished after the merge cutoff**; **never independently reviewed**, so it could not merge regardless |
 

@@ -550,3 +550,53 @@ this agent did once it noticed.
 Any review notification arriving after T+4h45m is appended to its task's evidence
 record and to this file. **It does not trigger a merge in this run.** The next run
 inherits the verdict and merges from it.
+
+### Post-cutoff verdict — QM-0001: **APPROVED** (arrived T+4h55m, not merged)
+
+`review-agent-6`, reviewed SHA `b0c9b46` (verified at head `ee30636`), base
+`793e122`. **Zero blocking findings.** Recorded here so the next run merges from a
+completed review rather than re-reviewing.
+
+Both required guard-firing demonstrations were **re-run by the reviewer itself**:
+
+* **Floor 999 → exit 1**, emitting `baseline regression: 290 < 999 (rust tests)`
+  verbatim on stderr — the exact string the task's `## Test Cases` row 3 specifies.
+  Exactly one check failed; the other 26 stayed green. Restored byte-exact
+  (`git diff --exit-code` 0, shasum `b08f6733…`, `cmp` 0).
+* **Broken assertion** (`q-statistics/src/lib.rs:335`, `count, 4`→`5`) → **exit 1**,
+  naming `tests::hand_computed_moments_on_a_small_fixture`, with four independent
+  failures. Restored byte-exact (shasum `96031105…`, `cmp` 0).
+
+**The blind spot is confirmed real and correctly not oversold.** In a trial merge
+against `main@3339485` the guard printed `ok rust tests: measured 318, floor 290 —
+FLOOR IS STALE by 28` and a `STALE FLOOR` block, then **exited 0**. A floor below
+reality warns; it does not fail. That is documented, not hidden.
+
+**Comparison operator is `-ge`** (`verify-baseline.test.sh:336,343,350,357`),
+confirmed empirically — so the floor can be raised to the measured value with **no
+test change**.
+
+#### Handoff item the next run MUST NOT miss
+
+When raising `rust_tests` in `scripts/baseline.json`, **also update its `"commit"`
+field in the same edit.** The file's own `_comment` asserts "counts were measured
+on the commit below"; raising the count while leaving `793e122` records **false
+provenance**, and the reviewer confirmed **nothing in the suite catches it** —
+`qm_baseline_validate` only checks the key is a string, and the commit self-test
+reads a temporary fixture. This is precisely the class of silent falsehood the
+guard exists to prevent, so it must not be introduced by the act of installing it.
+
+#### Merge-order fact, now settled by measurement
+
+`QM-0093` merged first (`7ec7758`). The reviewer's trial merge shows
+`.github/workflows/build.yaml` **auto-merges cleanly** — QM-0001's guard step,
+QM-0093's `licenses:` job, and QM-0001's artifact-name fix coexist, because
+QM-0093 never touched the artifact-name line. **The only conflict is the
+append/append in `.plan/PLAN_CHANGELOG.md`.** The merged tree measures **318 rust /
+39 binaries, 115 web / 13 files**, all 13 goldens green, guard exit 0. The
+controller still owes `scripts/license-audit.sh` on the merged tree.
+
+**AC-5 (CI green) ruled half-evidence, accepted**: environmentally unobtainable,
+disclosed in three places, and a grep found no claim of an observed CI run. The
+task's `## Completion Evidence` still lists "CI run URL" as a deliverable — a
+disclosed, environment-blocked gap for the next run to reconcile.
