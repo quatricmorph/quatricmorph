@@ -868,3 +868,42 @@ differently. `QM-0020`'s pinned digest needs no change.
 implementation — not the `blake3` crate the implementation and its in-test
 transcription both share, so the pinned literal is not the code asserting it equals
 itself. Recorded in `.plan/evidence/QM-0020.md` §Independent review.
+
+## 2026-08-05 — QM-0030 — `## Data Contracts` specified a dependency cycle; `BlockData` moved to `q-tensor-runtime`
+
+**Discovered during:** `QM-0030` implementation; cycle confirmed independently by `review-agent-10`
+**Defect:** `QM-0030/TASK.md` §Data Contracts specified `StreamedBlock.data:
+BlockData` with `BlockData` in `q-gpu`. **`crates/q-gpu/Cargo.toml` already declares
+`q-tensor-runtime` under `[dependencies]`, so the contract as written is a
+dependency cycle and is unsatisfiable.**
+**Correction:** `BlockData` moved into `q-tensor-runtime`, character-for-character
+identical, with `pub use q_tensor_runtime::BlockData;` at `q-gpu/src/lib.rs:109`.
+`q_gpu::BlockData` stays valid for `CpuBackend`, the `Backend` trait, nine unit
+tests and `q-cuda:35,138,167`. `TASK.md` §Data Contracts now carries a controller
+correction recording this. Ruled a **plan defect correctly handled**, not an
+out-of-scope edit.
+**Files changed:** `.plan/tasks/QM-0030-streaming-block-reader/TASK.md`
+**Dependency impact:** none. `QM-0101` consumes `BlockData` from its new home.
+**Evidence:** `crates/q-gpu/Cargo.toml` `[dependencies] q-tensor-runtime`;
+re-export at `q-gpu/src/lib.rs:109`; `cargo build --workspace --all-targets` exit 0.
+
+## 2026-08-05 — QM-0030 — the evidence overstates its own per-block assertion coverage
+
+**Discovered during:** `review-agent-10`'s independent review — a finding against the
+*evidence record*, not the code
+**Defect:** `.plan/evidence/QM-0030.md:425-429` claims `bytes_read` is asserted per
+block "in every phase" and that `run_count == extent.rows()` is asserted there.
+Measured, it is narrower: the per-block assertion exists only in the three-size
+phase (`bounded_residency.rs:237-241`); the 65536² phase asserts the **aggregate
+only** (`:309`); the bounded-queue phase asserts **no bytes at all** (its sink is
+`|_|`, `:336-342`); and `run_count == rows` lives at `src/stream.rs:1163` as
+`shard.reads() == 256`, not in that file.
+**Why it is not blocking:** AC2 depends on neither thin phase, and
+`TensorBlock::plan` (`src/lib.rs:244-249`) makes one-run-per-row structural rather
+than incidental. The residency result itself reproduced byte-identically.
+**Correction:** recorded here so a `QM-0101` reader inherits the accurate scope
+rather than the claim. A method overstated in an evidence record is the kind of
+defect that silently licenses a later, weaker measurement.
+**Files changed:** none — the reviewer's own section carries the correction.
+**Dependency impact:** none.
+**Evidence:** the four file:line citations above, all verified by the reviewer.
