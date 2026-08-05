@@ -737,3 +737,37 @@ dispatched.
 **Three branches are raising `scripts/baseline.json` concurrently.** Each records
 what it measured; the controller reconciles the final value at each merge, one at a
 time, per §14.
+
+## `verify-baseline.sh` exiting 1 in a fresh worktree is BY DESIGN, not a defect
+
+`QM-0010` reported the guard exiting **1** in its worktree, failing one of 24
+checks: `apps/web dependencies are not installed`. The controller's first reading
+was that this is a robustness gap in `QM-0001`'s guard. **That reading was wrong.**
+
+`scripts/verify-baseline.sh:33-34` states the behaviour as a deliberate choice:
+
+> It does not install anything. If `apps/web/node_modules` is absent it says so
+> and fails, rather than reaching the network.
+
+Failing is the **safe direction**. Silently skipping the web checks would let the
+guard exit 0 while verifying nothing about web — which is precisely the failure
+mode that let `27 passed` read as green while 74 tests sat uncollected behind
+`103297d`. A guard that degrades to silence under a missing dependency is worse
+than one that stops.
+
+The same file carries an explicit **anti-vacuous-pass** check at `:435-437`,
+rejecting `2 skipped | 113 passed (115)` — every *collected* test must have passed,
+not merely not-failed. The author was reasoning about this class of problem
+directly, and the asymmetry with the Python path is justified in the header: the
+fixtures gate is owned by CI's `fixtures` job and the guard must not depend on a
+virtualenv, whereas web test *absence* is inside the guard's remit.
+
+**Operational consequence, not a repair task.** `apps/web/node_modules` is
+gitignored, so every fresh worktree lacks it. Before running the guard in a
+worktree, run `npm ci` in `apps/web` — the controller already does this at merge
+time. `QM-0010`'s floor checks themselves passed (`measured 459, floor 459`), so
+its exit 1 carries no information about a regression, and its refusal to run a
+networked install inside a do-not-touch boundary was the correct call.
+
+No repair task is created. Filing one would have been the controller inventing
+work the plan does not represent, against a design the merged code documents.
