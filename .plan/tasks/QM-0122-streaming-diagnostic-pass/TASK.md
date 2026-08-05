@@ -221,6 +221,26 @@ blocking leaks into the answer, everything downstream is wrong.
 
 ## Risks
 
+> **Inherited risk from `QM-0120`, recorded 2026-08-05 — read before implementing.**
+> This task derives per-channel parameters from accumulated min/max and therefore
+> **cannot call `derive_params_named`**, which makes its **`max == min` branch the
+> exact place `QM-0120`'s worst defect can reappear.**
+>
+> `QM-0120` first used `s = 1` for a constant non-zero group, reconstructing
+> `0.5 → 0.0` — a **100 % error**. It survived a differential test against an
+> independent NumPy reference because that golden set's only constant magnitude was
+> `c = 1`, **the single value at which `s = 1` and `s = \|c\|` agree.** The
+> corrected rule is now specified in `.plan/DIAGNOSTIC_ARCHITECTURE.md` §3.1's
+> degenerate-case table and implemented in `crates/q-quant/src/rtn.rs`.
+>
+> **Do not re-derive it.** Reuse `q-quant`'s logic, and make sure this task's golden
+> set contains a constant non-zero group whose magnitude is **not 1**, so the test can
+> actually discriminate. Agreement with a reference proves the arithmetic matches on
+> the values you chose; it does not prove you chose values that can tell two candidate
+> formulas apart. **This task owns gate G2** — `.plan/EXECUTION_ORDER.md` §7: *"the
+> engine is the product; a wrong number is worse than no number."*
+
+
 | Risk | Mitigation |
 | --- | --- |
 | Pass 1 buffers a column and breaks residency | Residency assertion at three tensor sizes is an acceptance criterion |

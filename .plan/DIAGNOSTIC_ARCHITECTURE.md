@@ -94,12 +94,39 @@ Degenerate cases are specified, not left to the implementation:
 | Case | Behaviour |
 | --- | --- |
 | `max\|g\| == 0` (all-zero group) | `s = 1`, all `q = 0`, `x̂ = 0`. No division by zero |
+| **`min(g) == max(g) != 0`** (constant non-zero group, asymmetric) | **`s = \|c\|`, not `s = 1`.** Added 2026-08-05 by `QM-0120`; see the note below |
 | `s` underflows to subnormal | Refuse the group, naming the tensor and offset. Never silently produce infinities |
+| **Reconstruction is non-finite** | **Refuse per value.** `s` itself can be perfectly normal while `q_max · s` overflows — e.g. `s = f32::MAX/127` is `is_normal()`, yet `127·s` rounds past `f32::MAX`. A params-only bound is insufficient *and* over-refuses: three cases it would reject do reconstruct finitely. Added 2026-08-05 by `QM-0120` |
 | A group contains NaN or ±Inf | Refuse the tensor. A checkpoint with non-finite weights is a finding, reported as one |
 | Group size does not divide the axis | Final group is **clamped, never padded** — the same rule `BlockExtent::clamped_to` already applies |
 
 `round_half_to_even` is stated explicitly because half-away-from-zero would
 disagree with NumPy on exactly the boundary values a golden test will contain.
+
+> **The constant-non-zero-group rule, and why it is now specified here.**
+> The `max|g| == 0` row above is conditioned on the group being **all zero**, so it
+> never reaches a *constant non-zero* group — this section previously specified
+> nothing for that case. `QM-0120` first read the table literally and used `s = 1`
+> there, which reconstructs `0.5 → 0.0`: a **100 % error**.
+>
+> It survived a differential test against an independent NumPy reference because the
+> first golden set's only constant magnitude was `c = 1` — **the single value at
+> which `s = 1` and `s = |c|` produce identical output.** `review-agent-12`
+> re-derived the corrected rule in an independent driver crate: `0.5`, `−0.3` and
+> `0.823457` are all bit-exact under `s = |c|`, while `s = 1` gives 100 %, 100 %,
+> and wrong-direction error. The all-zero group keeps the tabulated `s = 1, z = 0`.
+>
+> **The transferable lesson for `QM-0121` and `QM-0122`, which G2 depends on:**
+> agreement with a reference proves the arithmetic matches *on the values you
+> chose*. It does not prove you chose values that can distinguish two candidate
+> formulas. A golden set needs inputs selected to **discriminate**, not merely to
+> cover.
+>
+> **`QM-0122` inherits a specific instance of this.** It derives per-channel
+> parameters from accumulated min/max and therefore cannot call
+> `derive_params_named`, which makes its `max == min` branch the exact place this
+> defect can reappear. `crates/q-quant/src/rtn.rs` holds the corrected logic;
+> `QM-0122` must not re-derive it independently.
 
 ### 3.2 Axis convention
 

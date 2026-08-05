@@ -1147,3 +1147,57 @@ source document — this run's own rule, and the controller broke it.**
 **Dependency impact:** none.
 **Evidence:** `grep -cE '^#+ *[0-9]+\.[0-9]' .plan/TEST_STRATEGY.md` → 9 subsections
 exist in the file, none of them under §6.
+
+## 2026-08-05 — DIAGNOSTIC_ARCHITECTURE §3.1 amended — the constant-non-zero-group rule is now specification, not evidence
+
+**Discovered during:** `QM-0120`; amendment recommended by `review-agent-12` before
+`QM-0121`/`QM-0122` could re-derive it
+**Defect:** §3.1's degenerate-case table conditions its `s = 1` row on
+`max|g| == 0` — an **all-zero** group — so it specified **nothing** for a *constant
+non-zero* group. `QM-0120` read the table literally, used `s = 1`, and reconstructed
+`0.5 → 0.0`: a **100 % error**.
+**Why the differential test missed it:** the first golden set's only constant
+magnitude was `c = 1` — **the single value at which `s = 1` and `s = |c|` produce
+identical output.** The reference was independent and correct; the *inputs* could not
+discriminate between two candidate formulas.
+**Correction:** two rows added to §3.1's table — `min(g) == max(g) != 0` →
+`s = |c|`, and non-finite reconstruction → refuse per value (`s` can be `is_normal()`
+while `q_max · s` overflows; the derived scale `2.6793887e36` was confirmed normal
+while `127·s` rounds past `f32::MAX`). A note records the derivation, and the
+transferable lesson: **a golden set needs inputs chosen to discriminate, not merely
+to cover.** The all-zero group keeps its tabulated `s = 1, z = 0`.
+**Also routed:** `QM-0122/TASK.md` §Risks now carries the inherited hand-off —
+it derives per-channel params from accumulated min/max, cannot call
+`derive_params_named`, and so its `max == min` branch is the exact place this defect
+reappears. It is told to reuse `q-quant`'s logic and to include a constant non-zero
+group whose magnitude is **not 1**. Previously this analysis existed only in
+`.plan/evidence/QM-0120.md`, invisible to the task that inherits the risk.
+**Files changed:** `.plan/DIAGNOSTIC_ARCHITECTURE.md`,
+`.plan/tasks/QM-0122-streaming-diagnostic-pass/TASK.md`
+**Dependency impact:** none. Prevents `QM-0121`/`QM-0122` from re-deriving the rule
+differently and reintroducing a 100 % error behind a passing golden test.
+**Evidence:** `review-agent-12` re-derived the rule in an independent driver crate:
+`0.5`, `−0.3`, `0.823457` all bit-exact under `s = |c|`; `s = 1` gives 100 %, 100 %,
+and wrong-direction error.
+
+## 2026-08-05 — QM-0120 — three stale prose figures; two fixed, one deliberately left
+
+**Discovered during:** `review-agent-12`'s independent review, by measurement
+**Defect:** `.plan/evidence/QM-0120.md` said `49 passed` where the measured figure is
+**53** (contradicting 598 in the same table), and described `rtn.rs` as holding
+26 unit tests where it holds **30**. Separately,
+`python/reference/quantise_reference.py:472` and the golden's `why` field describe
+"a 41 % error" for `0.823457`; the actual figure is **21.4 %** — 41.4 % belongs to the
+original `0.7071` probe.
+**Correction:** the two evidence figures are fixed in `QM-0120`'s merge commit. **The
+"41 %" is deliberately left unchanged in both the generator and the golden**, because
+editing either changes the golden's SHA-256 —
+`d4efa48e9f4e5335422835c25df0185a0c467efc9cd6d566dcf7530d41f0466f` — which
+`review-agent-12` independently verified across four regenerations. Churning a
+reviewer-verified golden to correct a prose percentage would trade real evidence for
+cosmetics. Recorded here instead.
+**Files changed:** `.plan/evidence/QM-0120.md`
+**Dependency impact:** none. `scripts/baseline.json` and `TASK.md` §Orchestration
+were both already correct — only prose was stale.
+**Evidence:** reviewer measured `cargo test -p q-quant` → 53 = 45 lib + 1 + 7, and
+counted 30 tests in `rtn.rs`.
