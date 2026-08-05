@@ -1029,3 +1029,53 @@ floor of 115 and **refused to lower the floor**, one writing: *"lowering a floor
 accommodate a broken environment is what the floor exists to prevent."* That is
 exactly right. Had either lowered it, four real tests would have been permanently
 licensed to vanish, and the guard would have gone on reporting success.
+
+## An unreviewed commit reached local `main`, and was reverted
+
+While `QM-0121` was under review, a stale agent **committed the whole task directly to
+local `main`** as `d81011d` — bypassing the review gate entirely. Found during
+`QM-0011`'s merge, when `cargo test --workspace` measured **744** where 706 was
+expected: a count that did not reconcile was the only reason it surfaced.
+
+**Assessed before acting, not after.** `d81011d` was **never pushed** — `origin/main`
+was still `ddf6a46`. Its content was byte-identical to the branch under review, proved
+per file with `shasum` on `crates/q-gpu/src/paired.rs`,
+`crates/q-gpu/tests/goldens/paired-reduction-goldens.json` and
+`python/reference/paired_reduction_reference.py`, and
+`git diff d81011d <branch-head> -- crates/ python/ architectures/ schemas/` was empty.
+So nothing was lost by removing it.
+
+**Action:** local `main` reset to `ddf6a46` to match `origin`, `d81011d` preserved
+under the tag `rogue/qm-0121-direct-to-main` until its content had merged through the
+gate, then the tag removed. `QM-0011` and `QM-0121` were both re-merged properly, each
+with its floor re-measured on the merged tree — **706/52** then **744/54**, neither of
+which equals what either branch recorded for itself.
+
+**Why this mattered even though the content was identical.** Had it stood, `main`
+would carry code that no reviewer had approved *at the time it landed*, and the audit
+trail would say otherwise. That both reviewers later approved it is luck, not process.
+
+## Double dispatch is systemic, and it is now costing review effort
+
+Three tasks were affected in one window: two implementation agents on `QM-0121`, two
+**review** agents on `QM-0121`, and an external `reset: moving to main` on `QM-0011`'s
+branch. `review-agent-14` named it directly: *"Concurrent double-dispatch is happening
+across at least three tasks simultaneously — that is a controller-level problem, and it
+is now costing duplicated review effort, not just duplicated implementation."*
+
+**Root cause, stated plainly:** the controller has no inventory of agents dispatched
+before a context summarisation, and it recreated worktrees at paths those agents still
+held. Every downstream symptom follows from that one gap.
+
+**What saved the work each time was the agents, not the controller.** Both `QM-0121`
+implementers documented the collision instead of concealing it and neither overwrote
+the other; the second reviewer preserved the first's verdict in full (209 insertions,
+0 deletions) and appended beneath it; `QM-0011`'s agent verified the foreign reset was
+harmless rather than assuming it. The redundant reviews did agree on every overlapping
+number, which is reassuring about the reviews and says nothing good about the
+scheduling.
+
+**Corrections adopted:** never reuse a worktree path within a run once dispatched;
+check for live writes before creating a worktree at a previously-used path; and treat a
+test count that does not reconcile as a **scheduling** alarm, not only an arithmetic
+one — that is what exposed `d81011d`.
