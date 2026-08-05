@@ -658,3 +658,82 @@ with `C ≤ 2 GB` and `file ≥ 24 GB`. Lines 375-380 walk it back four lines la
 **Merge note for the next run:** `git merge-tree main HEAD` conflicts on exactly one
 path — `.plan/PLAN_CHANGELOG.md`, append-on-both-sides, resolve by keeping both.
 No source, fixture, or test conflicts.
+
+---
+
+# Run 4 — continuation past the expired budget, on explicit instruction
+
+`main` at start: `6fb593a`. The 5h budget expired long before this; the run was
+resumed on the owner's instruction, so the T-45m/T-15m cutoffs no longer bind and
+merging reopened.
+
+## Two merges completed
+
+| Task | Reviewed | Verdict | Merge | Pushed |
+| --- | --- | --- | --- | --- |
+| `QM-0001` baseline verification | `ee30636` (review-agent-6) | APPROVED | `ac412cb` (+ pin `e365667`) | **yes** `ae11873..bda0a33` |
+| `QM-0100` checkpoint record | `94bc274` | APPROVED, unconditional | `91abade` (+ `6fb593a`) | **yes** `bda0a33..6fb593a` |
+
+**`push origin main` WORKS.** Run 2's recorded finding that it was unavailable was
+wrong — that failure was a transient SSH hang on pack upload, not a permission
+wall. `git ls-remote` now matches local `main`. The `gh` token still has
+`permissions.push: false`, so **no pull request is creatable**; pushing over SSH as
+`hmthanh` and creating a PR via the `gh` token are different permissions, and only
+the PR half is genuinely unavailable. Corrected here and in the report.
+
+## The floor is live, and was re-measured at each merge rather than trusted
+
+`QM-0001` authored `{rust_tests: 290, rust_binaries: 39}`, measured at `793e122`.
+`main` had reached 415. **The authored number would have set the floor 125 tests
+below reality, and `verify-baseline.sh` fires only on a too-HIGH floor — a too-low
+floor is silent.** That is the same asymmetry that let `27 passed` read as green
+while 74 tests sat uncollected behind `103297d`. Re-measured and written in the
+same squash commit each time:
+
+```
+after QM-0001   rust 415 over 42 binaries   web 115 over 13   verify-baseline exit 0
+after QM-0100   rust 434 over 43 binaries   web 115 over 13   verify-baseline exit 0
+guard fire demo floor->999: exit 1, "baseline regression: 415 < 999 (rust tests)"
+verify-baseline.test.sh: 46 run, 0 failed
+```
+
+## `QM-0100` scope, stated plainly
+
+`QM-0100` was re-scoped by commits `447b3ff` / `04991e9` to the local
+`models/distilbert-distilgpt2` — **352,824,413 bytes, ONE shard, no
+`model.safetensors.index.json`**. Its original acceptance criterion 1 (≥ 24 GB,
+sharded) is **not met and not claimed**. The 28.63 GB `Qwen1.5-MoE-A2.7B`
+checkpoint that Run 2 downloaded and byte-verified has since been **deleted** to
+reclaim disk; free disk is back to ~54 GB. **G1 remains NOT PASSED.**
+
+## `QM-0002` — CHANGES_REQUESTED, fix cycle 1 of 3 in flight
+
+`review-agent-7` returned `CHANGES_REQUESTED` at `6e99e62` (verdict `ff42d8a`):
+one root cause, seven symptoms — **the branch's base is 15 commits behind `main`,
+so a task whose entire purpose is reconciliation now asserts stale facts.** The
+sharpest finding: `.plan/README.md:242` claims the token "cannot push", which was
+**false when written** — the commit proving push works (`3394510`) is an ancestor
+of the branch's own base and its own `PLAN_CHANGELOG.md:368` carries it.
+
+The reviewer also flagged a conflict-resolution trap worth recording: `f132393`
+(`QM-0167`, merged and `Complete`) **deleted** a paragraph `QM-0002` edits and
+rewrote the authority table, so a naive resolution resurrects text a completed
+task deliberately removed. Ten divergences spot-checked, ten resolved; the
+citation checker was seen to fire (8 → 12 unresolved on a deliberately bad path,
+both documented exemptions applying correctly).
+
+## Newly unblocked by the merges, and dispatched
+
+| Task | Unblocked by | Lane | Scope (no overlap between them) |
+| --- | --- | --- | --- |
+| `QM-0030` streaming block reader | `QM-0100` (v1 edge per EXECUTION_ORDER §10; `QM-0003` is `Deferred`) | P | `q-tensor-runtime`, `q-source` |
+| `QM-0010` Qwen resolver | v1 edge is none; `QM-0005` is `Deferred` | T | `q-nsir`, `q-architecture`, `architectures/qwen/` |
+| `QM-0020` persist statistics | `QM-0012` Complete | T | `q-catalog`, `q-daemon`, `q-statistics` |
+
+`QM-0030` is the critical path — `QM-0101` is gated behind it, and `QM-0120`…
+`QM-0125` behind that. `QM-0150` is also newly unblocked by `QM-0140` but not yet
+dispatched.
+
+**Three branches are raising `scripts/baseline.json` concurrently.** Each records
+what it measured; the controller reconciles the final value at each merge, one at a
+time, per §14.
