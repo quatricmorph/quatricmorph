@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+Complete
 
 ## Phase
 
@@ -26,8 +26,9 @@ re-discovered:
    13 tests hold the code's version.
 2. **Three spatial authorities.** `q_tensor_runtime::Lod`,
    `q_tileset::GeometricError::for_lod` (`ROOT_GEOMETRIC_ERROR = 1024.0`), and
-   `apps/web/model-viewer/src/lod-policy.ts:102` (`1024 / 2 ** lod`, with the
-   comment *"mirrors `q_tileset::GeometricError`"* — hand-mirrored, no test).
+   `apps/web/model-viewer/src/lod-policy.ts:103` (`1024 / 2 ** lod`, under the
+   comment at `:101` *"mirrors `q_tileset::GeometricError`"* — hand-mirrored, no
+   test).
 3. **Catalog technology.** `ARCHITECTURE.md` §5 names DuckDB/Arrow/Parquet;
    the implementation is SQLite. Recorded in `ADR-003`, tracked as `CAT-010`.
 
@@ -172,3 +173,46 @@ grep -n "XY plane\|YZ plane\|XZ plane" ARCHITECTURE.md
 * `DIVERGENCE_REGISTER.md` contents.
 * The list of `.plan/` corrections made.
 * `git status` showing nothing modified outside `.plan/` and `scripts/`.
+
+## Orchestration
+
+* **State:** Awaiting Independent Review
+* **Fix cycle:** 1 of at most 3. `review-agent-7` returned `CHANGES_REQUESTED` at
+  head `6e99e62`; findings `B1`–`B7` are addressed under
+  `.plan/evidence/QM-0002.md` `## Fix cycle 1`.
+* **Lane:** V
+* **Wave:** 0
+* **Branch:** `task/qm-0002-plan-repo-reconciliation`
+* **Worktree:** `../.qm-worktrees/qm-0002`
+* **Base:** `eca5a6a7e2f4f40e9ab4a9a58250ccb16f0a32a6` (`git merge-base main HEAD`)
+* **Head:** recorded in `.plan/evidence/QM-0002.md` at merge; the fix-cycle commit
+  is the one whose subject carries `[QM-0002]`. Every measurement in the evidence
+  was taken at that commit's parent, `1d49ffa`.
+* **`main` when fix cycle 1 committed:** `e8d7997` — it advanced past this branch's
+  base three times during the cycle (`QM-0010` and `QM-0020` with code, raising the
+  recorded floor to rust 502/43; then an ADR-011 amendment with none). Deliberately
+  not chased; the reasoning is in `.plan/evidence/QM-0002.md` `## Claim limits`.
+* **Agent:** `impl-agent-11` (fix cycle 1); `impl-agent-6` (implementation)
+* **Evidence:** `.plan/evidence/QM-0002.md`
+* **Merge path:** L (local squash merge onto local `main`, then pushed to `origin`)
+* **Tests added:** none — **Plan-only exempt class** (controller §6.1): every path
+  in `## Files Expected to Change` is under `.plan/**` and no behaviour changed.
+  Test floor unchanged and machine-checked at this branch's base `eca5a6a`: rust 434
+  before = 434 after, web 115 before = 115 after, `./scripts/verify-baseline.sh`
+  exit 0 with every count "at floor" against the 434/43/115/13 that
+  `scripts/baseline.json` holds at `eca5a6a`. `main` has since raised the rust floor
+  to 502/43 at `4bddf6c`; this branch adds no code and does not touch that file, so
+  it cannot lower it. Detail under `.plan/evidence/QM-0002.md`
+  `### The floor, and that no count fell`.
+  Qualification: `.plan/tools/check-plan-citations.py` is executable tooling and
+  is evidenced by recorded invocations against the real corpus (12 unresolved
+  before, 2 after, on the same tool, at base `eca5a6a`) rather than by a unit test.
+  It exits **1**, so acceptance criterion 1 is still not claimed as met.
+* **Note:** the branch was fast-forwarded from its original base `ace7d09` to
+  `4e0e85c` before any editing, because `ace7d09` predates `QM-0006`'s directory
+  rename and the path citations this task repairs point the opposite way there.
+  It was then rebased onto `3339485` when `main` advanced again, and the
+  independent review found **that** base fifteen commits stale — the root cause of
+  all seven findings — so fix cycle 1 rebased onto `eca5a6a`, the base recorded
+  above. Rationale and proof in `.plan/evidence/QM-0002.md` `## Recovery` and
+  `## Fix cycle 1`.

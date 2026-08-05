@@ -99,7 +99,11 @@ this plan is written against them by name.
 
 ## 4. The matrix workspace, after the `mm` port
 
-`apps/web/quatricmorph-workspace/src/` is 40 TypeScript modules in seven directories.
+`apps/web/quatricmorph-workspace/src/` is 49 TypeScript modules outside
+`__tests__/`, spread over ten directories plus five at the root
+(`find apps/web/quatricmorph-workspace/src -name '*.ts' -not -path '*__tests__*' | wc -l`).
+The eight directories in the table below carry the port's substance; `examples/`
+and `ref/` hold `mm` demo entry points and `assets/` holds a font, no TypeScript.
 The port's central achievement is that **pure math is separated from Three.js
 scene state**, which is what makes real tensor blocks possible at all.
 

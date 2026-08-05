@@ -15,10 +15,19 @@ recorded in [`STRATEGY_ALIGNMENT.md`](STRATEGY_ALIGNMENT.md), and the boundary i
 enforced by [`PRODUCT_SCOPE.md`](PRODUCT_SCOPE.md).
 
 It is a **delta plan**, not a greenfield plan. The repository already contains a
-17-crate Rust workspace, three web applications, four JSON schemas, checked-in
-SafeTensors fixtures, ten ADRs, and a requirement-traceability document built
+Rust workspace of `ls crates | wc -l` crates (**18** at the time of writing),
+three web applications, `find schemas -name '*.json' | wc -l` JSON schemas
+(**5**), checked-in SafeTensors fixtures, the accepted ADRs in
+[`../docs/decisions/`](../docs/decisions/) (`ls docs/decisions/*.md | wc -l` —
+**13**), and a requirement-traceability document built
 from real test output. A plan that ignored that would be fiction. Every task in
 `tasks/` therefore starts from a cited file, symbol, or test that exists now.
+
+Each of those counts is given as **the command first and the number second**, on
+purpose: every one of them has been stale in this file at least once. Crates went
+17 → 18 when `QM-0140` added `crates/q-report`, schemas 4 → 5 when the same task
+added `schemas/diagnostics/manifest.v1.json`, and the ADR count read `eight` and
+then `ten` while thirteen were accepted. Run the command; do not cite the number.
 
 **This directory contains no code and mandates no change outside `.plan/`.**
 Where the plan concludes that a file outside `.plan/` is wrong — including
@@ -158,9 +167,23 @@ its `Dependencies` section has reached `Complete` and any ADR or hardware it
 names is available. The `## Status` field records the **current** state, not the
 transition — it always holds exactly one of the nine values above, on its own
 line, so it can be parsed. Any blocker is named on the line *below* the value.
-At the start of the v1 plan, `QM-0100`, `QM-0001`, and `QM-0002` are `Ready`;
-every other task is `Blocked` or `Deferred`. See
-[`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) §10.
+
+**Which tasks are `Ready` is never read from this document.** It is derived from
+the corpus, and it changes every time a task is claimed or completed, so any
+count written here is stale the moment a run starts. Derive it:
+
+```bash
+for f in .plan/tasks/*/TASK.md; do
+  awk '/^## Status$/{getline; getline; print; exit}' "$f"
+done | sort | uniq -c | sort -rn
+```
+
+The counts must sum to the number of `TASK.md` files (`ls .plan/tasks/*/TASK.md |
+wc -l`); a shortfall means a file whose `## Status` section does not hold exactly
+one value on its own line, which is a parser-contract defect to fix in that file.
+[`EXECUTION_ORDER.md`](EXECUTION_ORDER.md) §10 lists the tasks whose v1 unblock
+condition makes them `Ready` ahead of their original dependency edges, and §11
+names the ones to start first.
 
 `Hardware-Unverified` is not a task status. It is a *requirement* status in
 `STATUS.md`, and it is what a CUDA task's requirement stays at when the task's
@@ -222,8 +245,35 @@ is. This is the standard `STATUS.md` already holds itself to, and tasks inherit
 it.
 
 When a task reaches `Complete`, its requirement rows in `../STATUS.md` are
-updated in the same pull request. A task that changes behaviour without updating
-`STATUS.md` is not `Complete`.
+updated in the same **squash merge commit** as the implementation. A task that
+changes behaviour without updating `STATUS.md` is not `Complete`.
+
+**There is no pull-request path in this repository — but pushing works.** These
+are two different permissions and the distinction matters:
+
+* **Pushing to `origin` succeeds.** `origin` is
+  `git@github.com:quatricmorph/quatricmorph.git` and every merge reaches it over
+  SSH. `git ls-remote origin refs/heads/main` matches local `main`, and
+  `git reflog show origin/main` holds an `update by push` entry per merge.
+* **No pull request is creatable.** The `gh` token authenticates as
+  `MarkdownOfficial`, for whom
+  `gh api repos/quatricmorph/quatricmorph --jq .permissions` returns
+  `"push": false`. Opening a PR through that token is genuinely unavailable.
+
+So tasks are integrated as **local squash merges onto local `main`, which is then
+pushed**. The squash merge commit, not a PR, is the review artifact, and the
+evidence that would have been the PR body is written to
+`.plan/evidence/QM-XXXX.md` and lands in that same commit. Recorded in
+[`PLAN_CHANGELOG.md`](PLAN_CHANGELOG.md) (2026-08-04, "push to `origin` succeeds;
+Run 2's credential finding is superseded", commit `3394510`) and in
+[`ORCHESTRATION_STATE.md`](ORCHESTRATION_STATE.md) "Run 4", which states it in
+these terms: *"pushing over SSH as `hmthanh` and creating a PR via the `gh` token
+are different permissions, and only the PR half is genuinely unavailable."*
+
+An earlier revision of this paragraph said the token "cannot push … Permission
+denied", citing the *superseded* 2026-08-04 entry ("Run 1's Stage 0 credential
+halt is superseded") rather than the one that supersedes it. That claim was false
+when written, and is corrected here.
 
 ## How plans are updated when repository facts change
 
@@ -232,8 +282,11 @@ This plan cites line numbers, symbol names, and test names. Those drift.
 * **A citation that no longer resolves is a bug in this plan**, and fixing it
   takes precedence over the task that discovered it.
 * When a task changes a file another task cites, the changing task updates the
-  citation as part of its own pull request. `DEPENDENCY_GRAPH.md` lists the
-  high-traffic files where this is most likely.
+  citation in its own squash merge commit. `DEPENDENCY_GRAPH.md` lists the
+  high-traffic files where this is most likely. Where a task cannot reach the
+  citing document — because another task owns it, or is editing it concurrently —
+  it records the correction as a `PLAN_CHANGELOG.md` finding naming the owner
+  instead of editing across the boundary.
 * When `ARCHITECTURE.md` and this plan disagree, `ARCHITECTURE.md` wins and this
   plan is corrected — **except** where a divergence has been deliberately
   recorded in [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §"Recorded

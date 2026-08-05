@@ -2,7 +2,10 @@
 
 ## 0. State
 
-`apps/web/quatricmorph-workspace/` is the `mm` port: 40 TypeScript modules, 74 tests.
+`apps/web/quatricmorph-workspace/` is the `mm` port: 49 TypeScript modules outside
+`__tests__/`, and 88 tests in 10 test files (74 from the port, plus the 14 in
+`src/util/__tests__/workspace-paths.test.ts` that `QM-0006` added to hold the
+directory name).
 The port's central achievement is that **pure math is separated from Three.js
 scene state**, which is what makes real tensor blocks possible at all.
 

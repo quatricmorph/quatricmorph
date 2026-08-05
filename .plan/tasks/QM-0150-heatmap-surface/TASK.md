@@ -22,13 +22,16 @@ concentrates across a checkpoint, and can drill from layer to tensor to channel.
   (`CESIUM-002`): the discipline of not fetching detail without an explicit act.
 * `apps/web/model-viewer/src/tile-client.ts` — `treats_a_501_as_a_declared_gap_not_a_failure_to_retry`
   (`CESIUM-003`): how this codebase handles declared gaps.
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts` —
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` —
   `refuses_a_block_that_would_pull_a_whole_tensor_into_the_browser` (`GRID-005`).
-* `apps/web/vitest.config.ts`, 101 passing web tests — the harness this joins.
+* `apps/web/vitest.config.ts`, 115 passing web tests across 13 files — the
+  harness this joins.
 
-**Path note:** the directory is `apps/web/matrix-workspace`. Several `.plan`
-documents still call it `apps/web/quatricmorph-workspace`; `QM-0002` owns that
-correction.
+**Path note:** the directory is `apps/web/quatricmorph-workspace`;
+`apps/web/matrix-workspace` no longer exists. `QM-0006` completed the rename that
+commit `103297d` had begun in the references but never applied to the directory,
+and `QM-0002` corrected the `.plan/` prose that still carried the old name. The
+drift this note used to warn about is closed.
 
 ## Requirements Covered
 

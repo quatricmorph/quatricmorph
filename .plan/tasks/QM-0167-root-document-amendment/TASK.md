@@ -25,10 +25,10 @@ Amend the root documents so `ARCHITECTURE.md`, `MASTER_DOCUMENT.md`, `docs/`, an
 * `.plan/STRATEGY_ALIGNMENT.md` §6 — the table of every document, section, and
   claim that now disagrees.
 * `.plan/README.md` — the precedence note this task removes.
-* `../ARCHITECTURE.md` §17–§18; `../MASTER_DOCUMENT.md` §2, §20;
-  `../docs/ROADMAP.md`; `../docs/PRODUCT_BRIEF.md`; `../docs/requirements/VIZ_MVP.md`.
-* `../README.md` and `../STATUS.md` — **already accurate**; they describe only
-  what exists and need no scope amendment.
+* `ARCHITECTURE.md` §17–§18; `MASTER_DOCUMENT.md` §2, §20;
+  `docs/ROADMAP.md`; `docs/PRODUCT_BRIEF.md`; `docs/requirements/VIZ_MVP.md`.
+* The repository-root `README.md` and `STATUS.md` — **already accurate**; they
+  describe only what exists and need no scope amendment.
 
 ## Requirements Covered
 

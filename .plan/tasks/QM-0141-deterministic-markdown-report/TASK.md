@@ -22,7 +22,7 @@ cleanly.
 * `QM-0125` — ranking and frontier, including the `method` caveat string.
 * `QM-0124` — outlier attribution and its `resolution` string.
 * `.plan/PRODUCT_SCOPE.md` §5.2 — the forbidden-claims table this renders against.
-* `../STATUS.md` — the house style for evidence-carrying documents: numbers with
+* `STATUS.md` — the house style for evidence-carrying documents: numbers with
   the command above them, no status more favourable than its evidence.
 
 ## Requirements Covered

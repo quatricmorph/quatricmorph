@@ -15,9 +15,10 @@ application". That premise is a generation behind the repository.
 `mm/` is **one read-only directory** inside a much larger tree. The
 redesign it warns against has already happened: `mm` was analysed symbol by
 symbol in `docs/CURRENT_ARCHITECTURE.md`, ported to TypeScript under
-`apps/web/quatricmorph-workspace/`, and surrounded by a 17-crate Rust workspace
-implementing SafeTensors ingestion, canonical addressing, a metadata catalog,
-WeightQL, a `.qtile` format, a cache, and a local HTTP daemon.
+`apps/web/quatricmorph-workspace/`, and surrounded by an 18-crate Rust workspace
+(`ls crates | wc -l` → 18) implementing SafeTensors ingestion, canonical
+addressing, a metadata catalog, WeightQL, a `.qtile` format, a cache, a
+diagnostics manifest, and a local HTTP daemon.
 
 This plan is therefore a **delta plan**. It plans the work that remains. Where
 the task specification asks for something already built and tested, the plan
@@ -28,12 +29,39 @@ an implementation task.
 
 ## 1. Verified build and test baseline
 
-Run in `/Users/thanh/Quatricmorph/Quatricmorph` at commit `5ca434d`.
+Measured at commit `1d49ffa` (`QM-0002` rebased onto `main` at `eca5a6a`). Every
+number in this table is re-measured whenever it is quoted; the commit above is
+the one the run was made against, not the last commit that edited this file.
 
 | Command | Result |
 | --- | --- |
-| `cargo test --workspace` | **exit 0** — `290 passed; 0 failed` |
-| `npx vitest run` (from `apps/web`) | **exit 0** — `101 passed (101)`, 12 files, 832 ms |
+| `cargo test --workspace` | **exit 0** — `434 passed; 0 failed; 0 ignored`, summed over 43 `test result:` lines (43 test binaries) |
+| `npx vitest run` (from `apps/web`) | **exit 0** — `115 passed (115)`, 13 files |
+| `./scripts/verify-baseline.sh` | **exit 0** — at floor: rust 434/43, web 115/13 |
+
+**These numbers move with every merge, and this table has been wrong twice for
+that reason.** The readings and what closed the gap each time:
+
+| Read at | Rust | Web | What changed |
+| --- | --- | --- | --- |
+| `ace7d09` | `290` / 39 | `101` (12 files) | the original run |
+| `4e0e85c` | `318` / 39 | `115` (13 files) | `QM-0006` restored the 9 web test files `103297d` had silently de-collected and added `workspace-paths.test.ts`; `QM-0012` added Rust tests |
+| `1d49ffa` | **`434`** / **43** | `115` (13 files) | `QM-0140` added `crates/q-report` (97 tests over 2 binaries) and `QM-0100` added `tests/tests/real_checkpoint_record.rs`; `QM-0001` raised the recorded floor to match |
+
+The reading above is **machine-checked** rather than trusted to prose: at this
+branch's base `eca5a6a`, `scripts/baseline.json` records `rust_tests: 434`,
+`rust_binaries: 43`, `web_tests: 115`, `web_files: 13`, and
+`./scripts/verify-baseline.sh` exits 0 reporting every one of them "at floor".
+
+**That floor is itself a moving number, and this document does not own it.** `main`
+has already raised it past this branch's base — `4bddf6c` pins `rust_tests: 502`
+over the same 43 binaries after `QM-0010` and `QM-0020` merged — and the controller
+reconciles the value at each merge. Read `scripts/baseline.json` for the current
+floor; the numbers quoted here are the ones true at `eca5a6a`.
+
+**`STATUS.md:9-10` still claims `290` and `101 (12 files)` and is behind the
+tree** — that is `QM-0091`'s to regenerate, not this document's to assert.
+Registered as `DIV-009`.
 
 Test distribution measured from the vitest run:
 
@@ -41,6 +69,7 @@ Test distribution measured from the vitest run:
 | --- | --- |
 | `query-interface/src/__tests__/weightql.test.ts` | 17 |
 | `quatricmorph-workspace/src/math/__tests__/matmul.test.ts` | 17 |
+| `quatricmorph-workspace/src/util/__tests__/workspace-paths.test.ts` | 14 |
 | `quatricmorph-workspace/src/layout/__tests__/grid-ruler.test.ts` | 13 |
 | `quatricmorph-workspace/src/math/__tests__/blocking.test.ts` | 10 |
 | `quatricmorph-workspace/src/viz/__tests__/array2d.test.ts` | 9 |
@@ -52,8 +81,11 @@ Test distribution measured from the vitest run:
 | `quatricmorph-workspace/src/util/__tests__/params.test.ts` | 3 |
 | `quatricmorph-workspace/src/tensor/__tests__/block-adapter.test.ts` | 5 |
 
-This confirms the counts `STATUS.md` claims for its `2026-08-03` run. **`STATUS.md`
-is accurate and is adopted as the factual baseline for this plan.**
+These sum to 115 across 13 files. `STATUS.md` was accurate for its `2026-08-03`
+run and was adopted as this plan's factual baseline on that basis; the tree has
+since moved ahead of it under `QM-0006` and `QM-0012`. The baseline discipline is
+unchanged — the numbers above are what the commands print today, and `QM-0091`
+regenerates `STATUS.md` to match.
 
 ### Confirmed current commands
 
@@ -98,48 +130,91 @@ worse than no job.
 
 ## 2. Repository layout, as it exists
 
+Every label below is re-measured at `1d49ffa`. A written-down number in a tree
+diagram cannot carry its own deriving command, so the commands are given after the
+diagram and this whole block is expected to drift; it is re-measured, not trusted.
+
 ```text
-ARCHITECTURE.md              1261 lines — implementation SoT, untouched
-STATUS.md                     278 lines — 129 requirement rows from a real run
-AGENTS.md                      48 lines — agent rules; mm/ is read-only
-README.md                     127 lines
-Cargo.toml                             — workspace, 18 members, edition 2021, rust-version 1.78
-crates/                        17 crates, ~15 184 lines of Rust
+ARCHITECTURE.md              1376 lines — implementation SoT, untouched
+STATUS.md                     279 lines — 131 requirement rows from a real run
+AGENTS.md                      47 lines — agent rules; mm/ is read-only
+README.md                     142 lines
+MASTER_DOCUMENT.md           1054 lines
+Cargo.toml                             — workspace, 19 members (18 crates + tests), edition 2021, rust-version 1.78
+crates/                        18 crates, 18 692 lines of Rust over 46 .rs files
 gpu/cuda/                       4 .cu files + README (HARDWARE-UNVERIFIED)
 gpu/metal/compute.metal                — placeholder
 gpu/wgsl/compute.wgsl                  — placeholder
 apps/web/                      npm workspaces: quatricmorph-workspace, model-viewer, query-interface
 architectures/                 generic, llama (implemented); qwen, kimi, deepseek (declared)
-schemas/                       nsir 116, qtile 93, visualization 119, weightql 166 lines
-fixtures/                      tiny-llama-single (105 KB), tiny-llama-2shard (1.18 MB) + golden.json
-tests/                         cross-crate integration, incl. end_to_end_scalar_slice.rs
-docs/                          8 ADRs, requirements, roadmap, testing, mm evidence record
+schemas/                        5 JSON schemas — nsir 116, qtile 93, visualization 119, weightql 166,
+                               diagnostics/manifest.v1.json 592 lines (added by QM-0140)
+fixtures/                      tiny-llama-single (108 KB), tiny-llama-2shard (1.2 MB) + golden.json,
+                               real-checkpoint-record.json (added by QM-0100)
+tests/                         cross-crate integration: end_to_end_scalar_slice.rs,
+                               real_checkpoint_record.rs
+docs/                          13 ADRs, requirements, roadmap, testing, mm evidence record
 python/                        binding scaffold
-mm/                            READ-ONLY historical reference (5216 lines across 4 files)
-target/                        build output (4.3 GB of the repo's total size)
+mm/                            READ-ONLY historical reference (5216 lines across 5 files)
+target/                        build output — machine-local, not a repository fact
 ```
+
+Derivations, so no reader has to trust the numbers above:
+
+```bash
+wc -l ARCHITECTURE.md STATUS.md AGENTS.md README.md MASTER_DOCUMENT.md
+grep -cE '^\| [A-Z][A-Z0-9]*-[0-9]+ \|' STATUS.md      # STATUS requirement rows
+ls crates | wc -l                                       # crates
+find crates -name '*.rs' | xargs wc -l | tail -1        # Rust lines
+find schemas -name '*.json' | wc -l                     # JSON schemas
+ls docs/decisions/*.md | wc -l                          # ADRs
+wc -l mm/*.js mm/*.html                                 # mm/, 5 files
+```
+
+`mm/` has exactly one commit in its history (`c7b1f7e`, "feat: add mm") and
+`AGENTS.md` makes it read-only, so `5216` is stable. The **file count was wrong**:
+§3 nine lines below already enumerated five files — `viz.js`, `index.html`,
+`gui.js`, `util.js` **and** `ref.html` — while the label above said four. The
+label, not §3, was the defect.
 
 ### Crate inventory, by line count
 
-| Crate | Lines | Plane | State |
-| --- | --- | --- | --- |
-| `q-catalog` | 987 (+400 test) | Metadata | Working; SQLite |
-| `q-daemon` | 941 + 72 | — | 8 live routes, 5 × 501 |
-| `q-cache` | 714 | — | L1/L2 working, unwired |
-| `q-weightql` | 673+640+321+40 | Metadata | Parses, plans, executes reads |
-| `q-nsir` | 643+632+245+125+43 | Metadata | Working |
-| `q-expression` | 606 | Metadata | Closed AST |
-| `q-tiles` | 566 | Tensor Tile | `.qtile` v1 complete |
-| `q-cli` | 483 | — | 7 subcommands |
-| `q-statistics` | 481 | Tensor Tile | Computes; never persisted |
-| `q-tensor-runtime` | 478 | Metadata | LOD ladder, block planning |
-| `q-safetensors` | 435+391+361+131+32 | Artifact | Working |
-| `q-architecture` | 412 | Metadata | Plugin registry |
-| `q-gpu` | 363 | — | CPU backend is the reference |
-| `q-source` | ~2 000 across 11 files | Artifact | Working |
-| `q-cuda` | 221 | — | Refuses every operation |
-| `q-tileset` | 195 | Visualization | **Refuses to emit** |
-| `q-gltf` | 162 | Visualization | **Refuses to emit** |
+All **18** crates, re-measured at `1d49ffa`. `Lines` is the crate's total `.rs`
+line count and `Files` its `.rs` file count, both from one command per crate:
+
+```bash
+for c in crates/*/; do
+  printf '%s %s %s\n' "$(basename "$c")" \
+    "$(find "$c" -name '*.rs' | xargs wc -l | tail -1 | awk '{print $1}')" \
+    "$(find "$c" -name '*.rs' | wc -l)"
+done | sort -k2 -rn
+```
+
+The previous revision of this table gave hand-copied per-file breakdowns
+(`673+640+321+40`) for 17 crates. Every one of them had drifted as the crates
+grew, and `q-report` was missing entirely, so the column is now a single
+re-derivable total. Sum: **18 692** lines over **46** files.
+
+| Crate | Lines | Files | Plane | State |
+| --- | --- | --- | --- | --- |
+| `q-report` | 3034 | 3 | Diagnostics | v1 manifest schema, round-trip validated (`QM-0140`) |
+| `q-source` | 2270 | 11 | Artifact | Working |
+| `q-catalog` | 2104 | 4 | Metadata | Working; SQLite (`ADR-003`) |
+| `q-weightql` | 1935 | 5 | Metadata | Parses, plans, executes reads |
+| `q-nsir` | 1688 | 5 | Metadata | Working |
+| `q-safetensors` | 1469 | 5 | Artifact | Working |
+| `q-daemon` | 1087 | 2 | — | 8 live routes, 5 × 501 |
+| `q-cache` | 714 | 1 | — | L1/L2 working, unwired |
+| `q-cli` | 672 | 1 | — | 7 subcommands |
+| `q-architecture` | 647 | 1 | Metadata | Plugin registry |
+| `q-expression` | 606 | 1 | Metadata | Closed AST |
+| `q-tiles` | 566 | 1 | Tensor Tile | `.qtile` v1 complete |
+| `q-statistics` | 481 | 1 | Tensor Tile | Computes; never persisted |
+| `q-tensor-runtime` | 478 | 1 | Metadata | LOD ladder, block planning |
+| `q-gpu` | 363 | 1 | — | CPU backend is the reference |
+| `q-cuda` | 221 | 1 | — | Refuses every operation; a legitimate crate per `ADR-007` |
+| `q-tileset` | 195 | 1 | Visualization | **Refuses to emit** |
+| `q-gltf` | 162 | 1 | Visualization | **Refuses to emit** |
 
 ---
 

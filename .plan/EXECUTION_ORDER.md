@@ -266,9 +266,11 @@ For an agent starting now, with nothing in progress:
 2. **`QM-0001`** — while that runs, verify the baseline. `cargo test --workspace`
    and `npx vitest run`. Nothing may be built on an unverified baseline, and it
    takes minutes.
-3. **`QM-0002`** — validate the plan's own citations, including the
-   `apps/web/matrix-workspace` vs. `apps/web/quatricmorph-workspace` path drift
-   that ten `.plan` documents still get wrong.
+3. **`QM-0002`** — validate the plan's own citations. The web-workspace path
+   drift is closed here: `QM-0006` renamed the directory, so
+   `apps/web/matrix-workspace` no longer exists, and `QM-0002` corrected the
+   `.plan/` prose that still carried the old name to
+   `apps/web/quatricmorph-workspace`.
 
 Then `QM-0101`, and the lanes open.
 

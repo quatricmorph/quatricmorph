@@ -907,3 +907,168 @@ defect that silently licenses a later, weaker measurement.
 **Files changed:** none — the reviewer's own section carries the correction.
 **Dependency impact:** none.
 **Evidence:** the four file:line citations above, all verified by the reviewer.
+## 2026-08-05 — QM-0002 — `.plan/` citation, vocabulary and merge-path reconciliation
+
+**Discovered during:** `QM-0002` corpus sweep, re-run at `1d49ffa` after the
+branch was rebased onto `main` at `eca5a6a`, with
+`.plan/tools/check-plan-citations.py`.
+**Defect:** Unresolved citations across `.plan/`, plus non-path defects the
+checker cannot see (a status-value count, a hard-coded `Ready` set, two "pull
+request" requirements, and stale repository counts) — **and, found by the
+independent review, a false claim this task itself introduced: that the `gh`
+token "cannot push".**
+**Correction:** Eleven `.plan/` documents corrected; `.plan/DIVERGENCE_REGISTER.md`
+created with fourteen rows. Details and proving citations in
+`.plan/evidence/QM-0002.md`.
+**Files changed:** `.plan/README.md`, `.plan/CURRENT_ARCHITECTURE.md`,
+`.plan/REPOSITORY_ANALYSIS.md`, `.plan/MATRIX_WORKSPACE_ARCHITECTURE.md`,
+`.plan/EXECUTION_ORDER.md`, `.plan/RISK_REGISTER.md`, `.plan/STRATEGY_ALIGNMENT.md`,
+`.plan/phases/phase-13-diagnostic-surface/README.md`, `.plan/evidence/QM-0140.md`,
+`.plan/evidence/QM-0167.md`, and the `TASK.md` files of `QM-0002`, `QM-0141`,
+`QM-0150`, `QM-0153`, `QM-0165`, `QM-0167`.
+**Dependency impact:** None. No task's `Dependencies` or `Blocks` changed, no ID
+renumbered, and no `## Status` other than `QM-0002`'s own.
+**Evidence:** `python3 .plan/tools/check-plan-citations.py` at `1d49ffa` →
+**12 unresolved before, 2 after** on the same tool (the inherited tool read 14 on
+the inherited corpus and 15 once the corpus stopped masking itself — all four runs
+are tabulated in `.plan/evidence/QM-0002.md`), exit 1 throughout. The two survivors are
+`QM-0006`'s deliberate pre-rename record (finding 2) and one citation inside the
+frozen `## Independent review` section of `.plan/evidence/QM-0002.md`, which the
+controller's brief requires be left intact. Injected-failure demonstration
+2 → 5 → 2, with both documented exemptions firing once each. Gates at `1d49ffa`:
+`cargo fmt` 0, `cargo clippy -D warnings` 0, `cargo test --workspace` 0
+(**434 passed; 0 failed; 0 ignored** over 43 `test result:` lines),
+`npx vitest run` 0 (**115 passed, 13 files**), `./scripts/verify-baseline.sh` 0
+(at floor 434/43/115/13), `./scripts/verify-baseline.test.sh` 0 (46 run, 0 failed).
+
+### Fix cycle 1 — what the independent review found, and what it changed
+
+`review-agent-7` returned `CHANGES_REQUESTED` at head `6e99e62`: **one root cause,
+seven symptoms — the branch's base was fifteen commits behind `main`, so a task
+whose whole job is reconciliation asserted stale facts.** This entry is corrected
+in place rather than superseded, because it had never merged. The corrections:
+
+1. **The push claim was false, and false when written.** An earlier revision of
+   `.plan/README.md` and of `DIV-011` said the `gh` token "cannot push …
+   `Permission to quatricmorph/quatricmorph.git denied`", citing the **superseded**
+   2026-08-04 entry ("Run 1's Stage 0 credential halt is superseded"). The entry
+   that supersedes it — *"push to `origin` succeeds; Run 2's credential finding is
+   superseded"*, commit `3394510` — is an **ancestor of this branch's own base** and
+   sits in this same file. Both facts are now stated separately: **no PR is
+   creatable** (`gh api repos/quatricmorph/quatricmorph --jq .permissions` →
+   `"push": false`) and **pushing over SSH succeeds** (`git ls-remote origin
+   refs/heads/main` equals local `main`; `git reflog show origin/main` has an
+   `update by push` per merge). `DIV-011` moved `Resolved` → `Decided` with the
+   source-by-source derivation written out.
+2. **Counts re-measured, not excused.** Rust **318 / 39 → 434 / 43**; crates
+   **17 → 18** (`QM-0140` added `crates/q-report`); JSON schemas **4 → 5**
+   (`schemas/diagnostics/manifest.v1.json`); `Cargo.toml` members **18 → 19**;
+   `ARCHITECTURE.md` 1261 → **1376** lines; `STATUS.md` 278/129 rows →
+   **279 / 131**; `AGENTS.md` 48 → **47**; root `README.md` 127 → **142**;
+   `crates/` ~15 184 → **18 692** lines over 46 files; `mm/` "4 files" → **5**
+   (`REPOSITORY_ANALYSIS.md` §3 nine lines below already said five). The crate
+   inventory table gained its missing `q-report` row and its hand-copied per-file
+   breakdowns became one re-derivable total per crate.
+3. **`QM-0167`'s seven citations were repaired, not deferred.** The stated reason
+   for deferring them — "another agent is editing that file in this run" — became
+   false when `QM-0167` merged (`f132393`) and reached `Complete`. `TASK.md:121`
+   is unambiguous. Finding 1 below records what was done instead of what was
+   deferred.
+4. **The checker's own header no longer says `scripts/` "does not exist yet".**
+   It exists, and the same file's `NEW_TOP_LEVEL` comment already said so. The
+   reason the checker lives in `.plan/tools/` is the boundary, not absence.
+5. **Three checker defects fixed — two false positives and one false exemption.**
+   Detail in `.plan/evidence/QM-0002.md` under `## Fix cycle 1`. (i) A
+   document-relative template placeholder was shape-checked with its `../` intact,
+   so every such placeholder in `.plan/README.md` failed. (ii) The elision `…` was
+   not recognised where ASCII `...` was. (iii) **Worse than either**: a `## …`
+   heading quoted inside a fenced code block set the document section for everything
+   after it, so quoting a `## Test Cases` heading laundered every later citation
+   through `E1`. Reproduced: pasting this cycle's probe file verbatim took `E1` from
+   420 to 506 and made two real failures vanish. The `section` update now happens
+   only outside a fence. **The two documented exemptions are themselves unchanged**
+   and `E1` reads 420 before and after.
+6. **Conflict resolution honoured a deletion.** `f132393` deleted
+   `.plan/README.md`'s "On the rank 1 / rank 2 conflict" paragraph and rewrote the
+   authority table 8 → 9 rows. The rebase kept the deletion and dropped this
+   task's edit to the deleted paragraph rather than resurrecting it.
+7. **A line-initial triple backtick in `.plan/evidence/QM-0002.md` was masking part
+   of the corpus from the checker.** An inline code span written at the start of a
+   line reads as a **fence delimiter** to the scanner, which skips everything inside
+   a fence. That one line flipped fence parity and hid citations below it — including
+   inside the independent reviewer's own section — and left the file ending in an
+   open-fence state. A checker that cannot see part of its corpus reports a count
+   that is **too low, silently**, which is the same asymmetry `QM-0001` records for a
+   floor set below reality. Rewritten as an italic quotation; all **181**
+   `.plan/**/*.md` files then swept for fence parity, **zero** odd. This is why the
+   honest before-count is 15 and not 14.
+
+### Findings, and who they went to
+
+1. **`QM-0167` — seven document-relative citations that did not resolve. FIXED
+   HERE in fix cycle 1.** `.plan/tasks/QM-0167-root-document-amendment/TASK.md:28-31`
+   (`:25-27` before `main` moved) cited `../ARCHITECTURE.md`,
+   `../MASTER_DOCUMENT.md`, `../docs/ROADMAP.md`, `../docs/PRODUCT_BRIEF.md`,
+   `../docs/requirements/VIZ_MVP.md`, `../README.md` and `../STATUS.md` inside
+   `## Repository Evidence`. From that file's directory `../` is `.plan/tasks/`, so
+   `../ARCHITECTURE.md` meant `.plan/tasks/ARCHITECTURE.md`, which does not exist,
+   and the other six behaved the same way. The neighbouring bullets in the same
+   list are repo-root-relative (`.plan/STRATEGY_ALIGNMENT.md`), which is the
+   convention followed: the `../` is dropped, and the ambiguous bare `README.md` is
+   written as "the repository-root `README.md`" so it cannot be read as
+   `.plan/README.md`. **The earlier deferral reason — "another agent is editing that
+   file in this run" — was true when written and false by the time it was read:
+   `QM-0167` merged as `f132393` and is `Complete`, so there is no concurrent
+   editor and `TASK.md:121` ("an unresolvable citation is a plan bug, fixed here,
+   not deferred") governs.** The identical defect in `QM-0141` and `QM-0165` was
+   fixed in the first pass; before/after for all of them is in
+   `.plan/evidence/QM-0002.md`. `QM-0167`'s `## Status` was **not** touched.
+2. **`QM-0006` — one pre-rename evidence citation, deliberately left.**
+   `.plan/tasks/QM-0006-web-workspace-path-repair/TASK.md:40` cites
+   `apps/web/matrix-workspace/package.json` in `## Repository Evidence`. That path
+   no longer exists *because `QM-0006` renamed it*, so the citation is accurate as
+   the pre-rename record and rewriting it would destroy the audit trail for a
+   merged, `Complete` task. `QM-0006`'s own `## Out of Scope` hands the `.plan/`
+   *prose* to `QM-0002` but not its own evidence section. Left as a permanent,
+   documented, owner-assigned exception.
+3. **`.plan/ORCHESTRATION_STATE.md:141` is stale.** It records the web gate as
+   `27 passed (3 files)` — "BROKEN, see QM-0006" — and the web build as failing.
+   `QM-0006` merged; both now pass (`115 passed (115)`, 13 files). Controller-owned
+   file; `QM-0002` may not edit it. The controller has since appended its "Run 4"
+   section to the same file, so the stale line is now clearly historical rather
+   than current, but it is still uncorrected in place.
+4. **`COMPONENTS_MAP.md` has no owning task.** It sits at the repository root and
+   still names the pre-rename workspace directory. `grep -rn "COMPONENTS_MAP" .plan/`
+   finds no task whose `## Files Expected to Change` names it. `QM-0002`'s
+   `## Program Boundary` is `.plan/` only, so it cannot be corrected here. It needs
+   an owner before it can be corrected at all. Registered as `DIV-010`.
+5. **`STATUS.md:9-10` is behind the tree.** It claims `290` Rust and
+   `101 (12 files)` web; the tree at `1d49ffa` prints **`434`** over 43 binaries and
+   `115 (13 files)`. The gap is wider than first recorded — it read `318` then —
+   because `QM-0140` and `QM-0100` merged in between. That is `QM-0091`'s
+   regeneration, not a plan defect. Registered as `DIV-009`.
+6. **`QM-0002`'s own `## Files Expected to Add` contradicts its
+   `## Program Boundary`.** The former names `scripts/check-plan-citations.sh`;
+   the latter says "`.plan/` only. This task changes no repository file." They
+   cannot both hold, so the checker was placed at
+   `.plan/tools/check-plan-citations.py`. **The reason is the boundary alone.**
+   An earlier revision of this finding and of the checker's own header added that
+   `scripts/` "does not exist" — that was false when written (`QM-0093` had already
+   landed `scripts/license-audit.sh`, in the very commit this branch was based on)
+   and is corrected in fix cycle 1. `scripts/` now also holds `baseline.json`,
+   `verify-baseline.sh` and `verify-baseline.test.sh` from `QM-0001`. **Acceptance
+   criterion 1, which names the `scripts/` path, is not claimed as met.** A future
+   pass should reconcile the two sections; `QM-0002` did not edit its own scope to
+   make itself pass, and the independent review endorsed that disposition.
+7. **`.plan/evidence/QM-0140.md` and `.plan/evidence/QM-0167.md` — three citations
+   repaired, no claim touched.** `QM-0140.md:221` and `:601` cited
+   `tests/schema_conformance.rs`, which does not exist — repo-anchored that names
+   the root `tests/` crate, and the file is not there. The real path is
+   `crates/q-report/tests/schema_conformance.rs`, and the test counts around it
+   (59 lib + 38 integration) are unchanged. `QM-0167.md:20` cited
+   `docs/decisions/ADR-003`, which does not exist under that name; the directory
+   `docs/decisions/` is cited instead and the three ADR ids left as ids. These are
+   merged tasks' records, so the repairs add a prefix or point at the directory and
+   change nothing anyone claimed. Contrast finding 2: `QM-0006`'s path was *accurate
+   as a pre-rename record*, whereas these three were never correct from any
+   directory.

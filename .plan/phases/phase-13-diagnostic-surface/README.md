@@ -15,7 +15,7 @@ manifest.json
 ## Deliberately small
 
 This phase builds **no Cesium, no 3D tile traversal, no Three.js scene graph, no
-GLB**. Those exist in `apps/web/model-viewer` and `apps/web/matrix-workspace`,
+GLB**. Those exist in `apps/web/model-viewer` and `apps/web/quatricmorph-workspace`,
 they keep their tests, and they are deferred with the platform release.
 
 Two reasons, both from the strategy:

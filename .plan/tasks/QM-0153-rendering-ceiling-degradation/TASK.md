@@ -18,7 +18,7 @@ a footnote.
 
 ## Repository Evidence
 
-* `apps/web/matrix-workspace/src/tensor/block-adapter.ts` — `assertBlockIsBounded`
+* `apps/web/quatricmorph-workspace/src/tensor/block-adapter.ts` — `assertBlockIsBounded`
   and `refuses_a_block_that_would_pull_a_whole_tensor_into_the_browser`
   (`GRID-005`): the ceiling-and-refuse idiom.
 * `.plan/PRODUCT_SCOPE.md` §6 — degrade to an aggregate representation and say so

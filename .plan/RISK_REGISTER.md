@@ -45,7 +45,7 @@ directory, fully specified and tempting, and the tile pipeline in particular is
 genuinely close to working.
 
 **Trigger.** Any commit touching `crates/q-tiles`, `q-gltf`, `q-tileset`,
-`apps/web/model-viewer`, or `apps/web/matrix-workspace` in a v1 task; or a
+`apps/web/model-viewer`, or `apps/web/quatricmorph-workspace` in a v1 task; or a
 `Deferred` task moved to `Ready` without a `VALIDATION_PLAN.md` §5 decision.
 
 **Mitigation.** `Deferred` is a distinct status an agent may not start

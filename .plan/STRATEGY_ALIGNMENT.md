@@ -92,7 +92,7 @@ decision that has not been thought through.
 | Cost | Assessment |
 | --- | --- |
 | The "wow" demo slips | Real. The 3D checkpoint fly-through is the thing that gets shared. The strategy's answer: that is distribution, not validation (§9), and a heat-map that finds a real problem gets shared by the person it helped |
-| Three web apps sit idle | `model-viewer` and `matrix-workspace` keep their tests and their builds; they do not rot in one release cycle |
+| Three web apps sit idle | `model-viewer` and `quatricmorph-workspace` keep their tests and their builds; they do not rot in one release cycle |
 | The shared spatial contract (`QM-0004`) is not built | It has three consumers, none of which v1 builds. Building it now means writing a schema against three imagined callers |
 | Momentum on a nearly-complete tile pipeline | `.qtile` round-trips and the builders refuse placeholders — genuinely close. But "close to an artifact nobody has asked to buy" is the trap the value ladder describes |
 | Sunk design work | Roughly 30 task specifications move to a later release. None is wasted; all are dated and cited |
