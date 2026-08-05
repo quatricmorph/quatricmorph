@@ -2,8 +2,9 @@
 
 ## Status
 
-Ready
+Complete
 
+Claimed by `impl-agent-9` on branch `task/qm-0010-qwen-resolver`.
 No longer waits on `QM-0005` (deferred). v1's target checkpoints are Qwen-family, so the resolver is needed early.
 
 **v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
@@ -193,3 +194,51 @@ cargo run -p q-cli -- inspect fixtures/tiny-qwen-single
 * `q-cli inspect` output on the Qwen fixture.
 * The negative test asserting `unknown`.
 * `cargo test --workspace` count, increased.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | `Awaiting Independent Review` |
+| Lane | T |
+| Branch | `task/qm-0010-qwen-resolver` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0010` |
+| Base commit | `6fb593a` |
+| Head commit | The single commit `feat(q-nsir): add the Qwen architecture resolver [QM-0010]`, one commit ahead of `6fb593a` and carrying the whole change including this row. Its SHA is deliberately absent: a commit cannot contain its own hash, and this task authors exactly one commit rather than a second one that only records a SHA. Read it with `git rev-parse task/qm-0010-qwen-resolver`; `git log --oneline 6fb593a..HEAD` is one line. |
+| Implementation agent | `impl-agent-9` |
+| Evidence record | `.plan/evidence/QM-0010.md` |
+| Merge path | L |
+
+**Tests added:** 25 — 14 in `crates/q-nsir/src/resolver.rs`, 11 in
+`crates/q-architecture/src/lib.rs`. One pre-existing test,
+`unimplemented_plugins_are_declared_and_never_claim`, was rewritten in place
+rather than added: implementing Qwen makes its old assertions false by design, and
+acceptance criterion 5 anticipates exactly that. The rewrite strengthens it — see
+`.plan/evidence/QM-0010.md` §Tests added.
+
+**Floor:** `scripts/baseline.json` `rust_tests` **434 → 459**; `rust_binaries`
+**43 → 43** (unchanged). `web_tests: 115` / `web_files: 13` untouched and not
+re-measured, because no file under `apps/web/` changed.
+
+**Three items the reviewer must decide, all flagged in the evidence record and
+none actioned here:**
+
+1. `./scripts/verify-baseline.sh` exits **1** on this branch. Exactly one of its
+   24 checks fails — `apps/web dependencies are not installed` — because a fresh
+   worktree has no gitignored `node_modules`. Both floor comparisons pass at the
+   new values (`rust tests: measured 459, floor 459 — at floor`). No exit-0 run is
+   claimed.
+2. `scripts/baseline.json`'s `commit` field still names `91abade`, where 434 was
+   measured. A commit cannot contain its own hash;
+   `.plan/evidence/QM-0001.md` places the correction in the squash commit that
+   lands the raise.
+3. `architectures/kimi/plugin.toml:3` and `architectures/deepseek/plugin.toml:3`
+   now carry a false sentence — "only `generic` and `llama` are implemented in
+   this pass". Both files are outside this task's boundary
+   (`architectures/qwen/`), so the one-line correction was **not** made here. The
+   same sentence in the Qwen manifest was corrected, because that file is in
+   scope.
+
+**Not updated:** `STATUS.md` — `NSIR-006` still reads **Not Started** there. It
+covers Qwen *and* Kimi *and* DeepSeek, only Qwen is in scope for this task, and
+`STATUS.md` is on this task's do-not-touch list.

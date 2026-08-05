@@ -25,7 +25,10 @@
 //!
 //! Copy `architectures/llama/plugin.toml`, change `[plugin].id`, `[match]`, and
 //! the rule table, set `implemented = true`. No Rust change is needed unless the
-//! family needs a structural concept the schema cannot express.
+//! family needs a structural concept the schema cannot express. `architectures/qwen`
+//! (`QM-0010`, `NSIR-006`) is the worked example: it covers Qwen2 and Qwen3,
+//! dense and MoE, including per-head query/key norms and `experts.N.*`
+//! addressing, and required **no** change to this crate or to `q-nsir`.
 
 use q_source::error::{QError, Result};
 use serde::{Deserialize, Serialize};
@@ -305,8 +308,9 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// The built-in registry: `generic` + `llama` implemented, the rest
-    /// declared-but-unimplemented.
+    /// The built-in registry: `generic`, `llama`, and `qwen` implemented;
+    /// `kimi` and `deepseek` declared-but-unimplemented, so neither ever claims
+    /// a model (`unimplemented_plugins_are_declared_and_never_claim`).
     pub fn builtin() -> Result<Self> {
         let plugins = [
             ("generic", BUILTIN_GENERIC),
@@ -564,19 +568,6 @@ mod tests {
     }
 
     #[test]
-    fn unimplemented_plugins_are_declared_and_never_claim() {
-        let r = Registry::builtin().unwrap();
-        let mut unimpl = r.declared_but_unimplemented();
-        unimpl.sort();
-        assert_eq!(unimpl, vec!["deepseek", "kimi", "qwen"]);
-        // Qwen declares model_type "qwen2" but is not implemented, so a qwen2
-        // model falls back to generic rather than being silently mis-resolved.
-        let sel = r.select(Some("qwen2"), Some("Qwen2ForCausalLM")).unwrap();
-        assert_eq!(sel.id(), "generic");
-        assert!(!sel.matched);
-    }
-
-    #[test]
     fn llama_is_selected_by_model_type_and_by_architecture() {
         let r = Registry::builtin().unwrap();
         assert_eq!(r.select(Some("llama"), None).unwrap().id(), "llama");
@@ -643,5 +634,234 @@ mod tests {
             rule.match_kind == MatchKind::ExpertSuffix && rule.role == "moe_expert_down_projection"
         }));
         assert_eq!(llama.naming.expert_segment.as_deref(), Some("experts"));
+    }
+
+    // ------------------------------------------------------------------------
+    // Qwen family — QM-0010, requirement NSIR-006.
+    // ------------------------------------------------------------------------
+
+    /// The Qwen fixture's `config.json`, read from disk. Only the two keys the
+    /// registry selects on are extracted, because those are the only two the
+    /// registry is allowed to look at.
+    fn qwen_fixture_selection_keys() -> (Option<String>, Option<String>) {
+        let text = fixture_config_text("tiny-qwen-single");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let model_type = v["model_type"].as_str().map(str::to_string);
+        let architecture = v["architectures"][0].as_str().map(str::to_string);
+        (model_type, architecture)
+    }
+
+    #[test]
+    fn qwen_is_selected_by_model_type_and_by_architecture() {
+        // Acceptance criterion 4. The manifest declares two model types and
+        // four architecture strings; each is asserted rather than sampled.
+        let r = Registry::builtin().unwrap();
+        for model_type in ["qwen2", "qwen3"] {
+            let sel = r.select(Some(model_type), None).unwrap();
+            assert_eq!(sel.id(), "qwen", "model_type {model_type}");
+            assert!(sel.matched, "model_type {model_type}");
+        }
+        for architecture in [
+            "Qwen2ForCausalLM",
+            "Qwen3ForCausalLM",
+            "Qwen2MoeForCausalLM",
+            "Qwen3MoeForCausalLM",
+        ] {
+            let sel = r.select(None, Some(architecture)).unwrap();
+            assert_eq!(sel.id(), "qwen", "architecture {architecture}");
+            assert!(sel.matched, "architecture {architecture}");
+        }
+        // Priority: Qwen outranks the generic fallback rather than tying it.
+        assert!(r.get("qwen").unwrap().plugin.priority > r.get("generic").unwrap().plugin.priority);
+    }
+
+    #[test]
+    fn the_qwen_fixture_is_claimed_by_the_qwen_plugin_from_what_it_declares() {
+        // The fixture's config.json is the input, so the selection is exercised
+        // against a real file rather than against literals typed here.
+        let r = Registry::builtin().unwrap();
+        let (model_type, architecture) = qwen_fixture_selection_keys();
+        assert_eq!(model_type.as_deref(), Some("qwen3"));
+        assert_eq!(architecture.as_deref(), Some("Qwen3ForCausalLM"));
+        let sel = r
+            .select(model_type.as_deref(), architecture.as_deref())
+            .unwrap();
+        assert_eq!(sel.id(), "qwen");
+        assert!(sel.matched);
+    }
+
+    #[test]
+    fn builtin_registry_reports_qwen_as_implemented_with_rules_and_aliases() {
+        // Acceptance criterion 1's structural half: `implemented = true` is a
+        // claim, and a claim with no rule table behind it would be a lie.
+        let r = Registry::builtin().unwrap();
+        let qwen = r.get("qwen").unwrap();
+        assert!(qwen.is_implemented());
+        assert!(!qwen.rules.is_empty());
+        assert!(!qwen.aliases.is_empty());
+        assert_eq!(qwen.naming.stack, "language");
+        assert_eq!(qwen.naming.layer_segment, "layers");
+    }
+
+    #[test]
+    fn qwen_expert_rules_use_the_expert_match_kind() {
+        // Acceptance criterion 6's structural half: `experts.N.*` addressing
+        // needs both the expert segment and rules that match inside it.
+        let r = Registry::builtin().unwrap();
+        let qwen = r.get("qwen").unwrap();
+        assert_eq!(qwen.naming.expert_segment.as_deref(), Some("experts"));
+        for role in [
+            "moe_expert_gate_projection",
+            "moe_expert_up_projection",
+            "moe_expert_down_projection",
+        ] {
+            assert!(
+                qwen.rules
+                    .iter()
+                    .any(|rule| rule.match_kind == MatchKind::ExpertSuffix && rule.role == role),
+                "no expert-suffix rule for {role}"
+            );
+        }
+        // The router is a per-layer tensor, not a per-expert one.
+        assert!(qwen
+            .rules
+            .iter()
+            .any(|rule| { rule.role == "moe_router" && rule.match_kind == MatchKind::Suffix }));
+    }
+
+    #[test]
+    fn qwen_declares_an_ambiguous_alias_alongside_the_unambiguous_ones() {
+        // NSIR-007 is a property of the manifest before it is a property of
+        // resolution: an alias with several roles is ambiguous *by declaration*.
+        let r = Registry::builtin().unwrap();
+        let map = r.get("qwen").unwrap().alias_map();
+        assert_eq!(map["Q"], vec!["attention_query_projection"]);
+        assert_eq!(map["Att"].len(), 4);
+        assert_eq!(map["QKNorm"].len(), 2);
+        for alias in ["K", "V", "O", "MLP.down", "Expert.up", "Router", "Head"] {
+            assert!(map.contains_key(alias), "missing alias {alias}");
+        }
+    }
+
+    #[test]
+    fn unimplemented_plugins_are_declared_and_never_claim() {
+        let r = Registry::builtin().unwrap();
+        let mut unimpl = r.declared_but_unimplemented();
+        unimpl.sort();
+        // QM-0010 implemented Qwen; Kimi and DeepSeek stay declared-but-absent
+        // by design (QM-0010 §Out of Scope, PRODUCT_SCOPE.md), and this test
+        // still asserts that neither of them claims a model.
+        assert_eq!(unimpl, vec!["deepseek", "kimi"]);
+        for (model_type, architecture) in [
+            (Some("kimi"), Some("KimiForCausalLM")),
+            (Some("deepseek_v3"), Some("DeepseekV3ForCausalLM")),
+        ] {
+            let sel = r.select(model_type, architecture).unwrap();
+            assert_eq!(sel.id(), "generic", "{model_type:?} was claimed");
+            assert!(!sel.matched);
+        }
+        // The manifests still exist and still declare what they would match, so
+        // the gap is visible rather than merely missing.
+        assert!(!r.get("kimi").unwrap().match_spec.model_types.is_empty());
+        assert!(r.get("kimi").unwrap().rules.is_empty());
+        assert!(r.get("deepseek").unwrap().rules.is_empty());
+    }
+
+    #[test]
+    fn a_kimi_model_falls_back_to_generic_and_kimi_does_not_claim_it() {
+        // QM-0010 §Test Cases, row 7, asserted on its own: a `model_type` a
+        // declared-but-unimplemented plugin names must still reach `generic`.
+        let r = Registry::builtin().unwrap();
+        let kimi = r.get("kimi").unwrap();
+        assert!(kimi.match_spec.model_types.iter().any(|m| m == "kimi"));
+        assert!(!kimi.claims(Some("kimi"), None));
+        let sel = r.select(Some("kimi"), None).unwrap();
+        assert_eq!(sel.id(), "generic");
+        assert!(!sel.matched);
+    }
+
+    #[test]
+    fn no_plugin_rule_declares_more_axes_than_the_implemented_rank_ceiling() {
+        // ADR-010: rank ≤ 3 is implemented and rank > 3 refuses rather than
+        // flattens. Rank is not expressible in a *name* resolver — nothing here
+        // sees a shape — so the nearest expressible surface is the number of
+        // axis labels a rule declares. A rule declaring four would be a
+        // manifest asserting a rank the rest of the system refuses to render.
+        let r = Registry::builtin().unwrap();
+        for plugin in r.plugins() {
+            for rule in &plugin.rules {
+                assert!(
+                    rule.axes.len() <= 3,
+                    "{}: rule `{}` declares {} axes; ADR-010 implements rank <= 3",
+                    plugin.id(),
+                    rule.name,
+                    rule.axes.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_malformed_qwen_manifest_is_refused_at_load_naming_the_file() {
+        // QM-0010 §Error Handling. Truncating the real manifest is a more
+        // faithful corruption than an unrelated snippet.
+        let mut text = BUILTIN_QWEN.to_string();
+        text.truncate(text.len() / 2);
+        text.push_str("\n[[rules]]\nname = \n");
+        let err = ArchitecturePlugin::parse("architectures/qwen/plugin.toml", &text).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("architectures/qwen/plugin.toml"), "{msg}");
+        // A manifest missing its identity is refused rather than defaulted into
+        // an anonymous plugin.
+        let err = ArchitecturePlugin::parse("qwen.toml", "[match]\nmodel_types = [\"qwen3\"]\n")
+            .unwrap_err();
+        assert!(err.to_string().contains("qwen.toml"));
+    }
+
+    #[test]
+    fn the_qwen_fixture_config_declares_every_field_this_type_records() {
+        // Hand-read from fixtures/tiny-qwen-single/config.json.
+        let c = ModelConfigMetadata::parse("config.json", &fixture_config_text("tiny-qwen-single"))
+            .unwrap();
+        assert_eq!(c.hidden_size, Some(48));
+        assert_eq!(c.num_hidden_layers, Some(12));
+        assert_eq!(c.intermediate_size, Some(64));
+        assert_eq!(c.num_attention_heads, Some(8));
+        assert_eq!(c.num_key_value_heads, Some(2));
+        assert_eq!(c.vocab_size, Some(64));
+        assert_eq!(c.torch_dtype.as_deref(), Some("bfloat16"));
+        assert!(!c.is_empty());
+    }
+
+    #[test]
+    fn a_qwen_config_field_that_is_absent_is_never_inferred_from_its_neighbours() {
+        // `num_attention_heads * head_dim == 128`, which is not this model's
+        // hidden_size (48); `num_experts` says nothing about `num_hidden_layers`.
+        let c = ModelConfigMetadata::parse(
+            "config.json",
+            r#"{"model_type": "qwen3_moe", "num_attention_heads": 8, "head_dim": 128,
+                "num_experts": 128, "num_experts_per_tok": 8}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hidden_size, None);
+        assert_eq!(c.num_hidden_layers, None);
+        assert_eq!(c.intermediate_size, None);
+        assert_eq!(c.num_key_value_heads, None);
+        assert_eq!(c.num_attention_heads, Some(8));
+    }
+
+    #[test]
+    fn a_malformed_qwen_config_json_is_refused_with_the_file_named() {
+        let err = ModelConfigMetadata::parse(
+            "fixtures/tiny-qwen-single/config.json",
+            r#"{"model_type": "qwen3", "hidden_size": 48,"#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("fixtures/tiny-qwen-single/config.json"),
+            "{msg}"
+        );
+        assert!(matches!(err, QError::Json { .. }), "{err:?}");
     }
 }

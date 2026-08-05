@@ -23,10 +23,18 @@
 //!
 //! ## Scope in this pass
 //!
-//! Implemented: the generic transformer resolver, the Llama-family resolver,
-//! canonical address construction and parsing, the alias grammar, and ambiguity
-//! handling. Qwen / Kimi / DeepSeek exist as declared-but-unimplemented plugin
-//! manifests (`NSIR-006`) — adding one is a manifest edit, not a rewrite.
+//! Implemented: the generic transformer resolver, the Llama-family resolver, the
+//! Qwen-family resolver (`NSIR-006`, Qwen2/Qwen3, dense and MoE), canonical
+//! address construction and parsing, the alias grammar, and ambiguity handling.
+//! Kimi and DeepSeek exist as declared-but-unimplemented plugin manifests and
+//! never claim a model. Adding one is a manifest edit, not a rewrite — Qwen
+//! needed no Rust change at all, which is the evidence for that claim.
+//!
+//! A resolved address is **exact**: it is a deterministic function of the raw
+//! name and a declared rule table, with nothing sampled and nothing estimated.
+//! What it is *not* is a statement about meaning. Resolution establishes where a
+//! tensor lives and what its author called it; it establishes nothing about what
+//! the tensor has learned or computes.
 
 pub mod address;
 pub mod alias;

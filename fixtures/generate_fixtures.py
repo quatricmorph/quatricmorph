@@ -17,9 +17,17 @@ against, so the Rust test stays hermetic (no Python in CI) while the recorded
 values remain traceable to a real `safetensors` read.
 
 Usage:
-    python3 fixtures/generate_fixtures.py [--out fixtures]
+    python3 fixtures/generate_fixtures.py [--out fixtures] [--llama] [--qwen]
+
+With no selector every fixture is written, which is what CI's reproducibility
+gate runs (`.github/workflows/build.yaml`: `python3 fixtures/generate_fixtures.py`
+followed by `git diff --exit-code -- fixtures/`). The selectors exist only to
+regenerate one fixture while iterating; they must never be needed for the gate,
+or a fixture could drift without the gate noticing.
 
 Requires: numpy, safetensors  (see fixtures/README.md for a venv recipe).
+The Qwen fixture itself needs neither — it carries no weights — but this module
+imports numpy at load time, so the venv is still the way to run it.
 
 NOTE: this generates *metadata-and-weights at test scale* (~1.2 MB). It is not
 and must never become a proxy for a real checkpoint. Trillion-parameter scaling
@@ -336,25 +344,345 @@ def build_golden(sharded_dir: Path, index: dict) -> dict:
     }
 
 
+# --- tiny-qwen-single: a NAMING fixture, not a weights fixture ---------------
+#
+# QM-0010 / NSIR-006. What is under test here is *name resolution*, so this
+# fixture deliberately carries **no weight payload and no `.safetensors` file**.
+# ARCHITECTURE.md §4.2 forbids inferring a role from a shape, and
+# `q_nsir::NsirResolver::resolve_name` takes a `&str` and nothing else — a shape
+# is not merely unused, it is unavailable. A fixture of weights would therefore
+# test nothing this fixture does not, while inviting exactly the shape-based
+# reasoning the requirement forbids.
+#
+# Two files are written:
+#
+#   config.json  — a Qwen3-shaped declared config, so `q-architecture`'s registry
+#                  can select the plugin from `model_type` / `architectures` the
+#                  same way it does for `tiny-llama-2shard`.
+#   golden.json  — the name-resolution contract: for every Qwen name family, the
+#                  raw name and the canonical address it must produce, plus the
+#                  names the plugin is deliberately NOT taught.
+#
+# PROVENANCE OF THE EXPECTED ADDRESSES. Every `canonical_name` below was written
+# out by hand from the address rule in ARCHITECTURE.md §6.1, namely
+#
+#     model[.layers[N]].<component>[.experts[E]].<operation>[.<parameter>]
+#
+# with the component path segments and operation names taken from the declared
+# manifests under `architectures/`. **No value in this file was produced by
+# running the Rust resolver**, which is what makes the Rust test that asserts
+# against this file a cross-check rather than a tautology. The same rule is
+# applied to `architectures/llama/plugin.toml`'s tensors by
+# `q_nsir::resolver::tests::llama_resolves_the_architecture_md_example`, whose
+# expected string is likewise hand-written — the two agree, which is the point:
+# a canonical address must not depend on which family produced the tensor.
+
+# Layer 10 and expert 37 are the indices ARCHITECTURE.md §4.2 and QM-0010's
+# §Data Contracts use, so the rows below line up with the specification text.
+QWEN_LAYER = 10
+QWEN_EXPERT = 37
+QWEN_ROUTER_LAYER = 5
+
+QWEN_CONFIG = {
+    # `architectures` and `model_type` are the two keys the registry selects on.
+    "architectures": ["Qwen3ForCausalLM"],
+    "model_type": "qwen3",
+    "hidden_size": 48,
+    "intermediate_size": 64,
+    "num_hidden_layers": 12,
+    "num_attention_heads": 8,
+    "num_key_value_heads": 2,
+    "head_dim": 16,
+    "vocab_size": 64,
+    "max_position_embeddings": 128,
+    "rms_norm_eps": 1e-06,
+    "rope_theta": 1000000.0,
+    # Qwen3 drops the Qwen2 attention biases and adds per-head q/k norms. Both
+    # spellings are covered by golden.json's rows regardless of this flag; the
+    # flag is recorded because it is what the checkpoint declares, and nothing
+    # in the resolver reads it (a bias tensor is resolved by its *name*).
+    "attention_bias": False,
+    "tie_word_embeddings": False,
+    "torch_dtype": "bfloat16",
+}
+
+
+# QM-0010 §Scope's list of name families, verbatim and in its order. Acceptance
+# criterion 1 is "resolves all 15 name families", so this list is 15 entries
+# long and every row below carries one of these labels — a reviewer can count.
+# The last entry bundles MoE exactly as §Scope words it: "MoE `experts.N.*` plus
+# `mlp.gate.weight`".
+QWEN_NAME_FAMILIES = [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+    "input_layernorm",
+    "post_attention_layernorm",
+    "q_norm",
+    "k_norm",
+    "embed_tokens",
+    "lm_head",
+    "model.norm",
+    "moe",
+]
+
+
+def _qwen_rows() -> list[dict]:
+    """The name-resolution contract, one row per raw tensor name.
+
+    `family` names the entry in QWEN_NAME_FAMILIES; `variant` records which Qwen
+    release emits the name, so a reader can see that one fixture describes a
+    family's *naming*, not one checkpoint's contents.
+    """
+    lay = QWEN_LAYER
+    exp = QWEN_EXPERT
+    rl = QWEN_ROUTER_LAYER
+    wi = ["output_channel", "input_channel"]  # a 2-D projection weight
+    bo = ["output_channel"]  # a 1-D projection bias
+    hid = ["hidden_channel"]
+    head = ["head_channel"]
+    vocab = ["vocabulary", "hidden_channel"]
+
+    def row(family, variant, raw, canonical, role, component, operation,
+            parameter, axes, layer=None, expert=None):
+        return {
+            "family": family,
+            "variant": variant,
+            "raw_name": raw,
+            "canonical_name": canonical,
+            "role": role,
+            "component": component,
+            "operation": operation,
+            "parameter": parameter,
+            "axes": axes,
+            "layer": layer,
+            "expert": expert,
+        }
+
+    p = f"model.layers.{lay}."
+    c = f"model.layers[{lay}]."
+    return [
+        # 1-4: attention projections.
+        row("q_proj", "qwen2+qwen3", p + "self_attn.q_proj.weight",
+            c + "self_attention.query_projection.weight",
+            "attention_query_projection", "attention", "query_projection",
+            "weight", wi, lay),
+        row("k_proj", "qwen2+qwen3", p + "self_attn.k_proj.weight",
+            c + "self_attention.key_projection.weight",
+            "attention_key_projection", "attention", "key_projection",
+            "weight", wi, lay),
+        row("v_proj", "qwen2+qwen3", p + "self_attn.v_proj.weight",
+            c + "self_attention.value_projection.weight",
+            "attention_value_projection", "attention", "value_projection",
+            "weight", wi, lay),
+        row("o_proj", "qwen2+qwen3", p + "self_attn.o_proj.weight",
+            c + "self_attention.output_projection.weight",
+            "attention_output_projection", "attention", "output_projection",
+            "weight", wi, lay),
+        # 1-3 again, as biases: Qwen2 declares `attention_bias: true` and ships
+        # q/k/v biases; o_proj has none. Qwen3 ships no attention bias at all.
+        row("q_proj", "qwen2", p + "self_attn.q_proj.bias",
+            c + "self_attention.query_projection.bias",
+            "attention_query_projection", "attention", "query_projection",
+            "bias", bo, lay),
+        row("k_proj", "qwen2", p + "self_attn.k_proj.bias",
+            c + "self_attention.key_projection.bias",
+            "attention_key_projection", "attention", "key_projection",
+            "bias", bo, lay),
+        row("v_proj", "qwen2", p + "self_attn.v_proj.bias",
+            c + "self_attention.value_projection.bias",
+            "attention_value_projection", "attention", "value_projection",
+            "bias", bo, lay),
+        # 10-11: Qwen3's per-head query/key norms, which Llama checkpoints do
+        # not carry (the Llama manifest declares the rule anyway).
+        row("q_norm", "qwen3", p + "self_attn.q_norm.weight",
+            c + "self_attention.query_normalization.weight",
+            "attention_query_norm", "attention", "query_normalization",
+            "weight", head, lay),
+        row("k_norm", "qwen3", p + "self_attn.k_norm.weight",
+            c + "self_attention.key_normalization.weight",
+            "attention_key_norm", "attention", "key_normalization",
+            "weight", head, lay),
+        # 5-7: the dense MLP.
+        row("gate_proj", "qwen2+qwen3", p + "mlp.gate_proj.weight",
+            c + "mlp.gate_projection.weight",
+            "mlp_gate_projection", "mlp", "gate_projection", "weight", wi, lay),
+        row("up_proj", "qwen2+qwen3", p + "mlp.up_proj.weight",
+            c + "mlp.up_projection.weight",
+            "mlp_up_projection", "mlp", "up_projection", "weight", wi, lay),
+        row("down_proj", "qwen2+qwen3", p + "mlp.down_proj.weight",
+            c + "mlp.down_projection.weight",
+            "mlp_down_projection", "mlp", "down_projection", "weight", wi, lay),
+        # 8-9: the two per-layer norms.
+        row("input_layernorm", "qwen2+qwen3", p + "input_layernorm.weight",
+            c + "normalization.input_normalization.weight",
+            "input_layernorm", "normalization", "input_normalization",
+            "weight", hid, lay),
+        row("post_attention_layernorm", "qwen2+qwen3",
+            p + "post_attention_layernorm.weight",
+            c + "normalization.post_attention_normalization.weight",
+            "post_attention_layernorm", "normalization",
+            "post_attention_normalization", "weight", hid, lay),
+        # 15: MoE. `mlp.gate.weight` is the router; `mlp.gate_proj.weight`
+        # above is the dense MLP's gate. The two names differ by five
+        # characters and mean different things, which is why the plugin maps
+        # names and not meanings.
+        row("moe", "qwen3_moe", f"model.layers.{rl}.mlp.gate.weight",
+            f"model.layers[{rl}].router.expert_routing.weight",
+            "moe_router", "router", "expert_routing", "weight",
+            ["expert", "hidden_channel"], rl),
+        row("moe", "qwen3_moe",
+            p + f"mlp.experts.{exp}.gate_proj.weight",
+            c + f"moe.experts[{exp}].gate_projection.weight",
+            "moe_expert_gate_projection", "moe", "gate_projection", "weight",
+            wi, lay, exp),
+        row("moe", "qwen3_moe",
+            p + f"mlp.experts.{exp}.up_proj.weight",
+            c + f"moe.experts[{exp}].up_projection.weight",
+            "moe_expert_up_projection", "moe", "up_projection", "weight",
+            wi, lay, exp),
+        row("moe", "qwen3_moe",
+            p + f"mlp.experts.{exp}.down_proj.weight",
+            c + f"moe.experts[{exp}].down_projection.weight",
+            "moe_expert_down_projection", "moe", "down_projection", "weight",
+            wi, lay, exp),
+        # 12-14: the three tensors outside the layer stack. These carry no
+        # layer index, and the canonical address omits the `layers[N]` segment
+        # rather than substituting a zero.
+        row("embed_tokens", "qwen2+qwen3", "model.embed_tokens.weight",
+            "model.embedding.token_embedding.weight",
+            "token_embedding", "embedding", "token_embedding", "weight", vocab),
+        row("model.norm", "qwen2+qwen3", "model.norm.weight",
+            "model.normalization.final_normalization.weight",
+            "final_norm", "normalization", "final_normalization", "weight", hid),
+        row("lm_head", "qwen2+qwen3", "lm_head.weight",
+            "model.output_head.output_projection.weight",
+            "lm_head", "output_head", "output_projection", "weight", vocab),
+    ]
+
+
+# Names a Qwen checkpoint really can contain and this plugin is deliberately NOT
+# taught. Each must resolve to role `unknown` with no canonical address
+# (`NSIR-001`). Listing them in the fixture makes the refusal a checked contract
+# rather than an absence nobody notices.
+QWEN_UNTAUGHT = [
+    {
+        "raw_name": f"model.layers.{QWEN_LAYER}.some_future_thing.weight",
+        "why": "QM-0010 §Test Cases: a name from a release this plugin predates.",
+    },
+    {
+        "raw_name": "model.layers.0.mlp.shared_expert.up_proj.weight",
+        "why": ("Qwen2-MoE's always-on shared expert. Out of scope per QM-0010 "
+                "§Scope, which names `experts.N.*` and `mlp.gate.weight` only. "
+                "It is not the same object as a routed expert and must not be "
+                "addressed as one."),
+    },
+    {
+        "raw_name": "model.layers.0.mlp.shared_expert_gate.weight",
+        "why": "Qwen2-MoE's shared-expert gate. Out of scope, as above.",
+    },
+    {
+        "raw_name": "visual.blocks.3.attn.qkv.weight",
+        "why": ("A Qwen-VL vision-tower name. Vision and audio towers are out "
+                "of scope per QM-0010 §Out of Scope; the language plugin has no "
+                "business claiming them."),
+    },
+    {
+        "raw_name": "model.layers.abc.self_attn.q_proj.weight",
+        "why": ("A layer index that is not an integer. The layer must stay "
+                "absent rather than default to 0, and the suffix rule must not "
+                "fire without one."),
+    },
+    {
+        "raw_name": "model.layers.4294967296.self_attn.q_proj.weight",
+        "why": ("A layer index one past `u32::MAX`. Out of range is absent, "
+                "never truncated or wrapped."),
+    },
+]
+
+
+def write_qwen(out_dir: Path) -> dict:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "config.json").write_text(json.dumps(QWEN_CONFIG, indent=2) + "\n")
+
+    rows = _qwen_rows()
+    labelled = sorted({r["family"] for r in rows})
+    if labelled != sorted(QWEN_NAME_FAMILIES):
+        raise ValueError(
+            "every row must carry one of QM-0010's 15 name families and every "
+            f"family must have a row; rows cover {labelled}"
+        )
+    golden = {
+        "_comment": (
+            "Generated by fixtures/generate_fixtures.py for QM-0010 / NSIR-006. "
+            "A NAMING fixture: it carries no weight payload and no .safetensors "
+            "file, because name resolution is what is under test and "
+            "ARCHITECTURE.md section 4.2 forbids inferring a role from a shape. "
+            "Every canonical_name was hand-written from the address rule in "
+            "ARCHITECTURE.md section 6.1 and NOT produced by running the Rust "
+            "resolver, so the Rust test asserting against this file is a "
+            "cross-check rather than a tautology. The `variant` column records "
+            "which Qwen release emits a name: this file describes the family's "
+            "naming, not one checkpoint's contents."
+        ),
+        "fixture": "tiny-qwen-single",
+        "task": "QM-0010",
+        "requirement": "NSIR-006",
+        "carries_weight_payload": False,
+        "resolver_id": "qwen",
+        "canonical_address_rule": (
+            "model[.layers[N]].<component>[.experts[E]].<operation>"
+            "[.<parameter>]  (ARCHITECTURE.md section 6.1)"
+        ),
+        "fidelity": "exact",
+        "name_families": QWEN_NAME_FAMILIES,
+        "name_family_count": len(QWEN_NAME_FAMILIES),
+        "resolved": rows,
+        "untaught": QWEN_UNTAUGHT,
+    }
+    (out_dir / "golden.json").write_text(json.dumps(golden, indent=2) + "\n")
+    return golden
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent))
+    ap.add_argument("--llama", action="store_true",
+                    help="write only the Llama fixtures")
+    ap.add_argument("--qwen", action="store_true",
+                    help="write only the Qwen naming fixture")
     args = ap.parse_args()
     root = Path(args.out)
+    # No selector means every fixture, so CI's reproducibility gate covers all
+    # of them without knowing their names.
+    want_llama = args.llama or not (args.llama or args.qwen)
+    want_qwen = args.qwen or not (args.llama or args.qwen)
 
-    plan = tensor_plan()
-    payloads = build_payloads(plan)
+    if want_llama:
+        plan = tensor_plan()
+        payloads = build_payloads(plan)
 
-    sharded = root / "tiny-llama-2shard"
-    index = write_sharded(sharded, plan, payloads)
-    write_single(root / "tiny-llama-single", payloads)
+        sharded = root / "tiny-llama-2shard"
+        index = write_sharded(sharded, plan, payloads)
+        write_single(root / "tiny-llama-single", payloads)
 
-    golden = build_golden(sharded, index)
-    (sharded / "golden.json").write_text(json.dumps(golden, indent=2) + "\n")
+        golden = build_golden(sharded, index)
+        (sharded / "golden.json").write_text(json.dumps(golden, indent=2) + "\n")
 
-    print(f"wrote {sharded} ({golden['tensor_count']} tensors, "
-          f"{golden['shard_count']} shards, {golden['total_size_bytes']} payload bytes)")
-    print(f"wrote {root / 'tiny-llama-single'}")
+        print(f"wrote {sharded} ({golden['tensor_count']} tensors, "
+              f"{golden['shard_count']} shards, {golden['total_size_bytes']} payload bytes)")
+        print(f"wrote {root / 'tiny-llama-single'}")
+
+    if want_qwen:
+        qwen_dir = root / "tiny-qwen-single"
+        qg = write_qwen(qwen_dir)
+        print(f"wrote {qwen_dir} ({len(qg['resolved'])} names over "
+              f"{qg['name_family_count']} families, {len(qg['untaught'])} untaught, "
+              f"no weight payload)")
 
 
 if __name__ == "__main__":

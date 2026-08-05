@@ -629,4 +629,515 @@ mod tests {
         assert_eq!(s.suffix, "model.embed_tokens.weight");
         assert_eq!(s.parameter, "weight");
     }
+
+    // ------------------------------------------------------------------------
+    // Qwen family — QM-0010, requirement NSIR-006.
+    //
+    // Every expectation below comes from one of two places, and never from
+    // running this resolver:
+    //
+    //   * `fixtures/tiny-qwen-single/golden.json`, whose rows
+    //     `fixtures/generate_fixtures.py` writes out by hand from the address
+    //     rule in ARCHITECTURE.md §6.1; or
+    //   * an inline string literal in the test body, written from the same rule.
+    //
+    // Both are asserted, deliberately: if the manifest and the fixture ever
+    // drift together, the inline literals still fail.
+    // ------------------------------------------------------------------------
+
+    fn qwen_resolver(reg: &Registry) -> NsirResolver<'_> {
+        NsirResolver::new(reg.get("qwen").unwrap())
+    }
+
+    /// `fixtures/tiny-qwen-single/golden.json`, read from disk rather than
+    /// duplicated here, so the expectations are checked against the real file.
+    fn qwen_golden() -> serde_json::Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/tiny-qwen-single/golden.json");
+        let text = std::fs::read_to_string(&path).expect("run fixtures/generate_fixtures.py");
+        serde_json::from_str(&text).expect("golden.json is not valid JSON")
+    }
+
+    fn golden_rows(golden: &serde_json::Value, key: &str) -> Vec<serde_json::Value> {
+        golden[key]
+            .as_array()
+            .unwrap_or_else(|| panic!("golden.json has no `{key}` array"))
+            .clone()
+    }
+
+    fn s(value: &serde_json::Value) -> &str {
+        value.as_str().expect("expected a JSON string")
+    }
+
+    #[test]
+    fn qwen_resolves_every_fixture_name_to_its_hand_written_canonical_address() {
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        let golden = qwen_golden();
+        // A names-only fixture: asserting this here keeps the claim honest if
+        // someone later adds weights to the directory.
+        assert_eq!(golden["carries_weight_payload"], serde_json::json!(false));
+        assert_eq!(golden["resolver_id"], serde_json::json!("qwen"));
+
+        let rows = golden_rows(&golden, "resolved");
+        assert!(!rows.is_empty(), "golden.json resolved no names");
+        for row in &rows {
+            let raw = s(&row["raw_name"]);
+            let got = r.resolve_name(raw);
+            assert!(got.resolved, "{raw} did not resolve");
+            assert_eq!(got.stack, Stack::Language, "{raw} stack");
+            assert_eq!(got.resolver_id, "qwen", "{raw} resolver_id");
+            assert_eq!(got.role.as_str(), s(&row["role"]), "{raw} role");
+            assert_eq!(
+                got.component.as_str(),
+                s(&row["component"]),
+                "{raw} component"
+            );
+            assert_eq!(got.operation, s(&row["operation"]), "{raw} operation");
+            assert_eq!(got.parameter, s(&row["parameter"]), "{raw} parameter");
+            assert_eq!(
+                serde_json::to_value(&got.axes).unwrap(),
+                row["axes"],
+                "{raw} axes"
+            );
+            assert_eq!(
+                serde_json::to_value(got.layer).unwrap(),
+                row["layer"],
+                "{raw} layer"
+            );
+            assert_eq!(
+                serde_json::to_value(got.expert).unwrap(),
+                row["expert"],
+                "{raw} expert"
+            );
+            assert_eq!(
+                canonical_name(&got).unwrap(),
+                s(&row["canonical_name"]),
+                "{raw} canonical address"
+            );
+        }
+    }
+
+    #[test]
+    fn qwen_resolves_all_fifteen_name_families_named_in_the_task_scope() {
+        let golden = qwen_golden();
+        // Acceptance criterion 1 counts families, so the count is asserted
+        // rather than inferred from however many rows happen to be present.
+        let families: Vec<&str> = golden["name_families"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(s)
+            .collect();
+        assert_eq!(families.len(), 15, "QM-0010 §Scope names 15 families");
+        assert_eq!(golden["name_family_count"], serde_json::json!(15));
+
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        let rows = golden_rows(&golden, "resolved");
+        for family in &families {
+            let mut covered = rows
+                .iter()
+                .filter(|row| s(&row["family"]) == *family)
+                .peekable();
+            assert!(
+                covered.peek().is_some(),
+                "no fixture row covers the `{family}` family"
+            );
+            for row in covered {
+                let raw = s(&row["raw_name"]);
+                assert!(
+                    r.resolve_name(raw).resolved,
+                    "family `{family}`: {raw} did not resolve"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_qwen_name_the_resolver_was_not_taught_stays_unknown() {
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        let golden = qwen_golden();
+        let untaught = golden_rows(&golden, "untaught");
+        assert!(!untaught.is_empty(), "golden.json lists no untaught names");
+        for row in &untaught {
+            let raw = s(&row["raw_name"]);
+            let got = r.resolve_name(raw);
+            assert!(!got.resolved, "{raw} claimed to resolve: {got:?}");
+            assert_eq!(got.role, TensorRole::Unknown, "{raw} role");
+            assert_eq!(got.component, Component::Unknown, "{raw} component");
+            assert!(got.operation.is_empty(), "{raw} invented an operation");
+            assert!(got.axes.is_empty(), "{raw} invented axis labels");
+            assert!(
+                canonical_name(&got).is_none(),
+                "{raw} produced a canonical address it has not earned"
+            );
+        }
+        // The task's own §Test Cases row, asserted directly rather than only
+        // through the fixture loop.
+        let future = r.resolve_name("model.layers.0.some_future_thing.weight");
+        assert!(!future.resolved);
+        assert_eq!(future.role, TensorRole::Unknown);
+    }
+
+    #[test]
+    fn a_non_numeric_or_out_of_range_layer_index_leaves_the_layer_absent() {
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        for raw in [
+            "model.layers.abc.self_attn.q_proj.weight",
+            // One past u32::MAX. Out of range is absent, never wrapped.
+            "model.layers.4294967296.self_attn.q_proj.weight",
+            "model.layers.-1.self_attn.q_proj.weight",
+        ] {
+            let got = r.resolve_name(raw);
+            assert_eq!(got.layer, None, "{raw} invented a layer index");
+            assert!(!got.resolved, "{raw} resolved without a layer index");
+            assert_eq!(got.role, TensorRole::Unknown, "{raw} role");
+        }
+        // The in-range neighbour does resolve, so the three refusals above are
+        // about the index and not about the rest of the name.
+        let ok = r.resolve_name("model.layers.4294967295.self_attn.q_proj.weight");
+        assert_eq!(ok.layer, Some(u32::MAX));
+        assert!(ok.resolved);
+    }
+
+    #[test]
+    fn qwen_canonical_addresses_are_identical_in_form_to_llamas() {
+        // Acceptance criterion 2. A canonical address is the universal join key
+        // (.plan/DATA_ARCHITECTURE.md §4), so it must not depend on which
+        // family produced the tensor. Every name both manifests are taught must
+        // produce byte-identical output from both.
+        let reg = Registry::builtin().unwrap();
+        let llama = llama_resolver(&reg);
+        let qwen = qwen_resolver(&reg);
+        let golden = qwen_golden();
+        let rows = golden_rows(&golden, "resolved");
+        let mut compared = 0usize;
+        let mut not_taught_to_llama: Vec<&str> = Vec::new();
+        for row in &rows {
+            let raw = s(&row["raw_name"]);
+            let l = llama.resolve_name(raw);
+            if !l.resolved {
+                // Recorded, not skipped: a name only one manifest knows cannot
+                // be compared, and a comparison that quietly covers less than it
+                // claims is worse than one that fails.
+                not_taught_to_llama.push(raw);
+                continue;
+            }
+            let q = qwen.resolve_name(raw);
+            assert_eq!(canonical_name(&l), canonical_name(&q), "{raw} address");
+            assert_eq!(l.role, q.role, "{raw} role");
+            assert_eq!(l.component, q.component, "{raw} component");
+            assert_eq!(l.axes, q.axes, "{raw} axes");
+            compared += 1;
+        }
+        // The Llama rule table is currently a superset of Qwen's suffixes — it
+        // declares the q/k/v biases and the `q_norm`/`k_norm` rules even though
+        // Llama checkpoints carry no such tensors — so nothing is skipped and
+        // the comparison above is not vacuous. Should a Qwen-only tensor arrive
+        // later, this names it instead of silently comparing fewer rows.
+        assert!(
+            not_taught_to_llama.is_empty(),
+            "llama does not resolve {not_taught_to_llama:?}, so those rows were \
+             not compared; decide whether the address form still has to match"
+        );
+        assert_eq!(
+            compared,
+            rows.len(),
+            "compared {compared} of {} Qwen names",
+            rows.len()
+        );
+    }
+
+    #[test]
+    fn qwen_resolves_the_task_data_contract_examples() {
+        // QM-0010 §Data Contracts, with the three literals written from
+        // ARCHITECTURE.md §6.1 and the declared manifests. See
+        // .plan/evidence/QM-0010.md §Research: the task's abbreviated arrows
+        // spell `expert[37]`, `query_norm`, and `moe.router`, which the Llama
+        // form — normative per acceptance criterion 2 — renders `experts[37]`,
+        // `query_normalization`, and `router.expert_routing`.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+
+        let q = r.resolve_name("model.layers.10.self_attn.q_proj.weight");
+        assert_eq!(
+            canonical_name(&q).unwrap(),
+            "model.layers[10].self_attention.query_projection.weight"
+        );
+        assert_eq!(q.role, TensorRole::AttentionQueryProjection);
+        assert_eq!(q.axes, vec!["output_channel", "input_channel"]);
+
+        let up = r.resolve_name("model.layers.10.mlp.experts.37.up_proj.weight");
+        assert_eq!(
+            canonical_name(&up).unwrap(),
+            "model.layers[10].moe.experts[37].up_projection.weight"
+        );
+        assert_eq!(up.role, TensorRole::MoeExpertUpProjection);
+        assert_eq!(up.expert, Some(37));
+
+        let qn = r.resolve_name("model.layers.10.self_attn.q_norm.weight");
+        assert_eq!(
+            canonical_name(&qn).unwrap(),
+            "model.layers[10].self_attention.query_normalization.weight"
+        );
+        assert_eq!(qn.role, TensorRole::AttentionQueryNorm);
+        assert_eq!(qn.component, Component::Attention);
+    }
+
+    #[test]
+    fn qwen_moe_expert_addressing_uses_the_experts_n_layout() {
+        // Acceptance criterion 6, over all three expert projections.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        for (suffix, operation, role) in [
+            (
+                "gate_proj",
+                "gate_projection",
+                TensorRole::MoeExpertGateProjection,
+            ),
+            (
+                "up_proj",
+                "up_projection",
+                TensorRole::MoeExpertUpProjection,
+            ),
+            (
+                "down_proj",
+                "down_projection",
+                TensorRole::MoeExpertDownProjection,
+            ),
+        ] {
+            let got = r.resolve_name(&format!("model.layers.3.mlp.experts.0.{suffix}.weight"));
+            assert!(got.resolved, "{suffix}");
+            assert_eq!(got.layer, Some(3), "{suffix} layer");
+            assert_eq!(got.expert, Some(0), "{suffix} expert");
+            assert_eq!(got.component, Component::MoE, "{suffix} component");
+            assert_eq!(got.role, role, "{suffix} role");
+            assert_eq!(
+                canonical_name(&got).unwrap(),
+                format!("model.layers[3].moe.experts[0].{operation}.weight"),
+                "{suffix} address"
+            );
+        }
+    }
+
+    #[test]
+    fn the_moe_router_and_the_dense_mlp_gate_are_different_roles() {
+        // `mlp.gate.weight` and `mlp.gate_proj.weight` differ by five
+        // characters and denote different objects: the first routes tokens to
+        // experts, the second is one of the dense MLP's two input projections.
+        // A resolver maps names, so it must keep them apart — and nothing about
+        // either name or either shape reveals which is which. That is why the
+        // mapping is declared in a manifest rather than inferred.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+
+        let router = r.resolve_name("model.layers.5.mlp.gate.weight");
+        assert_eq!(router.role, TensorRole::MoeRouter);
+        assert_eq!(router.component, Component::Router);
+        assert_eq!(router.axes, vec!["expert", "hidden_channel"]);
+        assert_eq!(
+            canonical_name(&router).unwrap(),
+            "model.layers[5].router.expert_routing.weight"
+        );
+
+        let dense = r.resolve_name("model.layers.5.mlp.gate_proj.weight");
+        assert_eq!(dense.role, TensorRole::MlpGateProjection);
+        assert_eq!(dense.component, Component::Mlp);
+        assert_eq!(
+            canonical_name(&dense).unwrap(),
+            "model.layers[5].mlp.gate_projection.weight"
+        );
+
+        assert_ne!(router.role, dense.role);
+        assert_ne!(canonical_name(&router), canonical_name(&dense));
+    }
+
+    #[test]
+    fn qwen_reads_names_only_so_two_identically_shaped_tensors_get_different_roles() {
+        // QM-0010 §Test Cases, last row. `resolve_name` takes a `&str`: a shape
+        // is not merely unused here, it is unavailable — which is the strongest
+        // available form of ARCHITECTURE.md §4.2's prohibition.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        let shape = vec![64u64, 48];
+        let mut a = descriptor("model.layers.7.self_attn.q_proj.weight", shape.clone());
+        let mut b = descriptor("model.layers.7.mlp.up_proj.weight", shape.clone());
+        assert_eq!(a.shape, b.shape, "the premise of this test");
+
+        let ra = r.annotate(&mut a);
+        let rb = r.annotate(&mut b);
+        assert_eq!(ra.role, TensorRole::AttentionQueryProjection);
+        assert_eq!(rb.role, TensorRole::MlpUpProjection);
+        assert_ne!(ra.role, rb.role);
+        assert_ne!(a.canonical_name, b.canonical_name);
+
+        // And the converse: an untaught name stays unknown however ordinary its
+        // shape looks next to a tensor that did resolve.
+        let mut c = descriptor("model.layers.7.self_attn.qkv_proj.weight", shape);
+        let rc = r.annotate(&mut c);
+        assert_eq!(rc.role, TensorRole::Unknown);
+        assert_eq!(c.canonical_name, "model.layers.7.self_attn.qkv_proj.weight");
+    }
+
+    #[test]
+    fn qwen_biases_resolve_as_the_bias_parameter_of_their_projection() {
+        // Qwen2 declares `attention_bias: true` and ships q/k/v biases; o_proj
+        // has none, and Qwen3 has none at all. A bias is resolved by its name,
+        // not by its rank.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        for (proj, operation) in [
+            ("q_proj", "query_projection"),
+            ("k_proj", "key_projection"),
+            ("v_proj", "value_projection"),
+        ] {
+            let got = r.resolve_name(&format!("model.layers.2.self_attn.{proj}.bias"));
+            assert!(got.resolved, "{proj}.bias");
+            assert_eq!(got.parameter, "bias", "{proj}.bias parameter");
+            assert_eq!(got.axes, vec!["output_channel"], "{proj}.bias axes");
+            assert_eq!(
+                canonical_name(&got).unwrap(),
+                format!("model.layers[2].self_attention.{operation}.bias")
+            );
+        }
+        // Not taught, because Qwen does not ship it: unknown, not invented.
+        let o = r.resolve_name("model.layers.2.self_attn.o_proj.bias");
+        assert!(!o.resolved);
+        assert_eq!(o.role, TensorRole::Unknown);
+    }
+
+    #[test]
+    fn qwen_canonical_names_are_stable_across_resolution_runs() {
+        // Acceptance criterion 7, over every name in the fixture rather than
+        // one sample.
+        let reg = Registry::builtin().unwrap();
+        let r = qwen_resolver(&reg);
+        for row in golden_rows(&qwen_golden(), "resolved") {
+            let raw = s(&row["raw_name"]);
+            let first = r.resolve_name(raw);
+            let second = r.resolve_name(raw);
+            assert_eq!(canonical_name(&first), canonical_name(&second), "{raw}");
+            assert_eq!(first, second, "{raw} record");
+        }
+    }
+
+    /// A Qwen-resolved model. Shapes are arbitrary and are never read by the
+    /// resolver; they exist because `TensorDescriptor` has the field.
+    fn tiny_qwen_model() -> ResolvedModel {
+        let reg = Registry::builtin().unwrap();
+        let mut ds = Vec::new();
+        for layer in [10u32, 20] {
+            for suffix in [
+                "self_attn.q_proj.weight",
+                "self_attn.k_proj.weight",
+                "self_attn.v_proj.weight",
+                "self_attn.o_proj.weight",
+                "self_attn.q_norm.weight",
+                "self_attn.k_norm.weight",
+                "mlp.down_proj.weight",
+            ] {
+                ds.push(descriptor(
+                    &format!("model.layers.{layer}.{suffix}"),
+                    vec![16u64, 48],
+                ));
+            }
+        }
+        ds.push(descriptor("model.layers.10.mlp.gate.weight", vec![8, 48]));
+        for expert in [0u32, 37] {
+            ds.push(descriptor(
+                &format!("model.layers.10.mlp.experts.{expert}.up_proj.weight"),
+                vec![64, 48],
+            ));
+        }
+        ds.push(descriptor("model.embed_tokens.weight", vec![64, 48]));
+        // A Qwen2-MoE shared expert: a real name this plugin is not taught.
+        ds.push(descriptor(
+            "model.layers.10.mlp.shared_expert.up_proj.weight",
+            vec![64, 48],
+        ));
+        ResolvedModel::build(&reg, Some("qwen3"), None, ds).unwrap()
+    }
+
+    #[test]
+    fn a_qwen_model_is_resolved_by_the_qwen_plugin_and_reports_what_it_could_not_read() {
+        let m = tiny_qwen_model();
+        assert_eq!(m.resolver_id, "qwen");
+        // Exactly the shared-expert tensor is unresolved, and it keeps its raw
+        // name as its address rather than being filed under a routed expert.
+        assert_eq!(m.unresolved_count(), 1);
+        let (d, _) = m
+            .resolve_canonical("model.layers.10.mlp.shared_expert.up_proj.weight")
+            .unwrap();
+        assert_eq!(d.semantic_role, TensorRole::Unknown);
+    }
+
+    #[test]
+    fn an_ambiguous_qwen_alias_returns_candidates_not_a_silent_pick() {
+        // NSIR-007. `Att` is ambiguous by design (ARCHITECTURE.md §6.2): it
+        // could mean Q, K, V, or O, and the resolver says so instead of
+        // choosing.
+        let m = tiny_qwen_model();
+        let r = m.resolve_alias("Att[10]").unwrap();
+        assert!(r.is_ambiguous());
+        assert_eq!(r.candidates.len(), 4);
+        assert_eq!(r.confidence, 0.25);
+        let roles: Vec<TensorRole> = r.candidates.iter().map(|c| c.role).collect();
+        assert_eq!(
+            roles,
+            vec![
+                TensorRole::AttentionQueryProjection,
+                TensorRole::AttentionKeyProjection,
+                TensorRole::AttentionValueProjection,
+                TensorRole::AttentionOutputProjection,
+            ]
+        );
+        match r.unique() {
+            Err(QError::AmbiguousAlias { candidates, .. }) => {
+                assert_eq!(candidates.len(), 4);
+                assert!(candidates
+                    .iter()
+                    .any(|c| c == "model.layers[10].self_attention.query_projection.weight"));
+            }
+            other => panic!("expected AmbiguousAlias, got {other:?}"),
+        }
+
+        // `QNorm` covers Qwen3's two per-head norms, which Llama checkpoints do
+        // not carry: also ambiguous, also candidates.
+        let n = m.resolve_alias("QKNorm[10]").unwrap();
+        assert!(n.is_ambiguous());
+        assert_eq!(n.candidates.len(), 2);
+        assert!(matches!(n.unique(), Err(QError::AmbiguousAlias { .. })));
+    }
+
+    #[test]
+    fn an_unambiguous_qwen_alias_resolves_to_one_canonical_address() {
+        let m = tiny_qwen_model();
+        let q = m.resolve_alias("Q[10]").unwrap();
+        assert!(!q.is_ambiguous());
+        assert_eq!(q.confidence, 1.0);
+        assert_eq!(
+            q.unique().unwrap().canonical_name,
+            "model.layers[10].self_attention.query_projection.weight"
+        );
+
+        let e = m.resolve_alias("Expert[10,37].up").unwrap();
+        assert_eq!(
+            e.unique().unwrap().canonical_name,
+            "model.layers[10].moe.experts[37].up_projection.weight"
+        );
+
+        let router = m.resolve_alias("Router[10]").unwrap();
+        assert_eq!(
+            router.unique().unwrap().canonical_name,
+            "model.layers[10].router.expert_routing.weight"
+        );
+
+        // An alias the Qwen manifest does not declare is rejected with an
+        // explanation, not answered with a guess.
+        let err = m.resolve_alias("Zzz[10]").unwrap_err();
+        assert!(err.to_string().contains("unknown alias"), "{err}");
+    }
 }

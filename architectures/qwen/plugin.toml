@@ -1,27 +1,367 @@
-# Qwen-family transformer — DECLARED, NOT IMPLEMENTED.
+# Qwen-family resolver — ARCHITECTURE.md §4.2, requirement NSIR-006, QM-0010.
 #
-# ARCHITECTURE.md §4.2 lists this family, but only `generic` and `llama` are
-# implemented in this pass (see STATUS.md, requirement NSIR-006). This file
-# exists so that adding the family is a contained addition — fill in [[aliases]]
-# and [[rules]] following architectures/llama/plugin.toml, then flip
-# `implemented` to true.
+# Covers Qwen2 and Qwen3, dense and MoE. The rule table is a deliberate mirror
+# of architectures/llama/plugin.toml: the same suffix produces the same
+# `operation`, the same `component`, and therefore the same canonical address.
+# That is the point of QM-0010's acceptance criterion 2 — a canonical address is
+# the universal join key (.plan/DATA_ARCHITECTURE.md §4), so it must not depend
+# on which family produced the tensor. A consumer reading
+# `model.layers[10].self_attention.query_projection.weight` must not have to know
+# whether a Llama or a Qwen checkpoint produced it.
 #
-# Until then the registry reports this plugin as declared-but-unimplemented and
-# falls back to `generic`, which returns role `unknown` for anything it has not
-# been taught. It never guesses.
+# WHAT THIS TABLE IS, AND IS NOT. It maps *names* to declared labels. It does not
+# and cannot establish what any tensor means, what it has learned, or what it
+# computes. A name pattern is no more a concept than a colour pattern is
+# (ARCHITECTURE.md §19). Nothing here reads a shape: `resolve_name` takes a
+# `&str`, so the shape-based guessing ARCHITECTURE.md §4.2 forbids is not merely
+# avoided, it is unavailable.
+#
+# WHERE THE FAMILY DIFFERS FROM LLAMA, and how each difference is handled:
+#
+#   * Qwen2 sets `attention_bias: true` and ships q/k/v projection biases;
+#     `o_proj` has none. The three bias rules are declared; `o_proj.bias` is not,
+#     so it resolves to `unknown` rather than being invented.
+#   * Qwen3 drops the attention biases and adds per-head query/key RMSNorms,
+#     `self_attn.{q,k}_norm.weight`. Llama checkpoints carry no such tensors,
+#     though its manifest declares the rule; the roles `attention_query_norm` and
+#     `attention_key_norm` already exist in `q_source::TensorRole`, so no Rust
+#     change was needed for this family and none was made.
+#   * Qwen3-MoE routes with `mlp.gate.weight` and holds experts at
+#     `mlp.experts.N.{gate,up,down}_proj.weight`. Note that `mlp.gate.weight` and
+#     `mlp.gate_proj.weight` differ by five characters and denote different
+#     objects — a router and one of the dense MLP's input projections. They are
+#     separate rules with separate roles precisely because no rule of thumb
+#     distinguishes them; only the declared name does.
+#
+# WHAT IS DELIBERATELY ABSENT. Qwen2-MoE's always-on shared expert
+# (`mlp.shared_expert.*`, `mlp.shared_expert_gate.weight`) and every vision or
+# audio tower name (`visual.*`) are out of scope per QM-0010 §Scope and §Out of
+# Scope, and are therefore **not** taught. They resolve to `unknown`, which is
+# the correct answer (`NSIR-001`) and is asserted by
+# `q_nsir::resolver::tests::a_qwen_name_the_resolver_was_not_taught_stays_unknown`.
+# A shared expert is not a routed expert and must not be addressed as one.
 
 [plugin]
 id = "qwen"
-display_name = "Qwen-family transformer"
+display_name = "Qwen-family transformer (Qwen2, Qwen3, dense and MoE)"
 priority = 100
-implemented = false
+implemented = true
 nsir_version = 1
-notes = "Rule table not written. NSIR-006."
+notes = "Qwen2/Qwen3 naming, dense and MoE. Shared experts and vision/audio towers are not taught and stay unknown. NSIR-006."
 
 [match]
+# Qwen3-MoE checkpoints declare `model_type: "qwen3_moe"`, which this list does
+# not carry — QM-0010 §Scope names `qwen2` and `qwen3`. They are still claimed,
+# by their `architectures` entry below; `claims()` needs only one of the two keys
+# to match. Anything neither key names falls through to `generic`, which returns
+# `unknown` for what it was not taught.
 model_types = ["qwen2", "qwen3"]
-architectures = ["Qwen2ForCausalLM", "Qwen3ForCausalLM"]
+architectures = [
+  "Qwen2ForCausalLM",
+  "Qwen3ForCausalLM",
+  "Qwen2MoeForCausalLM",
+  "Qwen3MoeForCausalLM",
+]
 
 [naming]
 stack = "language"
 layer_segment = "layers"
+expert_segment = "experts"
+
+# --- aliases (ARCHITECTURE.md §6.2) ------------------------------------------
+# `roles` with more than one entry is an *ambiguous* alias: resolution returns
+# the candidate list rather than silently choosing (`NSIR-007`).
+
+[[aliases]]
+alias = "Q"
+roles = ["attention_query_projection"]
+
+[[aliases]]
+alias = "K"
+roles = ["attention_key_projection"]
+
+[[aliases]]
+alias = "V"
+roles = ["attention_value_projection"]
+
+[[aliases]]
+alias = "O"
+roles = ["attention_output_projection"]
+
+[[aliases]]
+alias = "Att"
+roles = [
+  "attention_query_projection",
+  "attention_key_projection",
+  "attention_value_projection",
+  "attention_output_projection",
+]
+
+[[aliases]]
+alias = "Attn"
+roles = [
+  "attention_query_projection",
+  "attention_key_projection",
+  "attention_value_projection",
+  "attention_output_projection",
+]
+
+# Qwen3's per-head norms. `QKNorm` is ambiguous by design, for the same reason
+# `Att` is: two tensors answer to it, and the resolver will not choose.
+[[aliases]]
+alias = "QNorm"
+roles = ["attention_query_norm"]
+
+[[aliases]]
+alias = "KNorm"
+roles = ["attention_key_norm"]
+
+[[aliases]]
+alias = "QKNorm"
+roles = ["attention_query_norm", "attention_key_norm"]
+
+[[aliases]]
+alias = "MLP.gate"
+roles = ["mlp_gate_projection"]
+
+[[aliases]]
+alias = "MLP.up"
+roles = ["mlp_up_projection"]
+
+[[aliases]]
+alias = "MLP.down"
+roles = ["mlp_down_projection"]
+
+[[aliases]]
+alias = "MLP"
+roles = ["mlp_gate_projection", "mlp_up_projection", "mlp_down_projection"]
+
+[[aliases]]
+alias = "Expert.gate"
+roles = ["moe_expert_gate_projection"]
+
+[[aliases]]
+alias = "Expert.up"
+roles = ["moe_expert_up_projection"]
+
+[[aliases]]
+alias = "Expert.down"
+roles = ["moe_expert_down_projection"]
+
+# The MoE router. Deliberately not spelled `MLP.gate`, which is the dense
+# projection; see the header note on why those two must not be conflated.
+[[aliases]]
+alias = "Router"
+roles = ["moe_router"]
+
+[[aliases]]
+alias = "Norm"
+roles = ["input_layernorm", "post_attention_layernorm"]
+
+[[aliases]]
+alias = "Embed"
+roles = ["token_embedding"]
+
+[[aliases]]
+alias = "Head"
+roles = ["lm_head"]
+
+# --- rules -------------------------------------------------------------------
+# Rule order is match priority: `resolve_name` takes the first rule that
+# matches. The order below mirrors architectures/llama/plugin.toml so the two
+# families cannot diverge by accident.
+
+[[rules]]
+name = "model.embed_tokens.weight"
+match_kind = "exact"
+role = "token_embedding"
+operation = "token_embedding"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "model.norm.weight"
+match_kind = "exact"
+role = "final_norm"
+operation = "final_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+# Declared even though a Qwen config may set `tie_word_embeddings: true`, because
+# the shard headers are the authority on which tensors a checkpoint actually
+# holds. A config flag is a declaration about the model, not an inventory; if the
+# tensor is absent no name reaches this rule and nothing is claimed.
+[[rules]]
+name = "lm_head.weight"
+match_kind = "exact"
+role = "lm_head"
+operation = "output_projection"
+parameter = "weight"
+axes = ["vocabulary", "hidden_channel"]
+
+[[rules]]
+name = "self_attn.q_proj.weight"
+match_kind = "suffix"
+role = "attention_query_projection"
+component = "attention"
+operation = "query_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+# Qwen2 only (`attention_bias: true`).
+[[rules]]
+name = "self_attn.q_proj.bias"
+match_kind = "suffix"
+role = "attention_query_projection"
+component = "attention"
+operation = "query_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.k_proj.weight"
+match_kind = "suffix"
+role = "attention_key_projection"
+component = "attention"
+operation = "key_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.k_proj.bias"
+match_kind = "suffix"
+role = "attention_key_projection"
+component = "attention"
+operation = "key_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.v_proj.weight"
+match_kind = "suffix"
+role = "attention_value_projection"
+component = "attention"
+operation = "value_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "self_attn.v_proj.bias"
+match_kind = "suffix"
+role = "attention_value_projection"
+component = "attention"
+operation = "value_projection"
+parameter = "bias"
+axes = ["output_channel"]
+
+[[rules]]
+name = "self_attn.o_proj.weight"
+match_kind = "suffix"
+role = "attention_output_projection"
+component = "attention"
+operation = "output_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+# Qwen3 only. Per-head, so the axis is a head channel rather than the hidden
+# channel a layer norm spans.
+[[rules]]
+name = "self_attn.q_norm.weight"
+match_kind = "suffix"
+role = "attention_query_norm"
+component = "attention"
+operation = "query_normalization"
+parameter = "weight"
+axes = ["head_channel"]
+
+[[rules]]
+name = "self_attn.k_norm.weight"
+match_kind = "suffix"
+role = "attention_key_norm"
+component = "attention"
+operation = "key_normalization"
+parameter = "weight"
+axes = ["head_channel"]
+
+[[rules]]
+name = "mlp.gate_proj.weight"
+match_kind = "suffix"
+role = "mlp_gate_projection"
+component = "mlp"
+operation = "gate_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.up_proj.weight"
+match_kind = "suffix"
+role = "mlp_up_projection"
+component = "mlp"
+operation = "up_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "mlp.down_proj.weight"
+match_kind = "suffix"
+role = "mlp_down_projection"
+component = "mlp"
+operation = "down_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+# Qwen3-MoE's router. Five characters from `mlp.gate_proj.weight` above, and a
+# different object; see the header note.
+[[rules]]
+name = "mlp.gate.weight"
+match_kind = "suffix"
+role = "moe_router"
+component = "router"
+operation = "expert_routing"
+parameter = "weight"
+axes = ["expert", "hidden_channel"]
+
+[[rules]]
+name = "gate_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_gate_projection"
+component = "moe"
+operation = "gate_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "up_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_up_projection"
+component = "moe"
+operation = "up_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "down_proj.weight"
+match_kind = "expert_suffix"
+role = "moe_expert_down_projection"
+component = "moe"
+operation = "down_projection"
+parameter = "weight"
+axes = ["output_channel", "input_channel"]
+
+[[rules]]
+name = "input_layernorm.weight"
+match_kind = "suffix"
+role = "input_layernorm"
+component = "normalization"
+operation = "input_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
+
+[[rules]]
+name = "post_attention_layernorm.weight"
+match_kind = "suffix"
+role = "post_attention_layernorm"
+component = "normalization"
+operation = "post_attention_normalization"
+parameter = "weight"
+axes = ["hidden_channel"]
