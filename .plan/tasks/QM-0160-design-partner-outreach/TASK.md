@@ -2,7 +2,10 @@
 
 ## Status
 
-Ready
+Blocked
+
+Requires a human to send real messages to real people. No agent can satisfy this.
+Scaffolding is committed; the acceptance criteria remain unmet.
 
 **Start on day 1, in parallel with the first engineering task.** Not after the
 tool works. The strategy is explicit that this is the ordering solo founders get
@@ -137,3 +140,43 @@ Not applicable.
 * The Inception confirmation.
 * The Palace reading note: agreements and deliberate departures.
 * The list of partners who agreed to look, and what they expect to see.
+
+## Scaffolding
+
+Committed in this directory. Templates and empty structures only — **no record of
+anything that happened**, because nothing has happened. See
+[`README.md`](README.md) for the index and the marker convention.
+
+| Artifact | Covers | State |
+| --- | --- | --- |
+| [`VALUE_PROPOSITION.md`](VALUE_PROPOSITION.md) | Criterion 1 | Sentence transcribed from `MASTER_PLAN.md` §3; ratification of the `quantization`/`quantisation` variance unfilled |
+| [`MESSAGE_TEMPLATES.md`](MESSAGE_TEMPLATES.md) | Scope: "use it verbatim in every message" | Six templates, complete, `<PLACEHOLDER>` slots per recipient |
+| [`TARGET_LIST_SCHEMA.md`](TARGET_LIST_SCHEMA.md) + [`target-list.csv`](target-list.csv) | Scope: "identify … candidate design partners" | Criteria and columns complete; **0 rows** |
+| [`OUTREACH_LOG_SCHEMA.md`](OUTREACH_LOG_SCHEMA.md) + [`outreach-log.csv`](outreach-log.csv) | Criteria 2, 8; "keep a dated log" | 12-value outcome enum, 9 of them failures; **0 rows** |
+| [`INTERVIEW_GUIDE.md`](INTERVIEW_GUIDE.md) | Criterion 3 | The four questions verbatim, plus protocol |
+| [`CONVERSATION_RECORD_TEMPLATE.md`](CONVERSATION_RECORD_TEMPLATE.md) + [`conversations/`](conversations/) | Criteria 3, 4, 5 | Blank form; **0 records** |
+| [`INCEPTION_APPLICATION_PREP.md`](INCEPTION_APPLICATION_PREP.md) | Criterion 6 | Repository-grounded facts assembled; submission and confirmation unfilled |
+| [`PALACE_READING_NOTE.md`](PALACE_READING_NOTE.md) | Criterion 7 | Comparison structure and identifier verification; **the paper has not been read** |
+
+**All eight acceptance criteria are unmet.** Contacts attempted: 0. Conversations
+held: 0. Partners agreed to look: 0. Inception applications submitted: 0. Papers
+read: 0. Criterion-by-criterion detail in
+[`../../evidence/QM-0160.md`](../../evidence/QM-0160.md).
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | **Blocked — human dependency** |
+| Lane | V |
+| Wave | 0 |
+| Branch | `task/qm-0160-design-partner-outreach` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0160` |
+| Base commit | `848621b` |
+| Head commit | The single scaffolding commit on this branch — `git rev-parse task/qm-0160-design-partner-outreach`. A commit cannot contain its own hash, so the value is reported by `impl-agent-5` and belongs in `## Merge` of the evidence record rather than being invented here |
+| Implementation agent | `impl-agent-5` |
+| Evidence record | [`../../evidence/QM-0160.md`](../../evidence/QM-0160.md) |
+| Merge path | L |
+| Tests added | none — human-dependent scaffolding exempt class |
+| Human blocker | **Requires a human to send real messages to real people. No agent can satisfy this. Scaffolding is committed; the acceptance criteria remain unmet.** |
+
