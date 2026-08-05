@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0100` reaches `Complete`. (Was `QM-0003`, now deferred — v1 streams the **real** checkpoint, not an LOD fixture.)
+`QM-0100` is `Complete` and merged, so the v1 edge is satisfied. (Was `QM-0003`, now deferred — v1 streams the **real** checkpoint, not an LOD fixture.)
 
 **v1 dependency rewiring.** This task's `## Dependencies` section names tasks that are now `Deferred`. For v1 it is unblocked by the tasks named above; the original edges return with the post-v1 platform release. See [`EXECUTION_ORDER.md`](../../EXECUTION_ORDER.md) §10.
 
@@ -78,6 +78,18 @@ writing artifacts.
 None.
 
 ## Data Contracts
+
+> **CONTROLLER CORRECTION, 2026-08-05.** This section specified
+> `StreamedBlock.data: BlockData` with `BlockData` living in `q-gpu`. **That is
+> unsatisfiable: `crates/q-gpu/Cargo.toml` declares `q-tensor-runtime` under
+> `[dependencies]`, so the contract as written is a dependency cycle.**
+> `QM-0030` moved `BlockData` into `q-tensor-runtime` — character-for-character
+> identical — and left `pub use q_tensor_runtime::BlockData;` at
+> `q-gpu/src/lib.rs:109`, keeping `q_gpu::BlockData` valid for `CpuBackend`, the
+> `Backend` trait, nine unit tests and `q-cuda:35,138,167`. `review-agent-10`
+> confirmed the cycle is real and ruled this a **plan defect correctly handled**,
+> not an out-of-scope edit. Recorded in `.plan/PLAN_CHANGELOG.md`.
+
 
 ```rust
 pub struct BlockStreamConfig {
@@ -186,3 +198,35 @@ cargo run -p q-cli -- stream fixtures/tiny-llama-large <address> --block 256   #
 * Block-count and clamping assertions.
 * Cancellation and backpressure test output.
 * `/usr/bin/time -l` output from the CLI run.
+
+---
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | `Awaiting Independent Review` |
+| Lane | P |
+| Branch | `task/qm-0030-streaming-block-reader` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0030` |
+| Base commit | `6fb593a` |
+| Commits on the branch | `f4fba1e` implementation · `e4061cd` plan-only (records the SHA) · `eea5950` test-setup fix + `baseline.json` commit repin. A trailing plan-only commit records this list. **`git log --oneline main..HEAD` is authoritative for the tip** — a commit cannot contain its own hash, so no field here can name it. |
+| Agent | `impl-agent-8` |
+| Evidence | [`.plan/evidence/QM-0030.md`](../../evidence/QM-0030.md) |
+| Merge path | L |
+| Tests added | 43 (30 in `q-tensor-runtime` `stream.rs`, 4 in `q-source` `budget.rs`, 1 in `tests/bounded_residency.rs`, 8 in `tests/real_fixture_blocks.rs`) |
+| Floor before | rust 434 tests over 43 binaries |
+| Floor after | rust 477 tests over 45 binaries (`scripts/baseline.json` raised; web 115/13 untouched) |
+
+**Deviation a reviewer must check.** `TASK.md` *Data Contracts* specifies
+`StreamedBlock.data: BlockData` and *Repository Evidence* points at
+`crates/q-gpu/src/lib.rs:105`, but `q-gpu` depends on `q-tensor-runtime`, so that
+import would be a dependency cycle. `BlockData` was moved into
+`q-tensor-runtime` and re-exported from `q-gpu` in one line — the only edit
+outside the stated program boundary. Rationale and verification in
+`.plan/evidence/QM-0030.md`.
+
+**Not claimed:** gate `G1` (that is `QM-0101`'s, and needs a configured residency
+ceiling that does not exist yet), `GRID-007` as `Verified` (`QM-0061` /
+`QM-0040`), and both `.plan/PERFORMANCE_PLAN.md` §2.2 latency budgets, which were
+not measured.

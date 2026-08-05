@@ -2,13 +2,21 @@
 //!
 //! Data plane: **Metadata Plane** (ARCHITECTURE.md §2.1, §5.3, §9).
 //!
-//! Tensor blocks, tile identity, and the LOD ladder.
+//! Tensor blocks, tile identity, the LOD ladder, and the bounded streaming
+//! block reader.
 //!
-//! **Scope in this pass: types only.** These are the addressing primitives the
-//! tile compiler and the compute backends share; nothing here executes, reads
-//! bytes, or produces tiles (`TILE-004`). What it *does* do is make the LOD
-//! ladder of ARCHITECTURE.md §9.1 a closed enum, so no code can invent a
-//! seventh level or conflate "block statistics" with "exact values".
+//! **Scope of this module (`lib.rs`): types only.** These are the addressing
+//! primitives the tile compiler and the compute backends share; nothing in
+//! *this file* executes, reads bytes, or produces tiles (`TILE-004`). What it
+//! *does* do is make the LOD ladder of ARCHITECTURE.md §9.1 a closed enum, so
+//! no code can invent a seventh level or conflate "block statistics" with
+//! "exact values".
+//!
+//! **[`stream`] is the one part of this crate that reads bytes** (`TILE-009`).
+//! It still produces no tiles: it walks a tensor's block grid, range-reads each
+//! block through a [`q_source::ModelSource`], and decodes it into a
+//! [`BlockData`] under buffers whose size depends on the block and never on the
+//! tensor. See that module for the residency contract.
 //!
 //! ## The ladder (§9.1–9.2)
 //!
@@ -23,6 +31,10 @@
 //!
 //! Only LOD 5 may carry exact values, and only on demand. Everything above it
 //! is summary data, labelled as such via [`q_source::AccessScale`].
+
+pub mod stream;
+
+pub use stream::{BlockGrid, BlockStream, BlockStreamConfig, StreamOutcome, StreamedBlock};
 
 use q_source::error::{QError, Result};
 use q_source::{AccessScale, TensorDescriptor, TensorId};
@@ -291,6 +303,47 @@ impl TileId {
 impl fmt::Display for TileId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
+    }
+}
+
+/// A materialized dense block. Deliberately `f32`: this is a *selected block*,
+/// never a whole tensor.
+///
+/// This type lives here rather than in `q-gpu` because it is the value
+/// container the block *runtime* produces — [`stream::BlockStream`] emits one
+/// per block — and `q-gpu` already depends on this crate, so the reverse edge
+/// would be a dependency cycle. `q_gpu::BlockData` re-exports this type, so
+/// every existing path keeps working.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockData {
+    pub rows: usize,
+    pub columns: usize,
+    pub values: Vec<f32>,
+}
+
+impl BlockData {
+    pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Result<Self> {
+        if values.len() != rows * columns {
+            return Err(QError::malformed(
+                "block",
+                format!(
+                    "{} values supplied for a {rows}x{columns} block",
+                    values.len()
+                ),
+            ));
+        }
+        Ok(Self {
+            rows,
+            columns,
+            values,
+        })
+    }
+
+    pub fn get(&self, i: usize, j: usize) -> Option<f32> {
+        if i >= self.rows || j >= self.columns {
+            return None;
+        }
+        self.values.get(i * self.columns + j).copied()
     }
 }
 

@@ -12,3 +12,12 @@ repository.workspace = true
 q-source = { workspace = true }
 serde = { workspace = true }
 blake3 = { workspace = true }
+
+[dev-dependencies]
+# Descriptors for the real fixtures are read with the shipped header parser
+# rather than hand-written, so a test cannot disagree with the file on disk.
+q-safetensors = { workspace = true }
+# fixtures/tiny-llama-2shard/golden.json — the Python safetensors reference.
+serde_json = { workspace = true }
+# Truncated-shard negative path: the fixture is copied, never modified in place.
+tempfile = { workspace = true }

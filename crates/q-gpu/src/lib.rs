@@ -99,40 +99,14 @@ pub trait Backend: Send + Sync {
     }
 }
 
-/// A materialized dense block. Deliberately `f32`: this is a *selected block*,
-/// never a whole tensor.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BlockData {
-    pub rows: usize,
-    pub columns: usize,
-    pub values: Vec<f32>,
-}
-
-impl BlockData {
-    pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Result<Self> {
-        if values.len() != rows * columns {
-            return Err(QError::malformed(
-                "block",
-                format!(
-                    "{} values supplied for a {rows}x{columns} block",
-                    values.len()
-                ),
-            ));
-        }
-        Ok(Self {
-            rows,
-            columns,
-            values,
-        })
-    }
-
-    pub fn get(&self, i: usize, j: usize) -> Option<f32> {
-        if i >= self.rows || j >= self.columns {
-            return None;
-        }
-        self.values.get(i * self.columns + j).copied()
-    }
-}
+/// A materialized dense block.
+///
+/// Re-exported from [`q_tensor_runtime`], which is where it now lives so that
+/// the streaming block reader (`q_tensor_runtime::stream`) can produce one
+/// without depending on this crate — `q-gpu` already depends on
+/// `q-tensor-runtime`, so the reverse edge would be a dependency cycle. This
+/// alias keeps `q_gpu::BlockData` a valid path for every existing caller.
+pub use q_tensor_runtime::BlockData;
 
 /// The CPU reference backend.
 ///

@@ -818,8 +818,11 @@ name = "q-tensor-runtime"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "q-safetensors",
  "q-source",
  "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
