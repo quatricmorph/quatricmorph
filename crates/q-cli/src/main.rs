@@ -20,17 +20,25 @@
 //! ```
 
 use clap::{Parser, Subcommand};
-use q_catalog::{Catalog, TensorFilter};
+use q_catalog::{Catalog, ConfigMetadata, TensorFilter};
 use q_gpu::{Backend, CpuBackend};
 use q_nsir::{Registry, ResolvedModel};
-use q_safetensors::ingest_local;
+use q_safetensors::{ingest_local, IngestOutcome};
 use q_source::error::{QError, Result};
 use q_source::role::TensorRole;
 use q_source::LocalFsSource;
 use q_tensor_runtime::BlockExtent;
 use q_weightql::{QueryEngine, QueryOutcome};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+/// The fidelity of everything `q inspect` prints.
+///
+/// Headers, the shard index, and `config.json` only. **No weight byte is read**
+/// (`q_safetensors::ingest::tests::ingestion_reads_only_headers_not_payload`).
+/// `.plan/DATA_ARCHITECTURE.md` §8 names that fidelity `metadata`.
+const INSPECT_FIDELITY: &str = "metadata";
 
 #[derive(Parser, Debug)]
 #[command(
@@ -139,10 +147,7 @@ fn open(model_dir: &Path) -> Result<(LocalFsSource, Catalog, String)> {
         &ingested.manifest.revision,
         &ingested.manifest.fingerprint(),
         &resolved.resolver_id,
-        ingested
-            .manifest
-            .config_u64("hidden_size")
-            .map(|v| v as u32),
+        &ConfigMetadata::from_config(ingested.manifest.config.as_ref()),
         &resolved,
     )?;
     Ok((
@@ -150,6 +155,123 @@ fn open(model_dir: &Path) -> Result<(LocalFsSource, Catalog, String)> {
         catalog,
         ingested.model_id.to_hex(),
     ))
+}
+
+/// What `q inspect` reports.
+///
+/// Two kinds of number live here and the distinction is load-bearing:
+///
+/// * **Observed** — `tensors`, `parameters`, `described_payload_bytes`,
+///   `shard_count`, `bytes_read`, and `layer_count` whenever the descriptors
+///   show one. Summed from the shard headers, so they are facts about the
+///   checkpoint.
+/// * **Declared** — `hidden_size`, `intermediate_size`, `num_attention_heads`,
+///   `num_key_value_heads`, `vocab_size`, `torch_dtype`. Copied out of
+///   `config.json`. Absent when the checkpoint has no config, or when a field
+///   is unusable, and then they render as `null` — **never `0`**.
+#[derive(Debug, Serialize)]
+struct InspectReport {
+    model_id: String,
+    source_key: String,
+    model_type: Option<String>,
+    resolver: String,
+    shard_count: usize,
+    tensors: usize,
+    parameters: u64,
+    described_payload_bytes: u64,
+    bytes_read: u64,
+    unresolved_tensors: usize,
+    hidden_size: Option<u32>,
+    layer_count: Option<u32>,
+    intermediate_size: Option<u32>,
+    num_attention_heads: Option<u32>,
+    num_key_value_heads: Option<u32>,
+    vocab_size: Option<u32>,
+    torch_dtype: Option<String>,
+    fidelity: String,
+}
+
+impl InspectReport {
+    fn build(ingested: &IngestOutcome, resolved: &ResolvedModel) -> Self {
+        let config = ConfigMetadata::from_config(ingested.manifest.config.as_ref());
+        let observed = q_catalog::observed_layer_count(&resolved.descriptors);
+        Self {
+            model_id: ingested.model_id.to_hex(),
+            source_key: ingested.manifest.source_key.clone(),
+            model_type: ingested.manifest.model_type(),
+            resolver: resolved.resolver_id.clone(),
+            shard_count: ingested.shard_count(),
+            tensors: ingested.tensor_count(),
+            parameters: ingested.total_parameters(),
+            described_payload_bytes: ingested.described_payload_bytes,
+            bytes_read: ingested.bytes_read,
+            unresolved_tensors: resolved.unresolved_count(),
+            layer_count: config.layer_count(observed),
+            hidden_size: config.hidden_size,
+            intermediate_size: config.intermediate_size,
+            num_attention_heads: config.num_attention_heads,
+            num_key_value_heads: config.num_key_value_heads,
+            vocab_size: config.vocab_size,
+            torch_dtype: config.torch_dtype,
+            fidelity: INSPECT_FIDELITY.to_string(),
+        }
+    }
+
+    fn render_text(&self) -> String {
+        /// An absent declared field prints `null`, never `0`.
+        fn opt<T: std::fmt::Display>(v: &Option<T>) -> String {
+            v.as_ref()
+                .map(T::to_string)
+                .unwrap_or_else(|| "null".into())
+        }
+        fn line(out: &mut String, key: &str, value: String) {
+            out.push_str(&format!("{key:<20}{value}\n"));
+        }
+        let mut s = String::new();
+        line(&mut s, "model_id", self.model_id.clone());
+        line(&mut s, "source", self.source_key.clone());
+        line(&mut s, "model_type", opt(&self.model_type));
+        line(&mut s, "resolver", self.resolver.clone());
+        line(&mut s, "shards", self.shard_count.to_string());
+        line(&mut s, "tensors", self.tensors.to_string());
+        line(&mut s, "parameters", self.parameters.to_string());
+        line(
+            &mut s,
+            "payload described",
+            format!("{} bytes", self.described_payload_bytes),
+        );
+        line(
+            &mut s,
+            "bytes actually read",
+            format!(
+                "{} bytes (headers + index only — no weights loaded)",
+                self.bytes_read
+            ),
+        );
+        line(
+            &mut s,
+            "unresolved tensors",
+            format!(
+                "{}{}",
+                self.unresolved_tensors,
+                if self.unresolved_tensors > 0 {
+                    "  (role `unknown` — the resolver did not guess)"
+                } else {
+                    ""
+                }
+            ),
+        );
+        s.push_str("-- declared by config.json (null = not declared, never 0) --\n");
+        line(&mut s, "hidden_size", opt(&self.hidden_size));
+        line(&mut s, "layer_count", opt(&self.layer_count));
+        line(&mut s, "intermediate_size", opt(&self.intermediate_size));
+        line(&mut s, "attention_heads", opt(&self.num_attention_heads));
+        line(&mut s, "key_value_heads", opt(&self.num_key_value_heads));
+        line(&mut s, "vocab_size", opt(&self.vocab_size));
+        line(&mut s, "torch_dtype", opt(&self.torch_dtype));
+        line(&mut s, "fidelity", self.fidelity.clone());
+        s
+    }
 }
 
 /// Pretty-print JSON, mapping the serializer error into the shared error type.
@@ -192,50 +314,11 @@ fn run(cli: &Cli) -> Result<()> {
                 ingested.manifest.declared_architecture().as_deref(),
                 ingested.descriptors.clone(),
             )?;
+            let report = InspectReport::build(&ingested, &resolved);
             if cli.json {
-                println!(
-                    "{}",
-                    serde_json::json!({
-                        "model_id": ingested.model_id.to_hex(),
-                        "source_key": ingested.manifest.source_key,
-                        "model_type": ingested.manifest.model_type(),
-                        "resolver": resolved.resolver_id,
-                        "shards": ingested.manifest.shards().count(),
-                        "tensors": ingested.tensor_count(),
-                        "parameters": ingested.total_parameters(),
-                        "described_payload_bytes": ingested.described_payload_bytes,
-                        "bytes_read": ingested.bytes_read,
-                        "unresolved_tensors": resolved.unresolved_count(),
-                    })
-                );
+                println!("{}", json_out(&report)?);
             } else {
-                println!("model_id            {}", ingested.model_id);
-                println!("source              {}", ingested.manifest.source_key);
-                println!(
-                    "model_type          {}",
-                    ingested.manifest.model_type().unwrap_or_else(|| "?".into())
-                );
-                println!("resolver            {}", resolved.resolver_id);
-                println!("shards              {}", ingested.manifest.shards().count());
-                println!("tensors             {}", ingested.tensor_count());
-                println!("parameters          {}", ingested.total_parameters());
-                println!(
-                    "payload described   {} bytes",
-                    ingested.described_payload_bytes
-                );
-                println!(
-                    "bytes actually read {} bytes (headers + index only — no weights loaded)",
-                    ingested.bytes_read
-                );
-                let unresolved = resolved.unresolved_count();
-                println!(
-                    "unresolved tensors  {unresolved}{}",
-                    if unresolved > 0 {
-                        "  (role `unknown` — the resolver did not guess)"
-                    } else {
-                        ""
-                    }
-                );
+                print!("{}", report.render_text());
             }
         }
 
@@ -480,4 +563,110 @@ fn run(cli: &Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures")
+            .join(name)
+            .canonicalize()
+            .expect("run fixtures/generate_fixtures.py")
+    }
+
+    fn report(dir: &Path) -> Result<InspectReport> {
+        report_from(ingest_local(dir)?)
+    }
+
+    fn report_from(ingested: q_safetensors::IngestOutcome) -> Result<InspectReport> {
+        let registry = Registry::builtin()?;
+        let resolved = ResolvedModel::build(
+            &registry,
+            ingested.manifest.model_type().as_deref(),
+            ingested.manifest.declared_architecture().as_deref(),
+            ingested.descriptors.clone(),
+        )?;
+        Ok(InspectReport::build(&ingested, &resolved))
+    }
+
+    #[test]
+    fn inspect_reports_the_fixture_config_metadata_at_metadata_fidelity() {
+        let r = report(&fixture("tiny-llama-2shard")).unwrap();
+        // fixtures/tiny-llama-2shard/config.json
+        assert_eq!(r.hidden_size, Some(48));
+        assert_eq!(r.layer_count, Some(12));
+        assert_eq!(r.intermediate_size, Some(64));
+        assert_eq!(r.num_attention_heads, Some(8));
+        assert_eq!(r.num_key_value_heads, Some(2));
+        assert_eq!(r.vocab_size, Some(64));
+        assert_eq!(r.torch_dtype.as_deref(), Some("float32"));
+        // From the manifest, not from config arithmetic.
+        assert_eq!(r.parameters, 302_256);
+        assert_eq!(r.described_payload_bytes, 1_196_736);
+        assert_eq!(r.tensors, 111);
+        assert_eq!(r.shard_count, 2);
+        assert_eq!(r.fidelity, "metadata");
+        // Nothing but headers and the index was read.
+        assert!(r.bytes_read < r.described_payload_bytes / 10);
+    }
+
+    #[test]
+    fn inspect_renders_absent_config_fields_as_null_never_zero() {
+        // A checkpoint with no `config.json` at all. That such a checkpoint
+        // ingests is proved in `q_safetensors::ingest::tests::
+        // a_checkpoint_without_a_config_json_still_ingests`; what is under test
+        // here is only how the absence renders.
+        let mut ingested = ingest_local(fixture("tiny-llama-single")).unwrap();
+        ingested.manifest.config = None;
+        let r = report_from(ingested).unwrap();
+        let wire = serde_json::to_value(&r).unwrap();
+        for key in [
+            "hidden_size",
+            "intermediate_size",
+            "num_attention_heads",
+            "num_key_value_heads",
+            "vocab_size",
+            "torch_dtype",
+            "model_type",
+        ] {
+            assert!(
+                wire[key].is_null(),
+                "{key} was {}, expected null",
+                wire[key]
+            );
+            assert_ne!(wire[key], serde_json::json!(0), "{key} rendered as zero");
+        }
+        // `layer_count` is *not* in that list, and the difference matters: a
+        // `layers.N.` segment in a tensor name is structural, so even the
+        // generic resolver — which claims no semantics here, `model_type` being
+        // absent — still observes the layer index. Observed beats declared, so
+        // the count survives the config's disappearance.
+        assert_eq!(r.layer_count, Some(1));
+        assert_eq!(r.resolver, "generic");
+        // The counts that come from the manifest are still exact.
+        assert_eq!(r.tensors, 10);
+        assert_eq!(r.shard_count, 1);
+        assert_eq!(r.fidelity, "metadata");
+        // An absent declared field prints as `null` in the human form too.
+        assert!(r.render_text().contains("hidden_size         null"));
+    }
+
+    #[test]
+    fn inspect_prints_the_config_metadata_in_the_human_readable_form() {
+        let r = report(&fixture("tiny-llama-2shard")).unwrap();
+        let text = r.render_text();
+        assert!(text.contains("hidden_size         48"), "{text}");
+        assert!(text.contains("layer_count         12"), "{text}");
+        assert!(text.contains("parameters          302256"), "{text}");
+        assert!(text.contains("fidelity            metadata"), "{text}");
+        // An absent field prints as `null`, never as `0`.
+        let empty = InspectReport {
+            hidden_size: None,
+            ..r
+        };
+        assert!(empty.render_text().contains("hidden_size         null"));
+    }
 }

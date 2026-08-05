@@ -21,7 +21,7 @@
 //! live bytes and a high-water mark for the whole test binary. That is exact
 //! and deterministic, unlike sampling RSS, which is why it is used here.
 
-use q_catalog::{Catalog, TensorFilter};
+use q_catalog::{Catalog, ConfigMetadata, TensorFilter};
 use q_nsir::{Registry, ResolvedModel};
 use q_source::role::TensorRole;
 use q_source::{DType, ModelId, TensorDescriptor, TensorId};
@@ -302,13 +302,25 @@ fn trillion_parameter_manifest_indexes_and_queries_within_a_bounded_budget() {
             "v1",
             "no-artifacts",
             "llama",
-            Some(HIDDEN as u32),
+            &ConfigMetadata {
+                hidden_size: Some(HIDDEN as u32),
+                num_hidden_layers: Some(LAYERS),
+                ..Default::default()
+            },
             &resolved,
         )
         .unwrap();
 
     assert_eq!(row.parameter_count, total_parameters);
+    assert_eq!(row.hidden_size, Some(HIDDEN as u32));
+    // Observed from the descriptors, which happen to agree with the declared
+    // `num_hidden_layers` here; `observed_layer_count_wins_over_a_disagreeing_
+    // declared_one` covers the case where they do not.
     assert_eq!(row.layer_count, Some(LAYERS));
+    assert_eq!(
+        q_catalog::observed_layer_count(&resolved.descriptors),
+        Some(LAYERS)
+    );
 
     let model_hex = model_id.to_hex();
 

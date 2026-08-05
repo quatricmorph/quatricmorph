@@ -673,6 +673,7 @@ dependencies = [
 name = "q-catalog"
 version = "0.1.0"
 dependencies = [
+ "q-architecture",
  "q-nsir",
  "q-source",
  "rusqlite",

@@ -138,10 +138,7 @@ impl AppState {
                 &ingested.manifest.revision,
                 &ingested.manifest.fingerprint(),
                 &resolved.resolver_id,
-                ingested
-                    .manifest
-                    .config_u64("hidden_size")
-                    .map(|v| v as u32),
+                &q_catalog::ConfigMetadata::from_config(ingested.manifest.config.as_ref()),
                 &resolved,
             )?;
             let id = ingested.model_id.to_hex();
@@ -283,21 +280,41 @@ type ApiResult<T> = Result<Json<T>, ApiError>;
 
 // --- responses ---------------------------------------------------------------
 
+/// The fidelity every model summary carries.
+///
+/// A model row is built entirely at `q_source::AccessScale::Metadata` — shapes,
+/// dtypes, addresses, byte ranges, and sums over them. **No weight byte was
+/// read to produce any of it.** `.plan/DATA_ARCHITECTURE.md` §8 names that
+/// fidelity `metadata`; `q_source::ResultFidelity` covers only the three
+/// payload-reading outcomes, so the label is spelled here and pinned by
+/// `the_model_summary_fidelity_is_metadata_because_no_payload_was_read`.
+pub const MODEL_SUMMARY_FIDELITY: &str = "metadata";
+
 #[derive(Debug, Serialize)]
 pub struct ModelSummary {
     pub model_id: String,
     pub source_key: String,
     pub architecture: String,
     pub resolver_id: String,
+    /// Summed over the tensor descriptors. Never config arithmetic.
     pub parameter_count: u64,
     pub tensor_count: u64,
+    /// Declared by `config.json`; `null` when the checkpoint has none.
+    /// **Never `0`** — zero would be a lie about a model we did not read.
+    pub hidden_size: Option<u32>,
     pub layer_count: Option<u32>,
-    pub payload_bytes: u64,
+    /// Summed tensor payload lengths. See the note in `ModelRow.payload_bytes`:
+    /// this excludes shard headers and the index, so it is smaller than the
+    /// checkpoint's size on disk.
+    pub total_bytes: u64,
+    pub shard_count: u64,
     /// Tensors whose semantic role is `unknown`. Surfaced, not hidden.
     pub unresolved_tensors: u64,
+    /// Always [`MODEL_SUMMARY_FIDELITY`].
+    pub fidelity: String,
 }
 
-fn summarize(r: q_catalog::ModelRow, unresolved: u64) -> ModelSummary {
+fn summarize(r: q_catalog::ModelRow, unresolved: u64, shard_count: u64) -> ModelSummary {
     ModelSummary {
         model_id: r.model_id,
         source_key: r.source_key,
@@ -305,9 +322,12 @@ fn summarize(r: q_catalog::ModelRow, unresolved: u64) -> ModelSummary {
         resolver_id: r.resolver_id,
         parameter_count: r.parameter_count,
         tensor_count: r.tensor_count,
+        hidden_size: r.hidden_size,
         layer_count: r.layer_count,
-        payload_bytes: r.payload_bytes,
+        total_bytes: r.payload_bytes,
+        shard_count,
         unresolved_tensors: unresolved,
+        fidelity: MODEL_SUMMARY_FIDELITY.to_string(),
     }
 }
 
@@ -424,7 +444,8 @@ pub async fn list_models(State(s): State<Arc<AppState>>) -> ApiResult<Vec<ModelS
             .catalog
             .unresolved_count(&r.model_id)
             .map_err(ApiError::from)?;
-        out.push(summarize(r, unresolved));
+        let shards = s.catalog.shard_count(&r.model_id).map_err(ApiError::from)?;
+        out.push(summarize(r, unresolved, shards));
     }
     Ok(Json(out))
 }
@@ -442,7 +463,8 @@ pub async fn get_model(
         .catalog
         .unresolved_count(&r.model_id)
         .map_err(ApiError::from)?;
-    Ok(Json(summarize(r, unresolved)))
+    let shards = s.catalog.shard_count(&r.model_id).map_err(ApiError::from)?;
+    Ok(Json(summarize(r, unresolved, shards)))
 }
 
 pub async fn list_layers(
@@ -734,6 +756,58 @@ mod tests {
         let id = models[0].model_id.clone();
         let Json(layers) = list_layers(State(s), AxumPath(id)).await.unwrap();
         assert_eq!(layers.len(), 12);
+    }
+
+    #[tokio::test]
+    async fn the_model_route_carries_config_metadata_and_a_metadata_fidelity() {
+        let s = state();
+        let id = s.model_ids()[0].clone();
+        let Json(m) = get_model(State(s), AxumPath(id)).await.unwrap();
+        // From fixtures/tiny-llama-2shard/config.json.
+        assert_eq!(m.hidden_size, Some(48));
+        assert_eq!(m.layer_count, Some(12));
+        // From the manifest, never from config arithmetic. See
+        // `q_safetensors::ingest::tests::total_parameters_is_the_summed_element
+        // _count_not_bytes_divided_by_a_uniform_width`.
+        assert_eq!(m.parameter_count, 302_256);
+        assert_eq!(m.total_bytes, 1_196_736);
+        assert_eq!(m.tensor_count, 111);
+        assert_eq!(m.shard_count, 2);
+        // No weight byte was read to produce any of the above.
+        assert_eq!(m.fidelity, "metadata");
+    }
+
+    #[test]
+    fn the_model_summary_fidelity_is_metadata_because_no_payload_was_read() {
+        assert_eq!(MODEL_SUMMARY_FIDELITY, "metadata");
+        // The label is pinned to the access scale that guarantees it, so it
+        // cannot drift into a claim the pipeline does not support.
+        assert!(!q_source::AccessScale::Metadata.reads_payload());
+    }
+
+    #[tokio::test]
+    async fn absent_config_fields_serialize_as_null_never_zero() {
+        let row = q_catalog::ModelRow {
+            model_id: "deadbeef".into(),
+            source_uri: "/models/x".into(),
+            source_key: "local:x".into(),
+            source_revision: String::new(),
+            source_hash: "fp".into(),
+            architecture: "unknown".into(),
+            resolver_id: "generic".into(),
+            parameter_count: 16,
+            layer_count: None,
+            hidden_size: None,
+            tensor_count: 1,
+            payload_bytes: 64,
+            imported_at: 0,
+        };
+        let wire = serde_json::to_value(summarize(row, 0, 1)).unwrap();
+        assert!(wire["hidden_size"].is_null(), "{wire}");
+        assert!(wire["layer_count"].is_null(), "{wire}");
+        assert_ne!(wire["hidden_size"], serde_json::json!(0));
+        assert_ne!(wire["layer_count"], serde_json::json!(0));
+        assert_eq!(wire["fidelity"], serde_json::json!("metadata"));
     }
 
     #[tokio::test]

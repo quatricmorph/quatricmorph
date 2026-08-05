@@ -190,6 +190,103 @@ impl ArchitecturePlugin {
     }
 }
 
+/// Model-level metadata **declared** by a checkpoint's `config.json`.
+///
+/// ARCHITECTURE.md §4.2 makes `config.json` this crate's input: it already
+/// decides which plugin claims a model from `model_type` / `architectures`.
+/// This is the rest of that same file, typed — the dimensions a summary needs
+/// (`ARCHITECTURE.md` §9.2: LOD 0 carries *"parameter count, bytes, global
+/// distributions"*).
+///
+/// Three rules hold throughout, and the tests name each one:
+///
+/// * **Declared, not observed.** Every field is what the checkpoint's author
+///   wrote down. The shard headers are the authority on what is actually
+///   stored, and where the two can disagree the header wins — see
+///   [`Self::layer_count`] and the note on [`Self::torch_dtype`].
+/// * **Absent is `None`, never `0`.** A field that is missing, of the wrong
+///   JSON type, negative, or too large to fit becomes `None`. Zero would be a
+///   claim about a model we did not read.
+/// * **One bad key costs only that key.** The remaining fields still load.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelConfigMetadata {
+    pub hidden_size: Option<u32>,
+    pub num_hidden_layers: Option<u32>,
+    pub intermediate_size: Option<u32>,
+    pub num_attention_heads: Option<u32>,
+    pub num_key_value_heads: Option<u32>,
+    pub vocab_size: Option<u32>,
+    /// `torch_dtype` verbatim, e.g. `"float32"`.
+    ///
+    /// **Never used to infer any tensor's storage dtype.** A checkpoint may
+    /// store individual tensors at other widths — `fixtures/tiny-llama-2shard`
+    /// declares `float32` and holds two BF16 tensors — so this is a fact about
+    /// the checkpoint's origin and nothing else. Deriving a `DType` from it
+    /// would be the shape-guessing that ARCHITECTURE.md §4.2 forbids, in
+    /// another costume.
+    pub torch_dtype: Option<String>,
+}
+
+impl ModelConfigMetadata {
+    /// Read the fields out of an already-parsed `config.json`.
+    ///
+    /// `None` — no `config.json` in the checkpoint — declares nothing.
+    pub fn from_config(config: Option<&serde_json::Value>) -> Self {
+        let Some(v) = config else {
+            return Self::default();
+        };
+        Self {
+            hidden_size: u32_field(v, "hidden_size"),
+            num_hidden_layers: u32_field(v, "num_hidden_layers"),
+            intermediate_size: u32_field(v, "intermediate_size"),
+            num_attention_heads: u32_field(v, "num_attention_heads"),
+            num_key_value_heads: u32_field(v, "num_key_value_heads"),
+            vocab_size: u32_field(v, "vocab_size"),
+            torch_dtype: v
+                .get("torch_dtype")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+        }
+    }
+
+    /// Parse `config.json` text.
+    ///
+    /// Malformed JSON is refused with `source_name` as context; a *well-formed*
+    /// file with unusable values is not an error, because the individual fields
+    /// degrade to `None` on their own.
+    pub fn parse(source_name: &str, text: &str) -> Result<Self> {
+        let value: serde_json::Value =
+            serde_json::from_str(text).map_err(|e| QError::json(source_name, e))?;
+        Ok(Self::from_config(Some(&value)))
+    }
+
+    /// Whether the config declared nothing this type records.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The layer count to report, given what the manifest actually showed.
+    ///
+    /// `observed` — the number of layers the shard headers produced, by way of
+    /// resolution — is exact, so it always wins, even against a config that
+    /// disagrees. `num_hidden_layers` fills in only when nothing was observed:
+    /// that is the generic-fallback case, where no plugin claimed the model and
+    /// so no descriptor carries a layer index. Reporting `NULL` there would
+    /// discard a fact the checkpoint states about itself.
+    pub fn layer_count(&self, observed: Option<u32>) -> Option<u32> {
+        observed.or(self.num_hidden_layers)
+    }
+}
+
+/// A `u32` config field, or `None`.
+///
+/// `as_u64` already rejects strings, floats, and negatives; `try_into` rejects
+/// anything past `u32::MAX`. Nothing is coerced, clamped, or rounded — a value
+/// this cannot represent exactly is absent rather than wrong.
+fn u32_field(value: &serde_json::Value, key: &str) -> Option<u32> {
+    value.get(key)?.as_u64()?.try_into().ok()
+}
+
 /// Built-in manifests, embedded at compile time.
 ///
 /// Embedding means resolution works regardless of the process's working
@@ -319,6 +416,144 @@ impl Selection<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fixture's own `config.json`, read from disk rather than duplicated
+    /// here, so the expectations below are checked against the real file.
+    fn fixture_config_text(fixture: &str) -> String {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures")
+            .join(fixture)
+            .join("config.json");
+        std::fs::read_to_string(&path).expect("run fixtures/generate_fixtures.py")
+    }
+
+    #[test]
+    fn config_metadata_parses_every_declared_field_of_the_fixture() {
+        let c =
+            ModelConfigMetadata::parse("config.json", &fixture_config_text("tiny-llama-2shard"))
+                .unwrap();
+        // Hand-read from fixtures/tiny-llama-2shard/config.json.
+        assert_eq!(c.hidden_size, Some(48));
+        assert_eq!(c.num_hidden_layers, Some(12));
+        assert_eq!(c.intermediate_size, Some(64));
+        assert_eq!(c.num_attention_heads, Some(8));
+        assert_eq!(c.num_key_value_heads, Some(2));
+        assert_eq!(c.vocab_size, Some(64));
+        assert_eq!(c.torch_dtype.as_deref(), Some("float32"));
+        assert!(!c.is_empty());
+    }
+
+    #[test]
+    fn an_absent_config_declares_nothing_rather_than_zero() {
+        let c = ModelConfigMetadata::from_config(None);
+        assert_eq!(c, ModelConfigMetadata::default());
+        assert!(c.is_empty());
+        // `None`, never `Some(0)` — zero would be a lie about a model whose
+        // config we never saw.
+        assert_eq!(c.hidden_size, None);
+        assert_eq!(c.num_hidden_layers, None);
+        assert_eq!(c.vocab_size, None);
+        assert_eq!(c.torch_dtype, None);
+    }
+
+    #[test]
+    fn a_field_of_the_wrong_type_is_none_and_the_rest_still_load() {
+        let c = ModelConfigMetadata::parse(
+            "config.json",
+            r#"{"hidden_size": "big", "num_hidden_layers": 12, "vocab_size": 64,
+                "torch_dtype": 32}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hidden_size, None);
+        assert_eq!(c.torch_dtype, None);
+        assert_eq!(c.num_hidden_layers, Some(12));
+        assert_eq!(c.vocab_size, Some(64));
+    }
+
+    #[test]
+    fn a_negative_or_oversized_field_is_none_rather_than_truncated() {
+        let c = ModelConfigMetadata::parse(
+            "config.json",
+            r#"{"hidden_size": -48, "vocab_size": 4294967296, "num_hidden_layers": 12}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hidden_size, None);
+        assert_eq!(c.vocab_size, None);
+        assert_eq!(c.num_hidden_layers, Some(12));
+    }
+
+    #[test]
+    fn a_missing_field_is_none_and_is_never_inferred_from_the_others() {
+        // `num_attention_heads * head_dim == 128`, which is *not* this model's
+        // hidden_size (48). Nothing may reconstruct an absent field from the
+        // ones that happen to be present.
+        let c = ModelConfigMetadata::parse(
+            "config.json",
+            r#"{"num_attention_heads": 8, "head_dim": 16, "intermediate_size": 64}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hidden_size, None);
+        assert_eq!(c.num_hidden_layers, None);
+        assert_eq!(c.num_attention_heads, Some(8));
+        assert_eq!(c.intermediate_size, Some(64));
+    }
+
+    #[test]
+    fn malformed_config_json_is_refused_with_context() {
+        let err = ModelConfigMetadata::parse("config.json", "{ not json").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("config.json"), "message lacked context: {msg}");
+        assert!(matches!(err, QError::Json { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn a_config_that_is_not_a_json_object_declares_nothing_rather_than_failing() {
+        let c = ModelConfigMetadata::parse("config.json", "[1, 2, 3]").unwrap();
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_config_key_is_ignored_rather_than_failing_the_parse() {
+        let c = ModelConfigMetadata::parse(
+            "config.json",
+            r#"{"quantization_config": {"bits": 4}, "hidden_size": 48}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hidden_size, Some(48));
+    }
+
+    #[test]
+    fn config_torch_dtype_is_recorded_as_declared_not_used_to_infer_tensor_dtype() {
+        // `tiny-llama-2shard` declares `torch_dtype: "float32"` and yet stores
+        // two BF16 tensors (`ingest::tests::bf16_tensors_are_described_with_the
+        // _right_width`). The declared value is a fact about the checkpoint's
+        // origin, not an authority over any tensor's storage width — the shard
+        // header is the only authority. So this type carries the string
+        // verbatim and offers nothing that turns it into a `DType`.
+        let c =
+            ModelConfigMetadata::parse("config.json", &fixture_config_text("tiny-llama-2shard"))
+                .unwrap();
+        assert_eq!(c.torch_dtype.as_deref(), Some("float32"));
+        let wire = serde_json::to_value(&c).unwrap();
+        assert_eq!(wire["torch_dtype"], serde_json::json!("float32"));
+        // An unrecognized spelling is kept, not mapped onto a known width.
+        let odd =
+            ModelConfigMetadata::parse("config.json", r#"{"torch_dtype": "float4_e2m1"}"#).unwrap();
+        assert_eq!(odd.torch_dtype.as_deref(), Some("float4_e2m1"));
+    }
+
+    #[test]
+    fn observed_layer_count_wins_and_declared_fills_in_only_an_absence() {
+        let c = ModelConfigMetadata::parse("config.json", r#"{"num_hidden_layers": 12}"#).unwrap();
+        // Observed comes from the shard headers by way of resolution and is
+        // exact, so it wins even when the config disagrees.
+        assert_eq!(c.layer_count(Some(3)), Some(3));
+        // Nothing observed — the generic-fallback case, where no resolver set a
+        // layer index — so the declared value is reported rather than NULL.
+        assert_eq!(c.layer_count(None), Some(12));
+        // Neither observed nor declared stays absent; it is not invented.
+        assert_eq!(ModelConfigMetadata::default().layer_count(None), None);
+    }
 
     #[test]
     fn builtin_registry_loads_every_manifest() {

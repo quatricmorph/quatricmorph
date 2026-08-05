@@ -11,6 +11,7 @@ repository.workspace = true
 [dependencies]
 q-source = { workspace = true }
 q-nsir = { workspace = true }
+q-architecture = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 rusqlite = { workspace = true }

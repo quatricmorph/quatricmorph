@@ -71,6 +71,7 @@ neither numbering is orphaned.
 | NSIR-007 | Ambiguous alias returns candidates, never a silent pick | Verified | PLAT-P1-WQL | `crates/q-nsir/src/resolver.rs` | `resolver::tests::ambiguous_alias_returns_candidates_not_a_silent_pick` |
 | NSIR-008 | Architecture plugin registry with priority selection and generic fallback | Verified | PLAT-P0-ADAPTER | `crates/q-architecture/src/lib.rs` | `tests::llama_is_selected_by_model_type_and_by_architecture`, `unknown_model_falls_back_to_generic` |
 | NSIR-009 | Invalid address / alias syntax rejected | Verified | PLAT-P1-WQL | `crates/q-nsir/src/{address,alias}.rs` | `address::tests::invalid_syntax_is_rejected_not_guessed`, `alias::tests::invalid_syntax_is_rejected` |
+| NSIR-010 | Model-level metadata typed from `config.json`; declared, never inferred | Verified | MVP-06 | `crates/q-architecture/src/lib.rs` (`ModelConfigMetadata`) | `q_architecture::tests::config_metadata_parses_every_declared_field_of_the_fixture`, `a_field_of_the_wrong_type_is_none_and_the_rest_still_load`, `config_torch_dtype_is_recorded_as_declared_not_used_to_infer_tensor_dtype`, `malformed_config_json_is_refused_with_context` |
 
 ## CAT — metadata catalog
 
@@ -86,6 +87,7 @@ neither numbering is orphaned.
 | CAT-008 | Catalog survives close and reopen | Verified | AC-008 | `crates/q-catalog/src/lib.rs` | `tests::catalog_survives_close_and_reopen` |
 | CAT-009 | Re-import is idempotent | Verified | PLAT-P0-CATALOG | `crates/q-catalog/src/lib.rs` | `tests::reimporting_the_same_model_is_idempotent` |
 | CAT-010 | DuckDB/Arrow/Parquet backend (ARCHITECTURE.md §5) | **Not Started** | PLAT-P0-CATALOG | — | Departure recorded in `docs/decisions/ADR-003-catalog-sqlite.md` |
+| CAT-011 | `models.hidden_size` / `layer_count` / `parameter_count` filled from `config.json` and the manifest; absent means `NULL`, never `0` | Verified | MVP-06 | `crates/q-catalog/src/lib.rs`, `crates/q-safetensors/src/ingest.rs`, `crates/q-daemon/src/lib.rs`, `crates/q-cli/src/main.rs` | `q_catalog::tests::config_declared_hidden_size_persists_and_reloads`, `observed_layer_count_wins_over_a_disagreeing_declared_one`, `declared_layer_count_fills_in_only_when_none_was_observed`, `a_model_without_a_config_persists_null_columns_never_zero`, `persisted_parameter_count_is_summed_from_descriptors_not_from_config_arithmetic`, `q_daemon::tests::the_model_route_carries_config_metadata_and_a_metadata_fidelity` |
 
 ## WQL — WeightQL
 
@@ -250,11 +252,11 @@ signatures and launch geometry and have **never been compiled**. See
 
 ## Summary
 
-129 requirement rows:
+131 requirement rows:
 
 | Status | Count |
 | --- | --- |
-| Verified | 102 |
+| Verified | 104 |
 | Stub (returns `NotImplemented` carrying its own ID) | 10 |
 | Not Started | 9 |
 | Hardware-Unverified | 5 |

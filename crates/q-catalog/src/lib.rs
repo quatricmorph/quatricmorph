@@ -28,6 +28,7 @@
 pub mod job;
 pub mod schema;
 
+use q_architecture::ModelConfigMetadata;
 use q_nsir::{CanonicalAddress, ResolvedModel};
 use q_source::error::{QError, Result};
 use q_source::role::{Component, TensorRole};
@@ -40,6 +41,46 @@ use std::sync::{Mutex, MutexGuard};
 
 pub use job::{ConversionJob, JobKind, JobState};
 pub use schema::{migrate, CURRENT_SCHEMA_VERSION};
+
+/// Re-exported so callers that persist a model do not each need a direct
+/// dependency on `q-architecture`.
+pub use q_architecture::ModelConfigMetadata as ConfigMetadata;
+
+/// How many layers the descriptors themselves show.
+///
+/// `max(layer_index) + 1`, over the descriptors a resolver annotated. This is
+/// **observed**: it comes from the shard headers, so it is exact for the
+/// tensors that were described. It is `None` when no descriptor carries a layer
+/// index — the generic-fallback case — which is the only situation in which
+/// `config.json`'s `num_hidden_layers` is consulted
+/// ([`ModelConfigMetadata::layer_count`]).
+pub fn observed_layer_count(descriptors: &[TensorDescriptor]) -> Option<u32> {
+    descriptors
+        .iter()
+        .filter_map(|d| d.layer_index)
+        .max()
+        .map(|m| m + 1)
+}
+
+/// Sum a per-descriptor quantity, refusing to wrap.
+///
+/// A `u64` cannot overflow at 10¹² parameters (≈2⁴⁰), so this can only fire on
+/// a corrupt or hostile manifest — which is exactly when a silently wrapped
+/// total would be worst.
+fn checked_sum(
+    descriptors: &[TensorDescriptor],
+    what: &str,
+    f: impl Fn(&TensorDescriptor) -> u64,
+) -> Result<u64> {
+    descriptors.iter().try_fold(0u64, |acc, d| {
+        acc.checked_add(f(d)).ok_or_else(|| {
+            QError::Catalog(format!(
+                "{what} overflows u64 while summing tensor `{}`",
+                d.raw_name
+            ))
+        })
+    })
+}
 
 /// A model row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -178,6 +219,14 @@ impl Catalog {
     /// Insertion is batched through a single prepared statement so that a
     /// 10^5-tensor manifest is one transaction with a bounded working set, not
     /// 10^5 round trips.
+    ///
+    /// `config` supplies the *declared* dimensions (`ARCHITECTURE.md` §5.1's
+    /// `hidden_size`, and `num_hidden_layers` as a fallback only). Every count
+    /// — `parameter_count`, `payload_bytes`, `tensor_count`, and `layer_count`
+    /// whenever the descriptors show one — is summed from the descriptors
+    /// instead, because config arithmetic would be an estimate and this is a
+    /// number the UI presents as fact. No payload is read either way: a
+    /// descriptor already carries its shape and byte range.
     #[allow(clippy::too_many_arguments)]
     pub fn upsert_model(
         &self,
@@ -188,16 +237,18 @@ impl Catalog {
         source_hash: &str,
         architecture: &str,
         resolver_id: &str,
-        hidden_size: Option<u32>,
+        config: &ModelConfigMetadata,
         descriptors: &[TensorDescriptor],
     ) -> Result<ModelRow> {
-        let parameter_count: u64 = descriptors.iter().map(|d| d.element_count()).sum();
-        let payload_bytes: u64 = descriptors.iter().map(|d| d.byte_length()).sum();
-        let layer_count = descriptors
-            .iter()
-            .filter_map(|d| d.layer_index)
-            .max()
-            .map(|m| m + 1);
+        let parameter_count = checked_sum(
+            descriptors,
+            "parameter_count",
+            TensorDescriptor::element_count,
+        )?;
+        let payload_bytes =
+            checked_sum(descriptors, "payload_bytes", TensorDescriptor::byte_length)?;
+        let layer_count = config.layer_count(observed_layer_count(descriptors));
+        let hidden_size = config.hidden_size;
         let row = ModelRow {
             model_id: model_id.to_hex(),
             source_uri: source_uri.to_string(),
@@ -307,7 +358,7 @@ impl Catalog {
         source_revision: &str,
         source_hash: &str,
         architecture: &str,
-        hidden_size: Option<u32>,
+        config: &ModelConfigMetadata,
         resolved: &ResolvedModel,
     ) -> Result<ModelRow> {
         self.upsert_model(
@@ -318,7 +369,7 @@ impl Catalog {
             source_hash,
             architecture,
             &resolved.resolver_id,
-            hidden_size,
+            config,
             &resolved.descriptors,
         )
     }
@@ -521,6 +572,20 @@ impl Catalog {
             .map_err(sql_err)
     }
 
+    /// How many distinct shards hold this model's tensors.
+    ///
+    /// Derived from the tensor rows rather than stored, so it cannot disagree
+    /// with them. Pure metadata: no artifact is opened.
+    pub fn shard_count(&self, model_id: &str) -> Result<u64> {
+        self.conn()
+            .query_row(
+                "SELECT COUNT(DISTINCT shard_uri) FROM tensors WHERE model_id = ?1",
+                params![model_id],
+                |r| r.get::<_, i64>(0).map(|v| v as u64),
+            )
+            .map_err(sql_err)
+    }
+
     pub fn unresolved_count(&self, model_id: &str) -> Result<u64> {
         self.conn()
             .query_row(
@@ -704,7 +769,20 @@ mod tests {
         }
     }
 
+    /// A config declaring only the fields a test cares about.
+    fn declared(hidden_size: Option<u32>, num_hidden_layers: Option<u32>) -> ModelConfigMetadata {
+        ModelConfigMetadata {
+            hidden_size,
+            num_hidden_layers,
+            ..Default::default()
+        }
+    }
+
     fn seeded() -> (Catalog, String) {
+        seeded_with(declared(Some(48), None))
+    }
+
+    fn seeded_with(config: ModelConfigMetadata) -> (Catalog, String) {
         let reg = Registry::builtin().unwrap();
         let mut ds = Vec::new();
         let mut offset = 1024u64;
@@ -741,7 +819,7 @@ mod tests {
             "",
             "fp",
             "llama",
-            Some(48),
+            &config,
             &resolved,
         )
         .unwrap();
@@ -765,6 +843,126 @@ mod tests {
         let expected: u64 = 3 * (128 * 48 + 32 * 48 + 48 * 64 + 48) + 64 * 48 + 4;
         assert_eq!(m.parameter_count, expected);
         assert_eq!(cat.list_models().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn config_declared_hidden_size_persists_and_reloads() {
+        let (cat, model_id) = seeded_with(declared(Some(48), Some(12)));
+        assert_eq!(
+            cat.get_model(&model_id).unwrap().unwrap().hidden_size,
+            Some(48)
+        );
+    }
+
+    #[test]
+    fn observed_layer_count_wins_over_a_disagreeing_declared_one() {
+        // The descriptors describe three layers; the config claims twelve. The
+        // artifact is the authority, so the declared value never overwrites it.
+        let (cat, model_id) = seeded_with(declared(Some(48), Some(12)));
+        assert_eq!(
+            cat.get_model(&model_id).unwrap().unwrap().layer_count,
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn declared_layer_count_fills_in_only_when_none_was_observed() {
+        // The generic-fallback case: no plugin claimed the model, so no
+        // descriptor carries a layer index and nothing is observed. Reporting
+        // NULL for a model whose own config says twelve would throw away a
+        // fact we hold, so the declared value is used — and only here.
+        let cat = Catalog::open_in_memory().unwrap();
+        let model_id = ModelId::derive("local:generic", "", "fp");
+        let ds = vec![descriptor("mystery.tensor.weight", vec![4, 4], 0)];
+        assert!(ds.iter().all(|d| d.layer_index.is_none()));
+        cat.upsert_model(
+            model_id,
+            "/models/generic",
+            "local:generic",
+            "",
+            "fp",
+            "unknown",
+            "generic",
+            &declared(None, Some(12)),
+            &ds,
+        )
+        .unwrap();
+        let m = cat.get_model(&model_id.to_hex()).unwrap().unwrap();
+        assert_eq!(m.layer_count, Some(12));
+        assert_eq!(m.hidden_size, None);
+    }
+
+    #[test]
+    fn a_model_without_a_config_persists_null_columns_never_zero() {
+        let cat = Catalog::open_in_memory().unwrap();
+        let model_id = ModelId::derive("local:noconfig", "", "fp");
+        let ds = vec![descriptor("mystery.tensor.weight", vec![4, 4], 0)];
+        cat.upsert_model(
+            model_id,
+            "/models/noconfig",
+            "local:noconfig",
+            "",
+            "fp",
+            "unknown",
+            "generic",
+            &ModelConfigMetadata::default(),
+            &ds,
+        )
+        .unwrap();
+        let hex = model_id.to_hex();
+        let m = cat.get_model(&hex).unwrap().unwrap();
+        assert_eq!(m.hidden_size, None);
+        assert_eq!(m.layer_count, None);
+        // SQL NULL, not 0. Zero would be a lie, and a UI cannot tell the two
+        // apart once the column has been coerced.
+        let stored: (Option<i64>, Option<i64>) = cat
+            .conn()
+            .query_row(
+                "SELECT hidden_size, layer_count FROM models WHERE model_id = ?1",
+                params![hex],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(stored, (None, None));
+    }
+
+    #[test]
+    fn persisted_parameter_count_is_summed_from_descriptors_not_from_config_arithmetic() {
+        let (cat, model_id) = seeded_with(declared(Some(48), Some(12)));
+        let m = cat.get_model(&model_id).unwrap().unwrap();
+        let from_manifest: u64 = 3 * (128 * 48 + 32 * 48 + 48 * 64 + 48) + 64 * 48 + 4;
+        assert_eq!(m.parameter_count, from_manifest);
+        // The obvious config-arithmetic estimate — hidden_size × layers, or any
+        // product of the declared dimensions — does not reproduce it, which is
+        // the point: only the manifest can.
+        assert_ne!(m.parameter_count, 48 * 12);
+        assert_ne!(m.parameter_count, u64::from(48u32) * u64::from(3u32));
+    }
+
+    #[test]
+    fn shard_count_is_the_number_of_distinct_shards_described() {
+        let cat = Catalog::open_in_memory().unwrap();
+        let model_id = ModelId::derive("local:two", "", "fp");
+        let mut a = descriptor("model.layers.0.self_attn.q_proj.weight", vec![4, 4], 0);
+        a.shard_uri = "model-00001-of-00002.safetensors".into();
+        let mut b = descriptor("model.layers.1.self_attn.q_proj.weight", vec![4, 4], 0);
+        b.shard_uri = "model-00002-of-00002.safetensors".into();
+        let mut c = descriptor("model.layers.1.mlp.down_proj.weight", vec![4, 4], 64);
+        c.shard_uri = "model-00002-of-00002.safetensors".into();
+        let reg = Registry::builtin().unwrap();
+        let resolved = ResolvedModel::build(&reg, Some("llama"), None, vec![a, b, c]).unwrap();
+        cat.upsert_resolved(
+            model_id,
+            "/models/two",
+            "local:two",
+            "",
+            "fp",
+            "llama",
+            &ModelConfigMetadata::default(),
+            &resolved,
+        )
+        .unwrap();
+        assert_eq!(cat.shard_count(&model_id.to_hex()).unwrap(), 2);
     }
 
     #[test]
@@ -926,7 +1124,7 @@ mod tests {
             "",
             "fp",
             "llama",
-            Some(48),
+            &declared(Some(48), None),
             &resolved,
         )
         .unwrap();
@@ -976,7 +1174,14 @@ mod tests {
             let resolved = ResolvedModel::build(&reg, Some("llama"), None, ds).unwrap();
             let cat = Catalog::open(&path).unwrap();
             cat.upsert_resolved(
-                model_id, "/x", "local:x", "", "fp", "llama", None, &resolved,
+                model_id,
+                "/x",
+                "local:x",
+                "",
+                "fp",
+                "llama",
+                &ModelConfigMetadata::default(),
+                &resolved,
             )
             .unwrap();
         }

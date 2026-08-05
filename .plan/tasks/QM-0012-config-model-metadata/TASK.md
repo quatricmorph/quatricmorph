@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+In Progress
 
 No longer waits on `QM-0005` (deferred). Model-level metadata feeds the manifest's `model` block.
 
@@ -165,3 +165,29 @@ curl -s localhost:PORT/v1/models | jq                    # introduced here
 * Test output with fixture values.
 * `q-cli inspect` output.
 * `curl` output showing the fields and the fidelity label.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | Awaiting Independent Review |
+| Lane | T |
+| Wave | 2 |
+| Branch | `task/qm-0012-config-model-metadata` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0012` |
+| Base commit | `ace7d09` |
+| Head commit | implementation commit `5fcf867`; branch tip `aa2082c` (two later commits are plan-metadata only — no source or test change). Authoritative: `git rev-parse task/qm-0012-config-model-metadata` |
+| Implementation agent | `impl-agent-3` |
+| Evidence record | `.plan/evidence/QM-0012.md` |
+| Merge path | L |
+| Tests added | 28 (`cargo test --workspace` 290 → 318; 0 failed, 0 ignored) |
+
+Two files outside the declared boundary changed — `crates/q-weightql/tests/planning.rs`
+and `tests/tests/end_to_end_scalar_slice.rs` — each a single forced call-site
+argument update after the `Catalog::upsert_resolved` signature change. See
+`.plan/evidence/QM-0012.md` § Files changed.
+
+Two plan defects found and recorded in § Claim limits: the `parameter_count:
+299184` in this file's § Data Contract is arithmetically wrong (true value
+302 256), and § Repository Evidence's claim that `q-architecture` already read
+`config.json` was false at `ace7d09`.

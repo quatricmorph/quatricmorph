@@ -86,10 +86,7 @@ fn open_model() -> (LocalFsSource, Catalog, String) {
             "",
             &ingested.manifest.fingerprint(),
             "llama",
-            ingested
-                .manifest
-                .config_u64("hidden_size")
-                .map(|v| v as u32),
+            &q_catalog::ConfigMetadata::from_config(ingested.manifest.config.as_ref()),
             &resolved,
         )
         .expect("catalog upsert");

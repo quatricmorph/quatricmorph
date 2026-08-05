@@ -41,7 +41,7 @@ fn catalog() -> (Catalog, String) {
         "",
         &out.manifest.fingerprint(),
         "llama",
-        out.manifest.config_u64("hidden_size").map(|v| v as u32),
+        &q_catalog::ConfigMetadata::from_config(out.manifest.config.as_ref()),
         &resolved,
     )
     .unwrap();

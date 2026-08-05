@@ -59,8 +59,29 @@ impl IngestOutcome {
         self.descriptors.len()
     }
 
+    /// Summed element count over every descriptor.
+    ///
+    /// This is the only honest way to get it. Dividing
+    /// `described_payload_bytes` by a single dtype width assumes a uniform
+    /// checkpoint, and real ones are mixed — `tiny-llama-2shard` alone is F32
+    /// with two BF16 tensors, so the shortcut is wrong by 3 072 elements.
+    /// Config arithmetic over `hidden_size` and `num_hidden_layers` is an
+    /// estimate for the same reason and worse ones.
     pub fn total_parameters(&self) -> u64 {
         self.descriptors.iter().map(|d| d.element_count()).sum()
+    }
+
+    /// How many distinct shards the descriptors were drawn from.
+    ///
+    /// Counted over the descriptors rather than the manifest so that a resumed
+    /// pass reports the shards it actually described, not the shards that
+    /// exist on disk.
+    pub fn shard_count(&self) -> usize {
+        self.descriptors
+            .iter()
+            .map(|d| d.shard_uri.as_str())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
     }
 
     pub fn find(&self, raw_name: &str) -> Option<&TensorDescriptor> {
@@ -282,6 +303,29 @@ mod tests {
             .expect("run fixtures/generate_fixtures.py")
     }
 
+    /// `fixtures/tiny-llama-2shard/golden.json` — reference totals read back
+    /// with the official Python `safetensors` library, checked in so the Rust
+    /// suite stays hermetic.
+    fn golden() -> serde_json::Value {
+        let text = std::fs::read_to_string(fixtures("tiny-llama-2shard").join("golden.json"))
+            .expect("run fixtures/generate_fixtures.py");
+        serde_json::from_str(&text).unwrap()
+    }
+
+    /// One valid single-tensor shard plus whatever `config.json` text is given.
+    fn checkpoint_with_config(config: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#;
+        let mut bytes = (json.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(json.as_bytes());
+        bytes.extend_from_slice(&[0u8; 4]);
+        std::fs::write(dir.path().join("model.safetensors"), &bytes).unwrap();
+        if let Some(text) = config {
+            std::fs::write(dir.path().join("config.json"), text).unwrap();
+        }
+        dir
+    }
+
     #[test]
     fn ingests_a_sharded_checkpoint() {
         let out = ingest_local(fixtures("tiny-llama-2shard")).unwrap();
@@ -315,6 +359,81 @@ mod tests {
             out.bytes_read,
             out.described_payload_bytes
         );
+    }
+
+    #[test]
+    fn described_totals_match_the_golden_file() {
+        let out = ingest_local(fixtures("tiny-llama-2shard")).unwrap();
+        let g = golden();
+        assert_eq!(
+            out.tensor_count() as u64,
+            g["tensor_count"].as_u64().unwrap()
+        );
+        assert_eq!(
+            out.described_payload_bytes,
+            g["total_size_bytes"].as_u64().unwrap()
+        );
+        assert_eq!(out.shard_count() as u64, g["shard_count"].as_u64().unwrap());
+    }
+
+    #[test]
+    fn total_parameters_is_the_summed_element_count_not_bytes_divided_by_a_uniform_width() {
+        let out = ingest_local(fixtures("tiny-llama-2shard")).unwrap();
+        // 302 256, computed independently by reading the fixture with Python
+        // `safetensors==0.8.0` (command and output recorded in
+        // `.plan/evidence/QM-0012.md` § Research).
+        assert_eq!(out.total_parameters(), 302_256);
+        // Deliberately *not* described_payload_bytes / 4: two tensors are BF16,
+        // so a uniform-width shortcut is wrong by 3 072 elements. Summing the
+        // descriptors is the only way to get this right.
+        assert_eq!(out.described_payload_bytes / 4, 299_184);
+        assert_ne!(out.total_parameters(), out.described_payload_bytes / 4);
+    }
+
+    #[test]
+    fn shard_count_counts_the_distinct_shards_described() {
+        assert_eq!(
+            ingest_local(fixtures("tiny-llama-2shard"))
+                .unwrap()
+                .shard_count(),
+            2
+        );
+        assert_eq!(
+            ingest_local(fixtures("tiny-llama-single"))
+                .unwrap()
+                .shard_count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_checkpoint_without_a_config_json_still_ingests() {
+        let dir = checkpoint_with_config(None);
+        let out = ingest_local(dir.path()).unwrap();
+        assert_eq!(out.tensor_count(), 1);
+        assert!(out.manifest.config.is_none());
+        // Absent, not zero.
+        assert_eq!(out.manifest.config_u64("hidden_size"), None);
+        assert_eq!(out.manifest.model_type(), None);
+    }
+
+    #[test]
+    fn a_corrupt_config_json_is_rejected_with_context() {
+        let dir = checkpoint_with_config(Some("{ not json"));
+        let err = ingest_local(dir.path()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("config.json"), "message lacked context: {msg}");
+        assert!(matches!(err, QError::Json { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn a_config_field_of_the_wrong_type_does_not_fail_ingestion() {
+        let dir =
+            checkpoint_with_config(Some(r#"{"hidden_size": "big", "num_hidden_layers": 12}"#));
+        let out = ingest_local(dir.path()).unwrap();
+        assert_eq!(out.tensor_count(), 1);
+        assert_eq!(out.manifest.config_u64("hidden_size"), None);
+        assert_eq!(out.manifest.config_u64("num_hidden_layers"), Some(12));
     }
 
     #[test]
