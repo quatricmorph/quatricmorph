@@ -2,6 +2,19 @@
 
 ## Status
 
+`Promoted → ADR-013`
+(`docs/decisions/ADR-013-metal-is-v1-gpu-compute-lane.md`, 2026-08-04).
+
+**The revised v1 decision below was adopted. The original recommended default —
+option A, extension point only, CUDA-first — was *not* adopted; it is superseded,
+and the ADR says so and says why.** The ADR additionally settles the build
+question this candidate leaves open: `objc2-metal` as the binding (metal-rs is
+deprecated by its maintainers and declares MSRV 1.82 against this workspace's
+1.78), a `metal` feature with `default = []`, `optional = true` dependencies, and
+a `cfg`-guarded `build.rs` compiling `gpu/metal/*.metal` at build time.
+
+Previously, and still true below:
+
 `Decided`. **Metal is the v1 GPU compute lane.** This reverses the prior
 `Open`/"Post-MVP" recommendation below (kept for its evidence and rationale).
 v1 ships CPU + Metal only; CUDA moves to an explicit next step, deferred until

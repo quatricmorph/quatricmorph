@@ -431,3 +431,167 @@ here regardless of the ruling.
 **Evidence:** `.plan/EXECUTION_ORDER.md` §2 (Wave 6) and §4 (no lane) vs §10
 ("`QM-0093` licensing · `QM-0080` · none — **Ready**"); the task file's
 `## Error Handling` vs `## Acceptance Criteria` item 6.
+## 2026-08-04 — ADR-011 — `ADR-CANDIDATE-018` promoted; the ID construction is now fixed at the byte level
+
+**Discovered during:** ADR promotion pass (controller §0.3), highest-priority
+candidate — `QM-0012` merged at `4e0e85c`, leaving `QM-0020` otherwise schedulable.
+**Defect:** `QM-0020`'s `## Scope` and `## Implementation Plan` commit to
+`StatisticsId = blake3(len‖subject_id ‖ len‖algorithm_version)` while citing an
+**unpromoted** candidate. Worse, that shorthand is lossy against the code it
+claims to follow: `q_source::ids::digest16` (`crates/q-source/src/ids.rs:81`)
+prefixes `ID_SCHEME_VERSION` and a per-kind domain string before any component,
+and `q_tensor_runtime::TileId::for_block` and `q_cache::CacheKey::digest` append
+fixed-width fields (`lod`, `algorithm_version`, `extent`) **unprefixed**. An
+implementer transcribing the shorthand literally would have frozen a fourth,
+incompatible construction into persisted `tensor_statistics` rows.
+**Correction:** Promoted to `docs/decisions/ADR-011-content-derived-identifiers.md`,
+**Accepted**, adopting the candidate's recommended default (option A) unchanged.
+The ADR states the construction at the byte level — variable-length components
+length-prefixed `u64` LE, fixed-width components appended LE unprefixed, digest
+truncated to 16 bytes — and binds the two new domains
+(`quatricmorph/statistics/v1`, `quatricmorph/job/v1`), the `JobId` timestamp
+component (the existing `ConversionJob::created_at`), the rule that a resumed job
+**keeps** its persisted `JobId`, and bare 32-hex as the persisted form where
+`API_CONTRACTS.md` §3 prose shows a `job:` display prefix.
+**Files changed:** `docs/decisions/ADR-011-content-derived-identifiers.md` (added),
+`.plan/decisions/ADR-CANDIDATE-018-tensor-id.md`, `.plan/decisions/README.md`
+**Dependency impact:** None to any `## Dependencies` section. `QM-0020` lists
+`QM-0012` only and cites 018 under `Scope`, not `Dependencies`; the same holds for
+`QM-0021`, `QM-0022`, and `QM-0033`. This retires the decision risk those tasks
+carried, not a dependency edge. **No `TASK.md` was edited.**
+**Evidence:** `cargo test --workspace` → 39 `test result: ok` lines summing to
+**318 passed / 0 failed**, exit 0. `cd apps/web && npx vitest run` → **13 files /
+115 passed**, exit 0. Both equal the `main` baseline; these are documentation-only
+changes.
+
+## 2026-08-04 — ADR-012 — `ADR-CANDIDATE-011` promoted; SSE accepted, and event replay is explicitly refused
+
+**Discovered during:** ADR promotion pass (controller §0.3).
+**Defect:** `.plan/API_CONTRACTS.md` §0 already states the transport decision as
+settled — *"HTTP for request/response, Server-Sent Events for progress
+(`ADR-CANDIDATE-011`)"* — and §1 lists four job routes as `new`, while the
+candidate itself read `Open`. A frozen route table resting on an unpromoted
+candidate is the condition `.plan/decisions/README.md` §"How a deadline is
+derived" exists to catch.
+**Correction:** Promoted to
+`docs/decisions/ADR-012-job-progress-over-server-sent-events.md`, **Accepted**,
+adopting the candidate's recommended default (option A, HTTP + SSE) unchanged.
+The ADR adds two bindings the candidate left open, both of which an implementer
+would otherwise have had to guess: the daemon buffers **no** events and
+implements **no** `Last-Event-ID` replay, because `EventSource` reconnects
+automatically and a reconnecting client re-reads `GET /v1/jobs/{jobId}`; and the
+job record, not the stream, is authoritative state.
+**Files changed:** `docs/decisions/ADR-012-job-progress-over-server-sent-events.md`
+(added), `.plan/decisions/ADR-CANDIDATE-011-daemon-transport.md`,
+`.plan/decisions/README.md`
+**Dependency impact:** None. `QM-0033`'s `## Dependencies` names `QM-0032` and
+`QM-0022`; it cites 011 under `Repository Evidence` only. `QM-0033` remains gated
+on `QM-0032`. **No `TASK.md` was edited.**
+**Evidence:** `cargo tree -p q-daemon -e features -i axum` → `axum v0.7.9` with
+feature `tokio` already enabled via `default`, which is the feature
+`axum::response::sse` is gated behind — so SSE needs **no manifest change**,
+verified on this machine rather than taken from documentation. Gates:
+rust **318 passed / 0 failed** exit 0; web **13 files / 115 passed** exit 0.
+
+## 2026-08-04 — ADR-013 — `ADR-CANDIDATE-003` promoted on its *revised* decision; the original option A is superseded
+
+**Discovered during:** ADR promotion pass (controller §0.3).
+**Defect:** Candidate 003 carries two decisions in one file. Its **original**
+recommended default is option A — extension point only, CUDA-first — and its
+`## Status` supersedes that with a revised v1 decision (v1 ships CPU + Metal;
+CUDA deferred post-v1). `ARCHITECTURE.md` §12.3, `.plan/CUDA_ARCHITECTURE.md`
+§12, and `.plan/PRODUCT_SCOPE.md` §2 have **already been rewritten** around the
+revised decision, so the repository was operating on a decision that had no
+accepted ADR. Separately, the build question — which binding, which feature
+shape, how shaders compile — was never settled anywhere.
+**Correction:** Promoted to
+`docs/decisions/ADR-013-metal-is-v1-gpu-compute-lane.md`, **Accepted**, adopting
+the **revised v1 decision**. The superseded original (option A) is recorded as a
+rejected alternative with the reason its premise collapsed: it rested on `MVP-10`
+naming CUDA, and CUDA left v1 scope. The ADR settles the build shape:
+`objc2-metal` as the binding, a `metal` feature with `default = []`,
+`optional = true` dependencies, and a `cfg`-guarded `build.rs` compiling
+`gpu/metal/*.metal` at build time. No `Departs from:` line — §12.3 already states
+the decision, so this ADR ratifies rather than overrides.
+**Files changed:** `docs/decisions/ADR-013-metal-is-v1-gpu-compute-lane.md`
+(added), `.plan/decisions/ADR-CANDIDATE-003-metal-build.md`,
+`.plan/decisions/README.md`
+**Dependency impact:** `QM-0126`'s `## Dependencies` reads `QM-0121`,
+`ADR-CANDIDATE-003 (Decided)` — not `(decision required)`, which per
+`.plan/README.md` is the only form that holds a task at `Blocked` for a decision.
+This retires the ADR-decision edge and settles the build shape; **`QM-0126`
+remains gated on `QM-0121`.** **No `TASK.md` was edited.**
+**Evidence:** External, cited in the ADR with retrieval dates: `metal` (metal-rs)
+0.33.0 declares MSRV **1.82** against this workspace's `rust-version = "1.78"`
+(`Cargo.toml:26`), and its README declares the crate **deprecated** in favour of
+`objc2`/`objc2-metal`; `objc2-metal` 0.3.2 declares MSRV **1.71**. Local gates:
+rust **318 passed / 0 failed** exit 0; web **13 files / 115 passed** exit 0.
+**No Metal device has executed anything in this repository** — this is a build and
+layout decision, and `MetalBackend::capabilities().verified` ships `false` until
+`QM-0127`.
+
+## 2026-08-04 — QM-0002 — `QM-0090` cites `ADR-CANDIDATE-014`, which was promoted to `ADR-009`
+
+**Discovered during:** ADR promotion pass (controller §0.3), while auditing which
+tasks cite unpromoted candidates.
+**Defect:** `.plan/tasks/QM-0090-documentation-update/TASK.md` cites
+`ADR-CANDIDATE-014`. That candidate was promoted to
+`docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md`, and
+`.plan/decisions/README.md` has recorded it as `Promoted → ADR-009` since. The
+citation points at a staging document when an accepted ADR exists, which is
+exactly backwards for a task whose job is correcting `ARCHITECTURE.md` §8.2 —
+`ADR-009` is the authority for that edit.
+**Correction:** **None applied here.** This is a stale citation, not a blocker:
+`QM-0090` is not held at `Blocked` by it, because `ADR-CANDIDATE-014` is promoted.
+Routed to **`QM-0002`**, which owns plan-citation reconciliation and is in flight
+in another worktree. Controller §11 forbids this pass from editing a `TASK.md`
+another agent holds, and `QM-0090`'s file was **not** edited.
+**Files changed:** none — `.plan/PLAN_CHANGELOG.md` (this entry) only.
+**Dependency impact:** None. `QM-0090` is unaffected in state; only its citation
+text is stale.
+**Evidence:** `.plan/decisions/ADR-CANDIDATE-014-model-layout-planes.md`
+`## Status` → ```Promoted → ADR-009``` (2026-08-04);
+`docs/decisions/ADR-009-world-axis-binding-and-operand-planes.md` exists and is
+`Accepted`.
+
+## 2026-08-04 — ADR-CANDIDATE-013 — stale web test count (101 vs 115) and a deadline naming a `Deferred` task
+
+**Discovered during:** ADR promotion pass (controller §0.3), while deciding which
+candidates were worth promoting.
+**Defect:** `.plan/decisions/ADR-CANDIDATE-013-browser-test-strategy.md` argues
+its recommended default from **"101 tests today"**. 101 is the pre-`QM-0006`
+figure: before the `matrix-workspace` → `quatricmorph-workspace` directory rename,
+`vitest.config.ts` matched only 3 of 12 test files, and the 101 was reconstructed
+as `27 collected + 74 uncollected` (see the `QM-0006` entry above). Since
+`QM-0006` merged, vitest collects everything and the real count is **115 across 13
+files**. An argument resting on a test-count magnitude should rest on the count
+that exists.
+**Correction:** **None applied, and the candidate was deliberately not promoted.**
+Nothing schedulable is held by it, so promoting it would spend an ADR number on a
+decision whose supporting evidence needs re-checking first. Recorded so that
+whoever promotes it re-derives the argument against 115 rather than inheriting
+101.
+
+**Second defect, found while checking the first — its stated deadline is
+unreachable.** The candidate's `## Decision deadline` reads *"Before `QM-0050`,
+the earliest task in `Tasks affected`"*, and `.plan/decisions/README.md` repeats
+it. `QM-0050` is now **`Deferred`** (post-v1 platform release), as are four of
+the other six tasks in its `Tasks affected` list (`QM-0051`, `QM-0052`,
+`QM-0053`, `QM-0080`). The two that remain — `QM-0082` and `QM-0085`, not
+`QM-0082` alone — are `Blocked` behind `QM-0152`. Per
+`.plan/decisions/README.md` §"How a deadline is derived", a deadline is derived
+mechanically from the `Tasks affected` list, so a list whose earliest entry is
+`Deferred` yields a deadline that can never arrive. Whoever promotes this
+candidate must re-derive the deadline from the v1-live subset (earliest:
+`QM-0082`) at the same time as re-deriving the count.
+**Files changed:** none — `.plan/PLAN_CHANGELOG.md` (this entry) only.
+**Dependency impact:** None. `QM-0082` and `QM-0085` stay `Blocked` behind
+`QM-0152`, unchanged by this pass. Neither names
+`ADR-CANDIDATE-013 (decision required)` in `## Dependencies`.
+**Evidence:** `cd apps/web && npx vitest run` on this machine at
+`9a5398d` → `Test Files 13 passed (13)` / `Tests 115 passed (115)`, exit 0.
+The candidate says "101 web tests run in vitest today" (`:9`), "12 test files, 101
+tests" (`:15`), and "101 tests today" (`:69`) — three places, all stale; the file
+count is also 12 against 13 on disk. `Tasks affected` (`:89`) lists seven tasks;
+`QM-0050`–`QM-0053` and `QM-0080` are `Deferred`, `QM-0082` and `QM-0085` are
+`Blocked` behind `QM-0152`.

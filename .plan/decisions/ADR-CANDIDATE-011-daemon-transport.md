@@ -2,7 +2,17 @@
 
 ## Status
 
-`Open`.
+`Promoted → ADR-012`
+(`docs/decisions/ADR-012-job-progress-over-server-sent-events.md`, 2026-08-04).
+The recommended default below — **A**, HTTP + Server-Sent Events — was accepted
+unchanged.
+
+The ADR adds two bindings this candidate leaves open: the daemon buffers no
+events and implements no `Last-Event-ID` replay (a reconnecting `EventSource`
+re-reads `GET /v1/jobs/{jobId}` instead), and the job record, not the stream, is
+the authoritative state.
+
+Previously: `Open`.
 
 ## Context
 

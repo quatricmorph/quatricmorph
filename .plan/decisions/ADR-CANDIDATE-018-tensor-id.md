@@ -2,8 +2,19 @@
 
 ## Status
 
-`Open` — the implementation is settled; the question is whether tile and block
-IDs should follow the same scheme as the pipeline extends.
+`Promoted → ADR-011` (`docs/decisions/ADR-011-content-derived-identifiers.md`,
+2026-08-04). The recommended default below was accepted unchanged.
+
+The ADR records the construction at the byte level, which the shorthand in
+`## Recommended default` below leaves implicit: variable-length components are
+length-prefixed with a `u64` little-endian length, fixed-width components are
+appended as fixed-width little-endian bytes, and the digest is preceded by
+`ID_SCHEME_VERSION` and a per-kind domain string. That is what
+`q_source::ids::digest16` already does; the ADR states it so that `StatisticsId`
+and `JobId` cannot be constructed differently by accident.
+
+Previously: `Open` — the implementation is settled; the question is whether tile
+and block IDs should follow the same scheme as the pipeline extends.
 
 ## Context
 
