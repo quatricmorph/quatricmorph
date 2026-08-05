@@ -667,3 +667,30 @@ schedule it early, because it protects every later agent.
 **Dependency impact:** none mechanical; a correctness hazard for future agent runs.
 **Evidence:** the file/line citations above, from `QM-0167`'s `## Not performed`
 items 1, 5 and 8 and independently confirmed by `review-agent-5`.
+## 2026-08-05 — QM-0140 — `## Files Expected to Add` did not name the test files the task requires
+
+**Discovered during:** `QM-0140` implementation (recovery of interrupted work)
+**Defect:** `QM-0140`'s `## Scope` requires "Schema validation in tests", its
+`## Verification Plan` is `**Automated** — schema validation, round trip, version
+refusal, ordering, formatting`, and its `## Test Cases` table has eight rows. Its
+`## Files Expected to Add` listed only the five source and schema files, naming no
+test file. An implementation satisfying the task therefore had to add files the
+declared list did not authorise, which makes real scope creep indistinguishable
+from required work at review time.
+**Correction:** Added `crates/q-report/tests/schema_conformance.rs`,
+`crates/q-report/tests/golden/manifest.v1.json` and
+`crates/q-report/tests/golden/manifest.v1.summary.json` to `## Files Expected to
+Add`, with a note recording why. No scope was widened: every one of those files
+implements a `## Test Cases` row or the `## Verification Plan`. `Cargo.toml`
+needed no correction — `## Files Expected to Change` already reads
+"`Cargo.toml` — workspace member", which authorises the root-configuration change
+that adds `crates/q-report` to `[workspace] members` and to the workspace
+dependency table.
+**Files changed:** `.plan/tasks/QM-0140-manifest-schema/TASK.md`,
+`.plan/PLAN_CHANGELOG.md`
+**Dependency impact:** None. `QM-0141`, `QM-0143`, `QM-0150` and `QM-0152` consume
+the manifest types and the schema, neither of which changed shape.
+**Evidence:** `TASK.md` `## Scope` line 3 "Schema validation in tests";
+`## Verification Plan` "**Automated** — schema validation, round trip, version
+refusal, ordering, formatting"; `## Files Expected to Add` as written listed five
+paths, none under `tests/`.

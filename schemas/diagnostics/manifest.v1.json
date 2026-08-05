@@ -1,0 +1,592 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://quatricmorph.dev/schemas/diagnostics/manifest/v1",
+  "title": "Diagnostics manifest v1",
+  "description": "The single serialization a quantisation-error diagnostic run emits. The Markdown report (REP-002), the daemon routes (API-012) and the heat-map surface all derive from this document; a number that appears in one of them and not here is a bug. Implemented by `q_report::Manifest` (crates/q-report/src/manifest.rs); this schema and those types must agree, and crates/q-report/tests/schema_conformance.rs fails if they drift. Shape follows .plan/REPORT_ARCHITECTURE.md section 2.",
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "projection",
+    "run",
+    "model",
+    "config",
+    "totals",
+    "layers",
+    "experts",
+    "ranking",
+    "frontier",
+    "fidelity",
+    "refusals"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": {
+      "description": "Version of this document format. A reader refuses a version it does not know rather than guessing a layout, the same rule CAT-002 applies to the catalog schema; a breaking change mints /v2 and both may exist during migration (SCHEMA_PLAN.md section 5).",
+      "const": 1
+    },
+    "projection": {
+      "description": "Which projection of the run this document is. Required rather than inferred from whether `tensors` is present, because `full` with an empty `tensors` (nothing was examined, and `refusals` says why) and `summary` (the per-tensor array was deliberately left out) are different facts, and a consumer that cannot tell them apart will report one as the other.",
+      "enum": ["full", "summary"]
+    },
+    "run": {
+      "description": "What ran, on what backend, and what it cost.",
+      "$ref": "#/definitions/run"
+    },
+    "model": {
+      "description": "Which checkpoint was diagnosed. A diagnosis of an unidentified checkpoint is not evidence, so every identity field here is required and non-empty.",
+      "$ref": "#/definitions/model"
+    },
+    "config": {
+      "description": "The quantisation configuration that was simulated. v1 computes the quantised counterpart itself and never reads a third-party quantised artifact (DIAGNOSTIC_ARCHITECTURE.md section 1).",
+      "$ref": "#/definitions/config"
+    },
+    "totals": {
+      "description": "Whole-model partials.",
+      "$ref": "#/definitions/error_aggregate"
+    },
+    "layers": {
+      "description": "Per layer of the repeated stack, ordered by `layer_index`. `layer_index` is unique within the array.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/layer_entry" }
+    },
+    "experts": {
+      "description": "Per MoE expert, ordered by (`layer_index`, `expert_index`). Empty where the resolver found no experts — absence here means the model has none or the resolver did not recognise them, never that expert error was zero.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/expert_entry" }
+    },
+    "tensors": {
+      "description": "Per examined tensor, ordered by canonical address. Present exactly when `projection` is `full`. At CAT-006's 47278 tensors this array is tens of megabytes, which is acceptable on disk and is not acceptable to push into a browser wholesale (ARCHITECTURE.md section 19); that is what the `summary` projection exists for.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/tensor_entry" }
+    },
+    "ranking": {
+      "description": "Tensors ranked by relative weight-space error, a proxy for sensitivity — not a statement that a layer is important, which is task-relative and not measured here. Ordered by (relative_error descending, parameter_count descending, address ascending), a total order because addresses are unique. Every address also appears in `tensors` when the projection is `full`.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/ranking_entry" }
+    },
+    "frontier": {
+      "description": "The mixed-precision frontier: which tensors to keep at base precision, and what that costs in bytes.",
+      "$ref": "#/definitions/frontier"
+    },
+    "fidelity": {
+      "description": "How the numbers in this manifest were obtained. The same three-way vocabulary the data model types end to end (SRC-018, STAT-005); a sampled result must never be presented as an exact one.",
+      "enum": ["exact", "sampled", "approximate"]
+    },
+    "refusals": {
+      "description": "Every capability this run could not provide, each with its requirement ID, ordered by (requirement_id, what, why). Required and never omitted: a consumer must be able to tell 'zero' from 'not computed', which is the failure mode that destroys trust in a diagnostic tool. An empty array is a claim that nothing was refused.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/refusal" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["projection"],
+        "properties": { "projection": { "const": "full" } }
+      },
+      "then": { "required": ["tensors"] },
+      "else": { "not": { "required": ["tensors"] } }
+    }
+  ],
+  "definitions": {
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "engine_version",
+        "backend",
+        "started_at",
+        "elapsed_seconds",
+        "peak_resident_bytes",
+        "bytes_read"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "description": "Deterministic identifier derived from (model revision hash, config, engine version). Two runs over the same inputs share it, which is what makes a cached or repeated run recognisable as the same run.",
+          "type": "string",
+          "minLength": 1
+        },
+        "engine_version": {
+          "description": "Version of the diagnostics engine that produced this document. Part of the determinism contract: same checkpoint plus same config plus same engine version gives byte-identical output.",
+          "type": "string",
+          "minLength": 1
+        },
+        "backend": {
+          "description": "Which compute backend actually ran. `cpu` is the numerical ground truth; `metal` is an accelerator behind the same trait. There is deliberately no `cuda`: q-cuda is Hardware-Unverified (CUDA-001), and claiming a GPU computed something the CPU computed is on the forbidden-claims list (PRODUCT_SCOPE.md section 5.2). A vocabulary that can name a backend which has never run is how that claim gets made by accident.",
+          "enum": ["cpu", "metal"]
+        },
+        "started_at": {
+          "description": "RFC 3339 timestamp, e.g. `2026-08-04T00:00:00Z`. Wall-clock metadata: excluded from the determinism comparison, so that a diff of two configs shows the numbers that changed and not the clock (REPORT_ARCHITECTURE.md section 3.2).",
+          "type": "string",
+          "format": "date-time",
+          "minLength": 20
+        },
+        "elapsed_seconds": {
+          "description": "Wall-clock duration. Run metadata, excluded from the determinism comparison for the same reason as `started_at`.",
+          "type": "number",
+          "minimum": 0
+        },
+        "peak_resident_bytes": {
+          "description": "Measured peak resident set size for the run, in bytes. The product's central claim — bounded residency independent of checkpoint size — lives here, in the artifact, so a reader never has to take it on trust. Must be above zero: a performance number does not exist until it is measured, and a run that could not measure residency records a refusal rather than reporting nothing as zero.",
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "bytes_read": {
+          "description": "Total payload bytes read from the checkpoint. Two passes over a tensor are expected where the granularity needs a whole-axis view (DIAGNOSTIC_ARCHITECTURE.md section 5).",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "model_id",
+        "source_uri",
+        "revision_hash",
+        "checkpoint_bytes",
+        "parameter_count",
+        "architecture",
+        "resolver_confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "description": "Catalog identifier for the checkpoint.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source_uri": {
+          "description": "Where the checkpoint was read from.",
+          "type": "string",
+          "minLength": 1
+        },
+        "revision_hash": {
+          "description": "Revision of the checkpoint as its source names it. Required and non-empty: a diagnosis that cannot say which checkpoint it diagnosed is not evidence, and a report of it must be refused rather than emitted.",
+          "type": "string",
+          "minLength": 1
+        },
+        "checkpoint_bytes": {
+          "description": "Size of the checkpoint on disk.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "parameter_count": {
+          "description": "Total parameters in the checkpoint. May exceed the sum over `tensors` when a tensor was refused — see `refusals`.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "architecture": {
+          "description": "The architecture plugin that produced the hierarchy — one of the resolvers under `architectures/`, e.g. `llama`, `qwen`, `generic`. Not an enum, so that adding a plugin does not require a schema version bump.",
+          "type": "string",
+          "minLength": 1
+        },
+        "resolver_confidence": {
+          "description": "`resolved` when an architecture plugin recognised the hierarchy, `unknown` when the generic resolver produced it. Surfaced because a generic-resolved model has weaker layer semantics, and NSIR-001 forbids presenting a guessed hierarchy as a known one.",
+          "enum": ["resolved", "unknown"]
+        }
+      }
+    },
+    "granularity": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "description": "Which values share one scale. Defined against NSIR's canonical axis semantics rather than raw tensor order: `per_output_channel` means one scale per output channel regardless of how the checkpoint stores the matrix (DIAGNOSTIC_ARCHITECTURE.md section 3.2).",
+          "enum": ["per_tensor", "per_output_channel", "per_group"]
+        },
+        "group_size": {
+          "description": "Values per group. Present exactly when `kind` is `per_group`; the block grid is aligned to it so that group-wise quantisation needs no second pass.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "if": {
+        "required": ["kind"],
+        "properties": { "kind": { "const": "per_group" } }
+      },
+      "then": { "required": ["group_size"] },
+      "else": { "not": { "required": ["group_size"] } }
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "precision",
+        "granularity",
+        "zero_point",
+        "round",
+        "block_rows",
+        "block_columns",
+        "resident_ceiling_bytes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "precision": {
+          "description": "Target precision of the simulated quantisation.",
+          "enum": ["int8", "int4"]
+        },
+        "granularity": {
+          "description": "Which values share one quantisation scale.",
+          "$ref": "#/definitions/granularity"
+        },
+        "zero_point": {
+          "description": "Zero-point convention (DIAGNOSTIC_ARCHITECTURE.md section 3.1).",
+          "enum": ["symmetric", "asymmetric"]
+        },
+        "round": {
+          "description": "Rounding mode. `nearest_even` is the only v1 variant, stated explicitly because half-away-from-zero disagrees with NumPy on exactly the boundary values a golden test contains.",
+          "const": "nearest_even"
+        },
+        "block_rows": {
+          "description": "Rows per streamed block. Residency is proportional to the block, not to the tensor.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "block_columns": {
+          "description": "Columns per streamed block.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "resident_ceiling_bytes": {
+          "description": "The declared residency ceiling the run was asked to stay under. Compare with `run.peak_resident_bytes`.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "error_aggregate": {
+      "description": "The composable partials for one level of the aggregation hierarchy (channel to tensor to module to layer to expert to model). Partials only: sums of squares compose across blocks, RMSE and relative error do not, and computing a finished metric per block and averaging is the single most likely correctness bug in this engine. A consumer derives rmse = sqrt(sum_sq_delta / count) and relative_error = sqrt(sum_sq_delta / sum_sq_base) at read time. Storing the finished metric here as well would give one quantity two definitions, and two definitions drift.",
+      "type": "object",
+      "required": [
+        "count",
+        "sum_sq_base",
+        "sum_sq_delta",
+        "sum_abs_delta",
+        "max_abs_delta",
+        "bytes_at_base_precision",
+        "bytes_at_target_precision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "Number of weights reduced at this level.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "sum_sq_base": {
+          "description": "Sum of w squared — the denominator of relative error.",
+          "type": "number",
+          "minimum": 0
+        },
+        "sum_sq_delta": {
+          "description": "Sum of (w - w-hat) squared — the numerator, the squared Frobenius norm of the error before the root.",
+          "type": "number",
+          "minimum": 0
+        },
+        "sum_abs_delta": {
+          "description": "Sum of |w - w-hat|.",
+          "type": "number",
+          "minimum": 0
+        },
+        "max_abs_delta": {
+          "description": "Maximum |w - w-hat|. Exact on every backend: a max reduction has no rounding excuse.",
+          "type": "number",
+          "minimum": 0
+        },
+        "bytes_at_base_precision": {
+          "description": "Bytes these weights occupy at the checkpoint's own precision.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_at_target_precision": {
+          "description": "Bytes these weights would occupy at `config.precision`. The difference is what keeping this level at base precision costs.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "layer_entry": {
+      "type": "object",
+      "required": ["layer_index", "aggregate"],
+      "additionalProperties": false,
+      "properties": {
+        "layer_index": {
+          "description": "Zero-based index within the repeated layer stack.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "aggregate": {
+          "description": "Partials summed over every tensor in this layer.",
+          "$ref": "#/definitions/error_aggregate"
+        }
+      }
+    },
+    "expert_entry": {
+      "type": "object",
+      "required": ["layer_index", "expert_index", "aggregate"],
+      "additionalProperties": false,
+      "properties": {
+        "layer_index": {
+          "description": "Layer the expert belongs to.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "expert_index": {
+          "description": "Expert index within the layer, as NSIR-003 resolves it.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "aggregate": {
+          "description": "Partials summed over this expert's tensors. Weight-space redundancy may be read from these numbers; expert deadness may not, because deadness is a routing property that needs runtime.",
+          "$ref": "#/definitions/error_aggregate"
+        }
+      }
+    },
+    "outlier_attribution": {
+      "description": "Share of squared error carried by the largest weights by magnitude (DIAGNOSTIC_ARCHITECTURE.md section 7.1). A tensor whose error is mostly attributable to 0.1 percent of its weights is a candidate for an outlier-preserving scheme; a tensor with diffuse error is not. Entirely weight-space.",
+      "type": "object",
+      "required": ["top_0_1_percent_share", "top_1_percent_share"],
+      "additionalProperties": false,
+      "properties": {
+        "top_0_1_percent_share": {
+          "description": "Fraction of this tensor's squared error carried by the largest 0.1 percent of its weights by magnitude.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "top_1_percent_share": {
+          "description": "Fraction of this tensor's squared error carried by the largest 1 percent of its weights by magnitude.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "tensor_entry": {
+      "type": "object",
+      "required": ["address", "role", "dtype", "shape", "aggregate"],
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "description": "NSIR canonical address, e.g. `model.layers[10].self_attention.query_projection.weight` (ARCHITECTURE.md section 6.1). Unique across the array (SRC-006).",
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "description": "Semantic role, in q_source::TensorRole's own spellings. `unknown` is a legitimate value, not a gap: ARCHITECTURE.md section 4.2 forbids guessing a role from shape, and a spelling outside this set is refused rather than coerced to `unknown` — that would make a typo read as an honest admission of ignorance.",
+          "enum": [
+            "token_embedding",
+            "position_embedding",
+            "attention_query_projection",
+            "attention_key_projection",
+            "attention_value_projection",
+            "attention_output_projection",
+            "attention_query_norm",
+            "attention_key_norm",
+            "mlp_gate_projection",
+            "mlp_up_projection",
+            "mlp_down_projection",
+            "moe_router",
+            "moe_expert_gate_projection",
+            "moe_expert_up_projection",
+            "moe_expert_down_projection",
+            "input_layernorm",
+            "post_attention_layernorm",
+            "final_norm",
+            "lm_head",
+            "bias",
+            "unknown"
+          ]
+        },
+        "dtype": {
+          "description": "SafeTensors dtype tag, in the header spellings q_source::DType defines. A tag outside this set is refused, never guessed (SRC-014).",
+          "enum": [
+            "BOOL",
+            "U8",
+            "I8",
+            "F8_E4M3",
+            "F8_E5M2",
+            "I16",
+            "U16",
+            "F16",
+            "BF16",
+            "I32",
+            "U32",
+            "F32",
+            "I64",
+            "U64",
+            "F64"
+          ]
+        },
+        "shape": {
+          "description": "Shape in axis order. Rank is capped at 3: ADR-010 implements rank at most 3 and refuses above it rather than flattening, because a [32,128,128] tensor presented as [32,16384] is a confidently wrong picture that invites the reader to see adjacency between values that are not adjacent. A rank-4 tensor is recorded in `refusals` under GRID-007; it never appears here reshaped.",
+          "type": "array",
+          "maxItems": 3,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "aggregate": {
+          "description": "Partials for this tensor.",
+          "$ref": "#/definitions/error_aggregate"
+        },
+        "outlier_attribution": {
+          "description": "Where this tensor's error concentrates. Absent when it was not computed — absence is not a zero, and a run that skipped it records a refusal.",
+          "$ref": "#/definitions/outlier_attribution"
+        }
+      }
+    },
+    "ranking_entry": {
+      "type": "object",
+      "required": ["address", "relative_error", "parameter_count"],
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "description": "Canonical address of the ranked tensor.",
+          "type": "string",
+          "minLength": 1
+        },
+        "relative_error": {
+          "description": "sqrt(sum_sq_delta / sum_sq_base) for this tensor. Carried here, and only here, because it is the ordering key; everywhere else the manifest carries partials and the consumer finishes the arithmetic. A proxy for sensitivity, ranked — not an accuracy prediction and not a claim that the tensor matters.",
+          "type": "number",
+          "minimum": 0
+        },
+        "parameter_count": {
+          "description": "Parameters in this tensor. The first tie-break, descending.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "frontier_step": {
+      "type": "object",
+      "required": ["keep_set", "added_bytes", "error_removed_fraction"],
+      "additionalProperties": false,
+      "properties": {
+        "keep_set": {
+          "description": "Canonical addresses kept at base precision at this step, ascending and distinct. When the projection is `full` every address also appears in `tensors`.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "added_bytes": {
+          "description": "Cumulative bytes the keep set costs, relative to quantising everything to `config.precision`. Computed, not estimated.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "error_removed_fraction": {
+          "description": "Cumulative fraction of total squared weight-space error removed by this keep set. Computed exactly from two measured quantities. Not an accuracy prediction: accuracy impact is not measured by this tool.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "frontier": {
+      "type": "object",
+      "required": ["method", "claim", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "description": "How the frontier was searched. Greedy over the density ratio (error removed per byte kept) — the standard fractional-knapsack heuristic.",
+          "const": "greedy_error_per_byte"
+        },
+        "claim": {
+          "description": "The strength of the claim, fixed so that no consumer can render a frontier without it. The heuristic is not proven optimal for the integer problem, and DIAGNOSTIC_ARCHITECTURE.md section 8 requires this wording wherever the frontier is presented.",
+          "const": "Greedy over error-per-byte; not proven optimal."
+        },
+        "steps": {
+          "description": "The frontier itself, ordered by cumulative `added_bytes`. Empty when no frontier was computed — and then `refusals` says why.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/frontier_step" }
+        }
+      }
+    },
+    "refusal": {
+      "type": "object",
+      "required": ["requirement_id", "what", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {
+          "description": "The STATUS.md requirement ID for the declared gap, e.g. `EVAL-001` for accuracy estimation or `GRID-007` for a tensor above the implemented rank ceiling.",
+          "type": "string",
+          "minLength": 1
+        },
+        "what": {
+          "description": "What this run could not provide.",
+          "type": "string",
+          "minLength": 1
+        },
+        "why": {
+          "description": "Why not, in the wording the governing document requires. A refusal that does not say why reads as a bug rather than a boundary.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "manifest_version": 1,
+      "projection": "full",
+      "run": {
+        "run_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "engine_version": "0.1.0",
+        "backend": "cpu",
+        "started_at": "2026-08-04T00:00:00Z",
+        "elapsed_seconds": 0.0,
+        "peak_resident_bytes": 2883584,
+        "bytes_read": 0
+      },
+      "model": {
+        "model_id": "distilbert-distilgpt2",
+        "source_uri": "file:///models/distilbert-distilgpt2",
+        "revision_hash": "0000000000000000000000000000000000000001",
+        "checkpoint_bytes": 353822720,
+        "parameter_count": 88437760,
+        "architecture": "generic",
+        "resolver_confidence": "unknown"
+      },
+      "config": {
+        "precision": "int8",
+        "granularity": { "kind": "per_tensor" },
+        "zero_point": "symmetric",
+        "round": "nearest_even",
+        "block_rows": 256,
+        "block_columns": 256,
+        "resident_ceiling_bytes": 2147483648
+      },
+      "totals": {
+        "count": 0,
+        "sum_sq_base": 0.0,
+        "sum_sq_delta": 0.0,
+        "sum_abs_delta": 0.0,
+        "max_abs_delta": 0.0,
+        "bytes_at_base_precision": 0,
+        "bytes_at_target_precision": 0
+      },
+      "layers": [],
+      "experts": [],
+      "tensors": [],
+      "ranking": [],
+      "frontier": {
+        "method": "greedy_error_per_byte",
+        "claim": "Greedy over error-per-byte; not proven optimal.",
+        "steps": []
+      },
+      "fidelity": "exact",
+      "refusals": [
+        {
+          "requirement_id": "EVAL-001",
+          "what": "accuracy estimate",
+          "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+        },
+        {
+          "requirement_id": "QUANT-003",
+          "what": "every tensor in the checkpoint",
+          "why": "The run was cancelled before the first tensor completed. Nothing was measured; the zeroes above are the absence of a measurement, not a measurement of zero."
+        }
+      ]
+    }
+  ]
+}

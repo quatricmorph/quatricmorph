@@ -1,0 +1,14 @@
+[package]
+name = "q-report"
+description = "Report Plane: the versioned diagnostics manifest, its schema, and its canonical serialization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+q-source = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

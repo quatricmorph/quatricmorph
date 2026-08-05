@@ -1,0 +1,144 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "3a7f1c9d2b8e40563a7f1c9d2b8e40563a7f1c9d2b8e40563a7f1c9d2b8e4056",
+    "engine_version": "0.1.0",
+    "backend": "cpu",
+    "started_at": "2026-08-04T00:00:00Z",
+    "elapsed_seconds": 12.5,
+    "peak_resident_bytes": 2883584,
+    "bytes_read": 11534336
+  },
+  "model": {
+    "model_id": "qwen2-0_5b-instruct",
+    "source_uri": "file:///models/qwen2-0.5b-instruct",
+    "revision_hash": "1f0a9d3c7b2e6540a8d1f3b709c2e6543a7f1c9d",
+    "checkpoint_bytes": 5772288,
+    "parameter_count": 1836032,
+    "architecture": "qwen",
+    "resolver_confidence": "resolved"
+  },
+  "config": {
+    "precision": "int4",
+    "granularity": {
+      "kind": "per_group",
+      "group_size": 128
+    },
+    "zero_point": "asymmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 1835008,
+    "sum_sq_base": 7168.0,
+    "sum_sq_delta": 256.0,
+    "sum_abs_delta": 1024.0,
+    "max_abs_delta": 0.5,
+    "bytes_at_base_precision": 5767168,
+    "bytes_at_target_precision": 917504
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 1310720,
+        "sum_sq_base": 3072.0,
+        "sum_sq_delta": 192.0,
+        "sum_abs_delta": 768.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 4718592,
+        "bytes_at_target_precision": 655360
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 524288,
+        "sum_sq_base": 4096.0,
+        "sum_sq_delta": 64.0,
+        "sum_abs_delta": 256.0,
+        "max_abs_delta": 0.125,
+        "bytes_at_base_precision": 1048576,
+        "bytes_at_target_precision": 262144
+      }
+    }
+  ],
+  "experts": [
+    {
+      "layer_index": 1,
+      "expert_index": 0,
+      "aggregate": {
+        "count": 524288,
+        "sum_sq_base": 4096.0,
+        "sum_sq_delta": 64.0,
+        "sum_abs_delta": 256.0,
+        "max_abs_delta": 0.125,
+        "bytes_at_base_precision": 1048576,
+        "bytes_at_target_precision": 262144
+      }
+    }
+  ],
+  "ranking": [
+    {
+      "address": "model.layers[0].mlp.down_projection.weight",
+      "relative_error": 0.25,
+      "parameter_count": 1048576
+    },
+    {
+      "address": "model.layers[0].self_attention.query_projection.weight",
+      "relative_error": 0.25,
+      "parameter_count": 262144
+    },
+    {
+      "address": "model.layers[1].experts[0].up_projection.weight",
+      "relative_error": 0.125,
+      "parameter_count": 524288
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": [
+      {
+        "keep_set": [
+          "model.layers[0].self_attention.query_projection.weight"
+        ],
+        "added_bytes": 393216,
+        "error_removed_fraction": 0.25
+      },
+      {
+        "keep_set": [
+          "model.layers[0].self_attention.query_projection.weight",
+          "model.layers[1].experts[0].up_projection.weight"
+        ],
+        "added_bytes": 1179648,
+        "error_removed_fraction": 0.5
+      },
+      {
+        "keep_set": [
+          "model.layers[0].mlp.down_projection.weight",
+          "model.layers[0].self_attention.query_projection.weight",
+          "model.layers[1].experts[0].up_projection.weight"
+        ],
+        "added_bytes": 4849664,
+        "error_removed_fraction": 1.0
+      }
+    ]
+  },
+  "fidelity": "exact",
+  "refusals": [
+    {
+      "requirement_id": "EVAL-001",
+      "what": "accuracy estimate",
+      "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+    },
+    {
+      "requirement_id": "GRID-007",
+      "what": "rank-4 tensor model.layers[1].router.gate_projection.weight",
+      "why": "ADR-010 implements rank <= 3 and refuses above it; a flattened shape would invite the reader to see adjacency that does not exist."
+    }
+  ]
+}

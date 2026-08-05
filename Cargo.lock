@@ -770,6 +770,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "q-report"
+version = "0.1.0"
+dependencies = [
+ "q-source",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "q-safetensors"
 version = "0.1.0"
 dependencies = [

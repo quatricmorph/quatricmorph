@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+In Progress
 
 Depends only on the *shape* of the engine's output, not its data. Scheduled in
 Wave 1 deliberately: it is the contract between the engine, the CLI, the daemon,
@@ -72,8 +72,17 @@ Markdown rendering (`QM-0141`) · the daemon routes (`QM-0143`) · the surface
 * `crates/q-report/Cargo.toml`
 * `crates/q-report/src/lib.rs`
 * `crates/q-report/src/manifest.rs`
+* `crates/q-report/tests/schema_conformance.rs`
+* `crates/q-report/tests/golden/manifest.v1.json`
+* `crates/q-report/tests/golden/manifest.v1.summary.json`
 * `schemas/diagnostics/manifest.v1.json`
 * `schemas/diagnostics/README.md`
+
+The three test paths were added on 2026-08-05 (`PLAN_CHANGELOG.md`). `## Scope`
+already required "Schema validation in tests" and `## Verification Plan` is
+`**Automated**`, so the tests were always in scope; the list simply did not name
+the files they live in. Recorded rather than assumed, because "the declared file
+list is the contract" is what keeps scope creep visible.
 
 ## Data Contracts
 
@@ -195,3 +204,27 @@ python3 -m jsonschema -i /tmp/manifest.json schemas/diagnostics/manifest.v1.json
 * Round-trip byte comparison.
 * Version-refusal error text.
 * A summary projection alongside its full manifest.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | `Awaiting Independent Review` |
+| Lane | R |
+| Wave | 1 |
+| Branch | `task/qm-0140-manifest-schema` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0140` |
+| Base commit (`git merge-base main HEAD`) | `ace7d0956e47055c040fbe426596290553e7700f` |
+| Head | tip of `task/qm-0140-manifest-schema` — the single commit `feat(q-report): add the v1 diagnostics manifest schema and round-trip validation [QM-0140]`, which carries this record and so cannot name its own hash. `git rev-parse task/qm-0140-manifest-schema` resolves it. |
+| Agent | `impl-agent-5` |
+| Evidence | `.plan/evidence/QM-0140.md` (script: `.plan/evidence/QM-0140-independent-check.py.md`) |
+| Merge path | L (local squash) |
+| Tests added | **+97** — 59 unit in `crates/q-report/src/manifest.rs`, 38 integration in `crates/q-report/tests/schema_conformance.rs` |
+| Floor change | rust **290 → 387** passed, 0 failed. Web unchanged by this task: **27 / 3 files** measured at this base, which predates `1cfdc9c`; `QM-0140` touches no file under `apps/web/` |
+
+**Recovered work.** The implementation was inherited uncommitted from an
+interrupted agent and audited rather than trusted. The audit is recorded in
+`.plan/evidence/QM-0140.md` `## Recovery`; the material corrections were the
+golden-provenance argument (replaced), the independent verification script (lost,
+rewritten, now durable), three added tests, and this file's
+`## Files Expected to Add` list (`PLAN_CHANGELOG.md`).
