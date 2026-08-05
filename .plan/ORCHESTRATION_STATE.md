@@ -600,3 +600,61 @@ controller still owes `scripts/license-audit.sh` on the merged tree.
 disclosed in three places, and a grep found no claim of an observed CI run. The
 task's `## Completion Evidence` still lists "CI run URL" as a deliverable — a
 disclosed, environment-blocked gap for the next run to reconcile.
+
+### Post-cutoff verdict — QM-0100: **APPROVED** (unconditional, arrived T+5h10m, not merged)
+
+`review-agent-7`, reviewed SHA `94bc274`, base `04991e9`, review commit `45cfea5`.
+**Zero blocking findings.** Gates re-run by the reviewer: fmt 0 · clippy 0 ·
+`cargo test --workspace` **309 passed / 0 failed** · fixtures no drift, exit 0.
+
+**13/13 checkpoint facts re-derived independently and matched exactly**, with a
+proof the implementer did not claim: the 82 `data_offsets` tile `[0, 352,816,128)`
+with **zero gaps or overlaps**, and `8 + 8,277 + 352,816,128 = 352,824,413` exactly
+— which proves *arithmetically* that the original file was never truncated.
+
+#### The N = 126.97 ruling — the correction that matters
+
+**Honest, but near-tautological, and NOT a G1 pass.** `C = R/1.25` is **back-solved
+from the measured result**, so `N ≥ 100` is arithmetically identical to
+`R < 4,410,305 B`. The reviewer nonetheless ruled it *not manufactured*, on five
+grounds: the task itself mandates reporting the **implied** ceiling
+(`TASK.md:241`); **no configured residency ceiling exists yet** —
+`q-source/src/budget.rs` holds per-request allocation caps (100/64/512 MB), not a
+process ceiling, and G1 belongs to `QM-0101` (`MASTER_PLAN.md:259`); the derivation
+is disclosed openly at `evidence:365`; `R` is the worst of three runs and sits
+**above all three of the reviewer's own** measurements; and **nothing anywhere
+claims G1 or `V1-01` passes** — `evidence:375-380` disclaims the ≥24 GB and
+C ≤ 2 GB rows, `:557-561` states `V1-01` unsatisfied, and
+`DEFINITION_OF_DONE.md:29` is still ⬜ and untouched by the diff.
+
+**The load-bearing evidence is therefore the flat-residency table, not the ratio**:
+no ordered residency increase across a **3,265× file-size span**.
+
+One non-blocking overstatement recorded for repair: `evidence:371` says N "does
+clear the plan's N ≥ 100" — under `MASTER_PLAN.md` §4 that row is a **conjunct**
+with `C ≤ 2 GB` and `file ≥ 24 GB`. Lines 375-380 walk it back four lines later.
+
+#### Other rulings
+
+* **ADR-010 — logging-not-implementing was correct.** The reviewer's own tree-wide
+  grep confirms `bindAxes`/`bind_axes` and `GRID-007` appear in **zero source
+  directories**. Ownership confirmed at `REQUIREMENT_TRACEABILITY.md:139` →
+  **`QM-0061`**. All three refusal messages re-run, verbatim matches, exit 1 each.
+  The positive rank-4 test is **not circular**: hardcoded Python-sourced literals
+  compared *against* `read_scalar`, all five re-derived independently and matching
+  on value **and** byte offset.
+* **Provenance honest.** Licence exists exactly as cited (`README.md:6` and `:36`,
+  apache-2.0). The `source_uri`/`revision` nulls are genuine — the reviewer
+  searched for any provenance record and found none. **No invented hash anywhere.**
+* **AC8 genuinely met.** `git ls-files models/` = **9** — tokenizer/model-card
+  metadata only, **no weights**, all pre-dating this branch. Two independent
+  gitignore guards. The 9 tracked files are a pre-existing housekeeping note, not a
+  QM-0100 defect.
+* **`q` vs `q-cli` confirmed as a task-file defect**: `[[bin]] name = "q"`, while
+  `TASK.md:206` and `:267-269` name a binary that does not exist.
+* **Mutation-verified**: deleting `coverage_not_established` fails
+  `real_checkpoint_record.rs:348`. The claim-limits test is not vacuous.
+
+**Merge note for the next run:** `git merge-tree main HEAD` conflicts on exactly one
+path — `.plan/PLAN_CHANGELOG.md`, append-on-both-sides, resolve by keeping both.
+No source, fixture, or test conflicts.

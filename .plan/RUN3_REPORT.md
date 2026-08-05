@@ -50,7 +50,7 @@ tasks, and are counted once, above):
 | Task | Branch head | State at cutoff |
 | --- | --- | --- |
 | `QM-0001` | `ee30636` | Implemented + evidence complete. **Independent review returned `APPROVED` at T+4h55m — after the merge cutoff, so it was recorded and not merged.** Zero blocking findings; both guard-firing demonstrations re-run by the reviewer |
-| `QM-0100` | `94bc274` | Implemented + evidence complete; **independent review still running** when the merge window closed |
+| `QM-0100` | `94bc274` | Implemented + evidence complete. **Independent review returned `APPROVED` (unconditional) at T+5h10m — after the merge cutoff, so recorded and not merged.** Reviewer re-derived 13/13 checkpoint facts exactly, zero discrepancies |
 | `QM-0002` | `6e99e62` | Implementation **finished after the merge cutoff**; **never independently reviewed**, so it could not merge regardless |
 
 `QM-0010` is `Ready` with no work started.
@@ -59,7 +59,7 @@ tasks, and are counted once, above):
 
 | Gate | Status |
 | --- | --- |
-| **G1** bounded residency on a real checkpoint | **Partially, and re-scoped.** `QM-0100` measured peak RSS 3,473,408 B on the release binary → `C = 2,778,726 B` → **N = 126.97**, clearing N ≥ 100. Residency flat across a 3,265× size span. **But this is a 337 MiB file, not ≥ 24 GB, and an indexing pass, not streaming.** Unmerged at cutoff, pending review. |
+| **G1** bounded residency on a real checkpoint | **NOT PASSED.** `QM-0100` measured peak RSS 3,473,408 B on the release binary and reported `C = R/1.25 = 2,778,726 B` → **N = 126.97**. Its independent reviewer ruled this **honest but near-tautological, and explicitly not a G1 pass**: because *no configured residency ceiling exists yet* (`q-source/src/budget.rs` holds per-request allocation caps, not a process ceiling, and G1 belongs to `QM-0101`), `C` is **back-solved from the result**, making `N ≥ 100` arithmetically identical to `R < 4,410,305 B`. It is not manufactured — the task itself mandates reporting the *implied* ceiling, the derivation is disclosed, and `R` is the worst of three runs and above all three of the reviewer's own — but it does not establish the gate. The **independent** evidence is the flat-residency table: no ordered residency increase across a **3,265× file-size span**. Separately this is a 337 MiB file, not ≥ 24 GB, and an **indexing** pass, not streaming. `V1-01` is unsatisfied and `DEFINITION_OF_DONE.md:29` remains ⬜. |
 | **G2** metric vs Python reference | **Not reached.** Lane Q (`QM-0120`…`QM-0122`) never opened — it is gated behind `QM-0101`, which is gated behind `QM-0100`. |
 | **G3** report byte-determinism | **Not reached** (`QM-0141`). `QM-0140` merged the schema and a byte-identity round-trip test beneath it. |
 | **G4** surface legibility | **Not reached** (`QM-0151`). |
