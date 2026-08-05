@@ -12,9 +12,11 @@ repository.workspace = true
 q-source = { workspace = true }
 q-nsir = { workspace = true }
 q-architecture = { workspace = true }
+q-statistics = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 rusqlite = { workspace = true }
+blake3 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

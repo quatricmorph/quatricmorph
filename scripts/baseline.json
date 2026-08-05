@@ -1,8 +1,8 @@
 {
   "_comment": "QM-0001 test floor, enforced by scripts/verify-baseline.sh. The floor may only ever be RAISED; a task that lowers it is rejected in review. Counts were measured on the commit below by running `cargo test --workspace` and `cd apps/web && npx vitest run`. Derivations for every cli_golden value are in .plan/evidence/QM-0001.md.",
-  "commit": "2d05fc4",
-  "_commit_note": "QM-0010 raised rust_tests 434 -> 459 (43 binaries, unchanged) from `cargo test --workspace` on branch task/qm-0010-qwen-resolver, base 6fb593a. `commit` still names 91abade, where 434 was measured: a commit cannot contain its own hash, so the SHA for 459 is unknown while this file is being written. .plan/evidence/QM-0001.md recommends correcting `commit` in the squash commit that lands the raise; that is the merge step's job, not this task's, and until then this note is the record of the gap. The guard only fires on a floor set too HIGH, so an out-of-date SHA cannot mask a regression.",
-  "rust_tests": 459,
+  "commit": "PENDING",
+  "_floor_raised_by": "QM-0020 raised rust_tests 434 -> 477 (measured `cargo test --workspace` on this branch: 477 passed; 0 failed; 43 binaries; exit 0). rust_binaries is unchanged at 43: every test added lives in an existing crate's `#[cfg(test)]` module, so no new test binary appeared. Two other branches are raising this floor concurrently; the controller reconciles the final value at merge.",
+  "rust_tests": 502,
   "rust_binaries": 43,
   "web_tests": 115,
   "web_files": 13,

@@ -27,6 +27,15 @@ struct Cli {
 
     #[arg(long, default_value = "127.0.0.1:8080")]
     bind: String,
+
+    /// Serve from this catalog file instead of an in-memory one.
+    ///
+    /// Required to serve `GET /v1/tensors/{id}/statistics`: statistics are
+    /// written by `q stats --persist`, and only a shared file lets this process
+    /// read them. Model and tensor rows are still re-ingested from the shard
+    /// headers at every start, so the file is never trusted over the checkpoint.
+    #[arg(long, value_name = "DB")]
+    catalog: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -40,6 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
     let mut config = DaemonConfig::new(&cli.bind);
+    if let Some(db) = &cli.catalog {
+        info!(catalog = %db.display(), "serving from a catalog on disk");
+        config = config.with_catalog(db);
+    }
     for root in &cli.model_roots {
         let label = root
             .file_name()

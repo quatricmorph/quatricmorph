@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0012` reaches `Complete`.
+`QM-0012` reached `Complete` and merged at `4e0e85c`, so this is unblocked.
 
 ## Phase
 
@@ -176,3 +176,36 @@ cargo run -p q-cli -- stats fixtures/tiny-llama-2shard \
 * Round-trip and reopen test output.
 * `curl` output of the statistics route with its fidelity label.
 * Confirmation that the four remaining 501s still carry their IDs.
+
+## Orchestration
+
+**Awaiting Independent Review**
+
+| Field | Value |
+| --- | --- |
+| Lane | T |
+| Branch | `task/qm-0020-persist-statistics` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0020` |
+| Base | `6fb593a` |
+| Implementation commits | `fb042f1` — the implementation, its 42 tests, the evidence record and the raised floor · `f42e4bf` — pre-review hardening (`put_statistics_batch` refuses a row whose `statistics_id` is not derived from its subject and version, +1 test) and two evidence corrections |
+| Head commit | the branch tip, which is the one metadata-only commit following `f42e4bf`: it exists only to name those two SHAs here, because a commit cannot record its own hash. `git log --oneline -3` shows all three |
+| Agent | `impl-agent-10` |
+| Evidence | `.plan/evidence/QM-0020.md` |
+| Merge path | L |
+| Tests added | **43** (q-statistics 3, q-catalog 24, q-daemon 7, q-cli 9) plus one existing 501 test narrowed and strengthened |
+| Floor before | rust **434** tests over **43** binaries (measured on this branch pre-change; matches `scripts/baseline.json` at `91abade`); web 115 over 13 |
+| Floor after | rust **477** tests over **43** binaries; web 115 over 13 (unchanged — no web file touched) |
+
+`scripts/baseline.json` raised `rust_tests` 434 → 477 only. Two other branches
+are raising the same floor concurrently; **the controller reconciles the final
+value at merge**.
+
+Schema note for the reviewer: `CURRENT_SCHEMA_VERSION` 1 → 2, migration 2
+`statistics_subject_kind`, purely additive (`ALTER TABLE ADD COLUMN` plus a
+unique index). Reasoning and the round-trip test are in
+`.plan/evidence/QM-0020.md` §Summary and §Acceptance criteria.
+
+`STATUS.md` is out of bounds for this task and is now stale in two places the
+controller must update: line 114 (`STAT-002` — **Stub**) and lines 272-274
+("nothing has run a statistics pass, so `tensor_statistics` is empty and the API
+returns 501").

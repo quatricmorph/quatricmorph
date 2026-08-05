@@ -16,18 +16,20 @@
 //! q slice    <DIR> <ADDRESS> --rows a:b --columns c:d
 //! q query    <DIR> <WEIGHTQL>            plan, and execute if executable
 //! q stats    <DIR> <ADDRESS> --rows --columns   CPU reference block statistics
+//!            [--persist [--catalog DB]]   write the row into tensor_statistics
 //! q backends                             what each compute backend can do
 //! ```
 
 use clap::{Parser, Subcommand};
-use q_catalog::{Catalog, ConfigMetadata, TensorFilter};
+use q_catalog::{Catalog, ConfigMetadata, StatisticsRow, SubjectKind, TensorFilter};
 use q_gpu::{Backend, CpuBackend};
 use q_nsir::{Registry, ResolvedModel};
 use q_safetensors::{ingest_local, IngestOutcome};
 use q_source::error::{QError, Result};
 use q_source::role::TensorRole;
 use q_source::LocalFsSource;
-use q_tensor_runtime::BlockExtent;
+use q_statistics::TensorStatistics;
+use q_tensor_runtime::{BlockExtent, Lod, TileId};
 use q_weightql::{QueryEngine, QueryOutcome};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -108,6 +110,20 @@ enum Command {
         columns: String,
         #[arg(long, default_value_t = 16)]
         bins: usize,
+        /// Write the result into `tensor_statistics` so it survives this process.
+        ///
+        /// The subject is the **whole tensor** only when the requested window
+        /// covers it; anything smaller is persisted as a *block*, under its own
+        /// `BlockId`. Labelling a 4×4 window as the tensor's statistics would be
+        /// a false claim about 6 144 weights.
+        #[arg(long)]
+        persist: bool,
+        /// Where to persist. Defaults to `<MODEL_DIR>/.quatricmorph/catalog.db`.
+        ///
+        /// Point `q-daemon --catalog` at the same file to serve the row over
+        /// `GET /v1/tensors/{id}/statistics`.
+        #[arg(long, value_name = "DB")]
+        catalog: Option<PathBuf>,
     },
     /// Report what each compute backend can actually do.
     Backends,
@@ -131,6 +147,27 @@ fn main() -> ExitCode {
 ///
 /// Headers only. Opening a 600 GB checkpoint here reads a few megabytes.
 fn open(model_dir: &Path) -> Result<(LocalFsSource, Catalog, String)> {
+    open_with_catalog(model_dir, None)
+}
+
+/// Where `--persist` writes when no `--catalog` is given.
+///
+/// Beside the checkpoint, in a directory of ours — never over an artifact.
+/// `.plan/DATA_ARCHITECTURE.md` §2: *"Conversion outputs go beside the
+/// checkpoint or into a cache directory, never over it."*
+fn default_catalog_path(model_dir: &Path) -> PathBuf {
+    model_dir.join(".quatricmorph").join("catalog.db")
+}
+
+/// As [`open`], but persisting the catalog to `catalog_path` when one is given.
+///
+/// The model and its tensor rows are upserted either way, so a file catalog is
+/// self-contained: a daemon started against it can resolve the tensor a
+/// statistics row belongs to.
+fn open_with_catalog(
+    model_dir: &Path,
+    catalog_path: Option<&Path>,
+) -> Result<(LocalFsSource, Catalog, String)> {
     let ingested = ingest_local(model_dir)?;
     let registry = Registry::builtin()?;
     let resolved = ResolvedModel::build(
@@ -139,7 +176,18 @@ fn open(model_dir: &Path) -> Result<(LocalFsSource, Catalog, String)> {
         ingested.manifest.declared_architecture().as_deref(),
         ingested.descriptors.clone(),
     )?;
-    let catalog = Catalog::open_in_memory()?;
+    let catalog = match catalog_path {
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| QError::Io {
+                    path: parent.to_path_buf(),
+                    source: e,
+                })?;
+            }
+            Catalog::open(path)?
+        }
+        None => Catalog::open_in_memory()?,
+    };
     catalog.upsert_resolved(
         ingested.model_id,
         &ingested.manifest.root_uri,
@@ -271,6 +319,88 @@ impl InspectReport {
         line(&mut s, "torch_dtype", opt(&self.torch_dtype));
         line(&mut s, "fidelity", self.fidelity.clone());
         s
+    }
+}
+
+/// What a `q stats` run actually measured.
+///
+/// The distinction is the honesty of the whole command. A window that covers the
+/// tensor is the tensor's statistics; anything smaller is a **block**, and it is
+/// stored under its own `BlockId` so nothing can later read it as a statement
+/// about the whole tensor. `BlockId` is `TileId::for_block` by
+/// `docs/decisions/ADR-011-content-derived-identifiers.md`, so the catalog row
+/// and the tile address are one identity rather than two.
+#[derive(Debug, Clone)]
+struct StatsSubject {
+    id: String,
+    kind: SubjectKind,
+    /// `true` when the measured window is the entire tensor.
+    covers_whole_tensor: bool,
+}
+
+impl StatsSubject {
+    fn of(descriptor: &q_source::TensorDescriptor, extent: &BlockExtent) -> Self {
+        let whole = descriptor.shape.len() == 2
+            && extent.row_start == 0
+            && extent.column_start == 0
+            && extent.row_end >= descriptor.shape[0]
+            && extent.column_end >= descriptor.shape[1];
+        if whole {
+            Self {
+                id: descriptor.tensor_id.to_hex(),
+                kind: SubjectKind::Tensor,
+                covers_whole_tensor: true,
+            }
+        } else {
+            Self {
+                id: TileId::for_block(descriptor.tensor_id, Lod::Block, extent).to_hex(),
+                kind: SubjectKind::Block,
+                covers_whole_tensor: false,
+            }
+        }
+    }
+}
+
+/// Persist one statistics row, returning its `statistics_id`.
+fn persist_statistics(
+    catalog: &Catalog,
+    subject: &StatsSubject,
+    statistics: TensorStatistics,
+) -> Result<String> {
+    let row = StatisticsRow::new(&subject.id, subject.kind, statistics)?;
+    catalog.put_statistics(&row)?;
+    Ok(row.statistics_id)
+}
+
+/// `q stats --json`. Wraps the statistics so the JSON carries what the human
+/// form does: the fidelity label, the subject, and where the row went.
+#[derive(Debug, Serialize)]
+struct StatsReport<'a> {
+    subject_id: &'a str,
+    subject_kind: &'a str,
+    covers_whole_tensor: bool,
+    #[serde(flatten)]
+    statistics: &'a TensorStatistics,
+    /// `"aggregate"` or `"sampled"`. Derived from `approximate`, never spelled.
+    fidelity: &'static str,
+    /// `null` unless `--persist` was given.
+    statistics_id: Option<&'a str>,
+}
+
+impl<'a> StatsReport<'a> {
+    fn build(
+        subject: &'a StatsSubject,
+        statistics: &'a TensorStatistics,
+        statistics_id: Option<&'a str>,
+    ) -> Self {
+        Self {
+            subject_id: &subject.id,
+            subject_kind: subject.kind.as_str(),
+            covers_whole_tensor: subject.covers_whole_tensor,
+            statistics,
+            fidelity: statistics.fidelity().as_str(),
+            statistics_id,
+        }
     }
 }
 
@@ -494,18 +624,42 @@ fn run(cli: &Cli) -> Result<()> {
             rows,
             columns,
             bins,
+            persist,
+            catalog: catalog_path,
         } => {
-            let (source, catalog, model_id) = open(model_dir)?;
+            let resolved_catalog_path = if *persist {
+                Some(
+                    catalog_path
+                        .clone()
+                        .unwrap_or_else(|| default_catalog_path(model_dir)),
+                )
+            } else {
+                catalog_path.clone()
+            };
+            let (source, catalog, model_id) =
+                open_with_catalog(model_dir, resolved_catalog_path.as_deref())?;
             let row = catalog
                 .get_by_canonical_name(&model_id, address)?
                 .ok_or_else(|| QError::NotFound(format!("tensor `{address}`")))?;
             let descriptor = row.to_descriptor()?;
             let (r0, r1) = parse_range(rows)?;
             let (c0, c1) = parse_range(columns)?;
+            // `clamped_to` refuses any rank but 2 — a rank-3 or rank-4 tensor is
+            // not silently flattened into a matrix
+            // (`docs/decisions/ADR-010-tensor-rank-ceiling.md`).
             let extent = BlockExtent::new(r0, r1, c0, c1)?.clamped_to(&descriptor.shape)?;
             let stats = CpuBackend.block_statistics(&source, &descriptor, extent, *bins)?;
+            let subject = StatsSubject::of(&descriptor, &extent);
+            let persisted = if *persist {
+                Some(persist_statistics(&catalog, &subject, stats.clone())?)
+            } else {
+                None
+            };
             if cli.json {
-                println!("{}", json_out(&stats)?);
+                println!(
+                    "{}",
+                    json_out(&StatsReport::build(&subject, &stats, persisted.as_deref()))?
+                );
             } else {
                 println!("tensor    {}", descriptor.canonical_name);
                 println!(
@@ -530,6 +684,25 @@ fn run(cli: &Cli) -> Result<()> {
                         "exact"
                     }
                 );
+                println!(
+                    "fidelity  {}  ({})",
+                    stats.fidelity().as_str(),
+                    if stats.approximate {
+                        "computed over a SAMPLE — not every element of the block was read"
+                    } else {
+                        "every element of the block was read; exact for this block"
+                    }
+                );
+                println!("subject   {} {}", subject.kind.as_str(), subject.id);
+                if let Some(statistics_id) = &persisted {
+                    println!(
+                        "persisted {statistics_id} -> {}",
+                        resolved_catalog_path
+                            .as_deref()
+                            .unwrap_or(Path::new("<in-memory>"))
+                            .display()
+                    );
+                }
             }
         }
 
@@ -652,6 +825,220 @@ mod tests {
         assert_eq!(r.fidelity, "metadata");
         // An absent declared field prints as `null` in the human form too.
         assert!(r.render_text().contains("hidden_size         null"));
+    }
+
+    // --- q stats --persist ---------------------------------------------------
+
+    const Q10: &str = "model.layers[10].self_attention.query_projection.weight";
+
+    /// Run the `--persist` path against a temporary catalog, exactly as the
+    /// command does, and hand back what it wrote.
+    fn stats_and_persist(
+        db: &Path,
+        address: &str,
+        rows: (u64, u64),
+        columns: (u64, u64),
+        bins: usize,
+    ) -> Result<(String, StatsSubject, TensorStatistics)> {
+        let model_dir = fixture("tiny-llama-2shard");
+        let (source, catalog, model_id) = open_with_catalog(&model_dir, Some(db))?;
+        let row = catalog
+            .get_by_canonical_name(&model_id, address)?
+            .ok_or_else(|| QError::NotFound(format!("tensor `{address}`")))?;
+        let descriptor = row.to_descriptor()?;
+        let extent = BlockExtent::new(rows.0, rows.1, columns.0, columns.1)?
+            .clamped_to(&descriptor.shape)?;
+        let stats = CpuBackend.block_statistics(&source, &descriptor, extent, bins)?;
+        let subject = StatsSubject::of(&descriptor, &extent);
+        let id = persist_statistics(&catalog, &subject, stats.clone())?;
+        Ok((id, subject, stats))
+    }
+
+    #[test]
+    fn a_persisted_statistic_is_readable_after_the_catalog_is_closed_and_reopened() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (statistics_id, subject, written) =
+            stats_and_persist(&db, Q10, (100, 104), (40, 44), 16).unwrap();
+
+        // Fresh handle on the same file: nothing of the first one survives.
+        let catalog = Catalog::open(&db).unwrap();
+        let back = catalog.get_statistics(&subject.id, 1).unwrap().unwrap();
+        assert_eq!(back.statistics_id, statistics_id);
+        assert_eq!(back.statistics, written);
+        // The block's 16 values, from `--rows 100:104 --columns 40:44`.
+        assert_eq!(back.statistics.count, 16);
+        assert_eq!(back.statistics.histogram.bins(), 16);
+        assert_eq!(back.statistics.histogram.total(), 16);
+        assert_eq!(back.statistics.backend, "cpu-reference");
+        assert!(!back.statistics.approximate);
+        assert_eq!(back.fidelity().as_str(), "aggregate");
+    }
+
+    #[test]
+    fn a_persisted_block_statistic_matches_the_hand_computed_golden_values() {
+        // `scripts/baseline.json`'s `cli_golden.stats_*` for this exact window,
+        // derived from `fixtures/tiny-llama-2shard/golden.json`'s f32 bit
+        // patterns rather than from this code (see `.plan/evidence/QM-0001.md`).
+        // The round trip must not perturb them.
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (_, subject, _) = stats_and_persist(&db, Q10, (100, 104), (40, 44), 16).unwrap();
+        let s = Catalog::open(&db)
+            .unwrap()
+            .get_statistics(&subject.id, 1)
+            .unwrap()
+            .unwrap()
+            .statistics;
+        assert_eq!(s.min_value, -0.04204120859503746);
+        assert_eq!(s.max_value, 0.0300398301333189);
+        assert_eq!(s.mean, -0.005001873796572909);
+        assert_eq!(s.l1_norm, 0.27181090926751494);
+        assert_eq!(s.l2_norm, 0.08061549393964319);
+    }
+
+    #[test]
+    fn a_partial_window_is_persisted_as_a_block_never_as_the_whole_tensor() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (_, subject, _) = stats_and_persist(&db, Q10, (100, 104), (40, 44), 16).unwrap();
+        assert_eq!(subject.kind, SubjectKind::Block);
+        assert!(!subject.covers_whole_tensor);
+
+        // The tensor's own id holds nothing: 16 of 6 144 weights is not the
+        // tensor's statistics, and must never be readable as if it were.
+        let catalog = Catalog::open(&db).unwrap();
+        let model_dir = fixture("tiny-llama-2shard");
+        let (_, mem, model_id) = open(&model_dir).unwrap();
+        let tensor_id = mem
+            .get_by_canonical_name(&model_id, Q10)
+            .unwrap()
+            .unwrap()
+            .tensor_id;
+        assert_ne!(subject.id, tensor_id);
+        assert!(catalog.get_statistics(&tensor_id, 1).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_window_covering_the_whole_tensor_is_persisted_as_the_tensor() {
+        // Q[10] is [128, 48] = 6 144 weights — the count the data contract shows.
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (_, subject, stats) = stats_and_persist(&db, Q10, (0, 128), (0, 48), 64).unwrap();
+        assert_eq!(subject.kind, SubjectKind::Tensor);
+        assert!(subject.covers_whole_tensor);
+        assert_eq!(stats.count, 6144);
+        assert_eq!(stats.histogram.bins(), 64);
+
+        let model_dir = fixture("tiny-llama-2shard");
+        let (_, mem, model_id) = open(&model_dir).unwrap();
+        let tensor_id = mem
+            .get_by_canonical_name(&model_id, Q10)
+            .unwrap()
+            .unwrap()
+            .tensor_id;
+        assert_eq!(subject.id, tensor_id);
+        let back = Catalog::open(&db)
+            .unwrap()
+            .get_statistics(&tensor_id, 1)
+            .unwrap()
+            .unwrap();
+        assert_eq!(back.subject_kind, SubjectKind::Tensor);
+        assert_eq!(back.statistics.count, 6144);
+        assert_eq!(back.statistics.histogram.total(), 6144);
+    }
+
+    #[test]
+    fn persisting_statistics_for_a_rank_one_tensor_is_refused_not_flattened() {
+        // `input_layernorm.weight` is rank 1. A block extent applies to rank-2
+        // tensors; reinterpreting a rank-1 (or rank-4) tensor as a matrix would
+        // produce a confidently wrong picture, which
+        // `docs/decisions/ADR-010-tensor-rank-ceiling.md` refuses by design.
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let err = stats_and_persist(
+            &db,
+            "model.layers[10].normalization.input_normalization.weight",
+            (0, 8),
+            (0, 8),
+            8,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("rank-2 tensors"),
+            "expected a rank refusal, got: {err}"
+        );
+        assert!(err.to_string().contains("got rank 1"), "{err}");
+        // Nothing was written on the way to refusing.
+        assert!(Catalog::open(&db)
+            .unwrap()
+            .list_statistics(&"0".repeat(32))
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn an_out_of_bounds_window_is_refused_before_any_row_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        // Q[10] has 128 rows; row 500 is not in it.
+        let err = stats_and_persist(&db, Q10, (500, 504), (0, 4), 8).unwrap_err();
+        assert!(
+            matches!(err, QError::IndexOutOfBounds { .. }),
+            "expected an out-of-bounds refusal, got: {err}"
+        );
+    }
+
+    #[test]
+    fn the_default_persist_path_sits_beside_the_checkpoint_not_over_it() {
+        let dir = fixture("tiny-llama-2shard");
+        let path = default_catalog_path(&dir);
+        assert_eq!(path.parent().unwrap(), dir.join(".quatricmorph"));
+        assert_eq!(path.file_name().unwrap(), "catalog.db");
+        // It is not any artifact the checkpoint owns.
+        for artifact in [
+            "config.json",
+            "model.safetensors.index.json",
+            "model-00001-of-00002.safetensors",
+        ] {
+            assert_ne!(path, dir.join(artifact));
+        }
+    }
+
+    #[test]
+    fn the_stats_json_carries_a_fidelity_label_and_the_subject_it_measured() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (statistics_id, subject, stats) =
+            stats_and_persist(&db, Q10, (100, 104), (40, 44), 16).unwrap();
+        let wire = serde_json::to_value(StatsReport::build(&subject, &stats, Some(&statistics_id)))
+            .unwrap();
+        assert_eq!(wire["fidelity"], serde_json::json!("aggregate"));
+        assert_eq!(wire["approximate"], serde_json::json!(false));
+        assert_eq!(wire["subject_kind"], serde_json::json!("block"));
+        assert_eq!(wire["covers_whole_tensor"], serde_json::json!(false));
+        assert_eq!(wire["count"], serde_json::json!(16));
+        assert_eq!(wire["statistics_id"], serde_json::json!(statistics_id));
+
+        // Without `--persist` there is no row, and the field is `null` rather
+        // than an empty string or a fabricated id.
+        let unpersisted = serde_json::to_value(StatsReport::build(&subject, &stats, None)).unwrap();
+        assert!(unpersisted["statistics_id"].is_null(), "{unpersisted}");
+        assert_eq!(unpersisted["fidelity"], serde_json::json!("aggregate"));
+    }
+
+    #[test]
+    fn a_sampled_statistic_reaches_the_report_labelled_sampled() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let (_, subject, mut stats) =
+            stats_and_persist(&db, Q10, (100, 104), (40, 44), 16).unwrap();
+        stats.approximate = true;
+        let report = StatsReport::build(&subject, &stats, None);
+        assert_eq!(report.fidelity, "sampled");
+        let wire = serde_json::to_value(&report).unwrap();
+        assert_eq!(wire["fidelity"], serde_json::json!("sampled"));
+        assert_eq!(wire["approximate"], serde_json::json!(true));
     }
 
     #[test]

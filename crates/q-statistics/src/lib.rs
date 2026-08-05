@@ -36,6 +36,54 @@ pub const ALGORITHM_VERSION: u32 = 1;
 /// Default histogram resolution. Named, not magic.
 pub const DEFAULT_HISTOGRAM_BINS: usize = 64;
 
+/// The `.plan/DATA_ARCHITECTURE.md` §8 fidelity of a statistic.
+///
+/// Two variants, and the mapping from [`TensorStatistics::approximate`] is
+/// **total**: there is no third outcome, and no way to spell one, so the boolean
+/// and the label cannot disagree. That is the whole point — `QM-0020`'s data
+/// contract requires the mapping to live in exactly one place.
+///
+/// * [`StatisticsFidelity::Aggregate`] — §8's name for *"a statistic over a
+///   region, computed from all its values"*. Every element of the subject was
+///   read, so the number is **exact for that region**. It is deliberately not
+///   §8's `exact`, which names the *values as stored in the checkpoint* rather
+///   than a statistic computed over them.
+/// * [`StatisticsFidelity::Sampled`] — §8's *"a statistic or preview computed
+///   from a subset"*. Produced whenever
+///   [`StatisticsAccumulator::mark_approximate`] was used. A sampled mean must
+///   never be presented as an exhaustive one; that is why this is a label
+///   carried on the wire and not a comment in the source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatisticsFidelity {
+    Aggregate,
+    Sampled,
+}
+
+impl StatisticsFidelity {
+    /// The one and only mapping. Everything that surfaces a statistic calls
+    /// this rather than re-spelling the strings.
+    pub fn from_approximate(approximate: bool) -> Self {
+        if approximate {
+            Self::Sampled
+        } else {
+            Self::Aggregate
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Aggregate => "aggregate",
+            Self::Sampled => "sampled",
+        }
+    }
+
+    /// The inverse of [`Self::from_approximate`], so the round trip is checkable.
+    pub fn is_approximate(&self) -> bool {
+        matches!(self, Self::Sampled)
+    }
+}
+
 /// The `tensor_statistics` row of ARCHITECTURE.md §5.4.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TensorStatistics {
@@ -62,6 +110,12 @@ pub struct TensorStatistics {
 impl TensorStatistics {
     pub fn std_dev(&self) -> f64 {
         self.variance.sqrt()
+    }
+
+    /// The label every surface must carry. Derived, never stored, so it cannot
+    /// drift away from [`Self::approximate`].
+    pub fn fidelity(&self) -> StatisticsFidelity {
+        StatisticsFidelity::from_approximate(self.approximate)
     }
 }
 
@@ -455,6 +509,51 @@ mod tests {
         let mut acc = StatisticsAccumulator::new().mark_approximate();
         acc.extend(SAMPLE);
         assert!(acc.finish("cpu-reference").unwrap().approximate);
+    }
+
+    #[test]
+    fn an_exhaustive_statistic_is_labelled_aggregate_not_exact() {
+        // `compute_exact` reads every element of `SAMPLE`, so the statistic is
+        // exact *for that region*. `.plan/DATA_ARCHITECTURE.md` §8 names that
+        // `aggregate`; `exact` names the stored values, not a statistic over
+        // them, so claiming `exact` here would overstate what was produced.
+        let s = compute_exact(&SAMPLE, 4).unwrap();
+        assert!(!s.approximate);
+        assert_eq!(s.fidelity(), StatisticsFidelity::Aggregate);
+        assert_eq!(s.fidelity().as_str(), "aggregate");
+        assert_ne!(s.fidelity().as_str(), "exact");
+    }
+
+    #[test]
+    fn a_sampled_statistic_is_labelled_sampled_never_aggregate() {
+        let mut acc = StatisticsAccumulator::new().mark_approximate();
+        acc.extend(SAMPLE);
+        let s = acc.finish("cpu-reference").unwrap();
+        assert!(s.approximate);
+        assert_eq!(s.fidelity(), StatisticsFidelity::Sampled);
+        assert_eq!(s.fidelity().as_str(), "sampled");
+        assert_ne!(s.fidelity().as_str(), "aggregate");
+    }
+
+    #[test]
+    fn the_fidelity_mapping_is_total_and_cannot_disagree_with_the_flag() {
+        // Both inputs, both outputs, and the inverse — so there is no third
+        // label and no way for the boolean and the string to drift apart.
+        for approximate in [false, true] {
+            let f = StatisticsFidelity::from_approximate(approximate);
+            assert_eq!(f.is_approximate(), approximate, "for {approximate}");
+        }
+        assert_eq!(
+            StatisticsFidelity::from_approximate(false),
+            StatisticsFidelity::Aggregate
+        );
+        assert_eq!(
+            StatisticsFidelity::from_approximate(true),
+            StatisticsFidelity::Sampled
+        );
+        // Exactly two labels exist, and both are spelled here.
+        assert_eq!(StatisticsFidelity::Aggregate.as_str(), "aggregate");
+        assert_eq!(StatisticsFidelity::Sampled.as_str(), "sampled");
     }
 
     #[test]

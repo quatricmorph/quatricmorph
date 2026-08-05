@@ -673,9 +673,11 @@ dependencies = [
 name = "q-catalog"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "q-architecture",
  "q-nsir",
  "q-source",
+ "q-statistics",
  "rusqlite",
  "serde",
  "serde_json",
@@ -693,10 +695,12 @@ dependencies = [
  "q-nsir",
  "q-safetensors",
  "q-source",
+ "q-statistics",
  "q-tensor-runtime",
  "q-weightql",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -720,6 +724,7 @@ dependencies = [
  "q-nsir",
  "q-safetensors",
  "q-source",
+ "q-statistics",
  "q-weightql",
  "serde",
  "serde_json",

@@ -19,7 +19,7 @@
 //! | `GET  /v1/tensors/{id}/value?index=100,42`       | implemented (exact)   |
 //! | `GET  /v1/tensors/{id}/blocks?rows=&columns=`    | implemented (exact)   |
 //! | `POST /v1/query`                                 | scalar/slice only     |
-//! | `GET  /v1/tensors/{id}/statistics`               | **501** `STAT-002`    |
+//! | `GET  /v1/tensors/{id}/statistics`               | implemented (persisted rows only) |
 //! | `GET  /v1/visualizations/{id}/tileset.json`      | **501** `CESIUM-001`  |
 //! | `GET  /v1/visualizations/{id}/tiles/{tile}.glb`  | **501** `GLB-001`     |
 //! | `POST /v1/conversions`                           | **501** `JOB-002`     |
@@ -63,6 +63,16 @@ pub struct ModelRoot {
 pub struct DaemonConfig {
     pub roots: Vec<ModelRoot>,
     pub bind_address: String,
+    /// Where the metadata catalog lives.
+    ///
+    /// `None` — the default — means an in-memory catalog rebuilt from the shard
+    /// headers at every start, which is what the daemon has always done. Point it
+    /// at a file to serve rows another process persisted: `q stats --persist`
+    /// writes `tensor_statistics`, and only a shared file lets this daemon read
+    /// them. Model and tensor rows are re-upserted at bootstrap either way, so
+    /// the file never has to be primed first and is never trusted over the
+    /// checkpoint's own headers.
+    pub catalog_path: Option<PathBuf>,
 }
 
 impl DaemonConfig {
@@ -70,7 +80,14 @@ impl DaemonConfig {
         Self {
             roots: Vec::new(),
             bind_address: bind_address.into(),
+            catalog_path: None,
         }
+    }
+
+    /// Serve from a catalog on disk instead of an in-memory one.
+    pub fn with_catalog(mut self, path: impl Into<PathBuf>) -> Self {
+        self.catalog_path = Some(path.into());
+        self
     }
 
     /// Add a model root, canonicalizing it so the boundary check is exact.
@@ -119,7 +136,10 @@ impl AppState {
     /// Metadata only: headers and the shard index. No payload is read at
     /// startup, so a daemon over a 600 GB checkpoint starts in milliseconds.
     pub fn bootstrap(config: DaemonConfig) -> q_source::Result<Arc<Self>> {
-        let catalog = Catalog::open_in_memory()?;
+        let catalog = match &config.catalog_path {
+            Some(path) => Catalog::open(path)?,
+            None => Catalog::open_in_memory()?,
+        };
         let registry = Registry::builtin()?;
         let mut models = BTreeMap::new();
 
@@ -394,6 +414,87 @@ pub enum QueryResponse {
     },
 }
 
+/// The histogram, with its resolution stated rather than inferred from the
+/// array's length by the client.
+#[derive(Debug, Serialize)]
+pub struct HistogramBody {
+    pub bins: usize,
+    pub min: f64,
+    pub max: f64,
+    pub counts: Vec<u64>,
+}
+
+/// `GET /v1/tensors/{id}/statistics`.
+///
+/// `fidelity` comes from [`q_statistics::TensorStatistics::fidelity`] — the one
+/// mapping — so it cannot disagree with `approximate`. Both are on the wire
+/// deliberately: the boolean is the fact, the label is what a UI badges.
+#[derive(Debug, Serialize)]
+pub struct StatisticsResponse {
+    pub statistics_id: String,
+    pub subject_id: String,
+    pub subject_kind: String,
+    pub count: u64,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub mean: f64,
+    pub variance: f64,
+    pub l1_norm: f64,
+    pub l2_norm: f64,
+    pub zero_ratio: f64,
+    pub positive_ratio: f64,
+    pub negative_ratio: f64,
+    pub histogram: HistogramBody,
+    /// `true` when the row was computed over a sample rather than every element.
+    pub approximate: bool,
+    pub algorithm_version: u32,
+    /// `"aggregate"` or `"sampled"`; never spelled here, always derived.
+    pub fidelity: String,
+    pub backend: String,
+}
+
+impl From<q_catalog::StatisticsRow> for StatisticsResponse {
+    fn from(row: q_catalog::StatisticsRow) -> Self {
+        // Read before the row is destructured, so the label is derived from the
+        // same value that ships in `approximate`.
+        let fidelity = row.fidelity().as_str().to_string();
+        let subject_kind = row.subject_kind.as_str().to_string();
+        let s = row.statistics;
+        Self {
+            statistics_id: row.statistics_id,
+            subject_id: row.subject_id,
+            subject_kind,
+            count: s.count,
+            min_value: s.min_value,
+            max_value: s.max_value,
+            mean: s.mean,
+            variance: s.variance,
+            l1_norm: s.l1_norm,
+            l2_norm: s.l2_norm,
+            zero_ratio: s.zero_ratio,
+            positive_ratio: s.positive_ratio,
+            negative_ratio: s.negative_ratio,
+            histogram: HistogramBody {
+                bins: s.histogram.bins(),
+                min: s.histogram.min,
+                max: s.histogram.max,
+                counts: s.histogram.counts,
+            },
+            approximate: s.approximate,
+            algorithm_version: s.algorithm_version,
+            fidelity,
+            backend: s.backend,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StatisticsQuery {
+    /// Pin a specific algorithm version. Omitted, the newest persisted version
+    /// for the subject is served — and the response says which one it is.
+    pub algorithm_version: Option<u32>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct IndexQuery {
     pub index: String,
@@ -633,20 +734,61 @@ pub async fn post_query(
     }))
 }
 
-// --- the 501s ----------------------------------------------------------------
+/// `GET /v1/tensors/{id}/statistics` — `STAT-002`, `API-005`.
+///
+/// Reads persisted rows. It never computes: a full-tensor statistics pass is
+/// `QM-0031`, and computing a block's statistics inside a GET would read payload
+/// on a metadata route.
+///
+/// Two distinct 404s, and the difference is the point:
+///
+/// * the tensor is unknown — a bad id;
+/// * the tensor is known but has no statistics — nothing has been computed for
+///   it. `TASK.md` §Error Handling: an empty row *"would read as all zeros"*, so
+///   the route says what is missing and how to produce it instead of serving
+///   zeros that look like measurements.
+pub async fn get_tensor_statistics(
+    State(s): State<Arc<AppState>>,
+    AxumPath(tensor_id): AxumPath<String>,
+    Query(q): Query<StatisticsQuery>,
+) -> ApiResult<StatisticsResponse> {
+    let row = s
+        .catalog
+        .get_tensor(&tensor_id)
+        .map_err(ApiError::from)?
+        .ok_or_else(|| ApiError::from(QError::NotFound(format!("tensor `{tensor_id}`"))))?;
 
-pub async fn tensor_statistics_501(AxumPath(tensor_id): AxumPath<String>) -> ApiError {
-    ApiError::not_implemented(
-        "STAT-002",
-        format!(
-            "statistics for tensor `{tensor_id}` are not served yet. A CPU reference \
-             implementation exists (q-statistics, q_gpu::CpuBackend) but no statistics pass has \
-             been run and nothing is persisted in tensor_statistics, so there is no honest value \
-             to return."
-        ),
-        "ARCHITECTURE.md §5.4, §14.1",
-    )
+    let found = match q.algorithm_version {
+        Some(v) => s
+            .catalog
+            .get_statistics(&tensor_id, v)
+            .map_err(ApiError::from)?,
+        // `list_statistics` orders by `algorithm_version`, so the last row is the
+        // newest algorithm held for this subject.
+        None => s
+            .catalog
+            .list_statistics(&tensor_id)
+            .map_err(ApiError::from)?
+            .pop(),
+    };
+
+    let row = found.ok_or_else(|| {
+        let which = match q.algorithm_version {
+            Some(v) => format!(" at algorithm version {v}"),
+            None => String::new(),
+        };
+        ApiError::from(QError::NotFound(format!(
+            "no statistics for tensor `{tensor_id}` (`{}`){which}. Nothing has computed them yet; \
+             run `q stats <MODEL_DIR> <ADDRESS> --persist` against a catalog this daemon was \
+             started with (`--catalog`). An empty row is not returned in their place, because a \
+             row of zeros would read as a measurement",
+            row.canonical_name
+        )))
+    })?;
+    Ok(Json(StatisticsResponse::from(row)))
 }
+
+// --- the 501s ----------------------------------------------------------------
 
 pub async fn tileset_501(AxumPath(model_id): AxumPath<String>) -> ApiError {
     ApiError::not_implemented(
@@ -699,7 +841,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/tensors/:tensor_id/blocks", get(get_tensor_blocks))
         .route(
             "/v1/tensors/:tensor_id/statistics",
-            get(tensor_statistics_501),
+            get(get_tensor_statistics),
         )
         .route("/v1/query", post(post_query))
         .route(
@@ -956,13 +1098,13 @@ mod tests {
         assert_eq!(err.body.candidates.as_ref().unwrap().len(), 4);
     }
 
+    /// Narrowed by `QM-0020`, not deleted: `tensor_statistics_501` is gone
+    /// because `STAT-002` is now served, and the other four 501s still need this
+    /// assertion.
     #[tokio::test]
     async fn unbuilt_routes_return_501_with_a_requirement_id() {
+        let mut seen = 0;
         for (err, want) in [
-            (
-                tensor_statistics_501(AxumPath("t".into())).await,
-                "STAT-002",
-            ),
             (tileset_501(AxumPath("m".into())).await, "CESIUM-001"),
             (
                 glb_tile_501(AxumPath(("m".into(), "t".into()))).await,
@@ -978,7 +1120,309 @@ mod tests {
             assert_eq!(err.body.requirement.as_deref(), Some(want));
             assert!(err.body.documentation.is_some());
             assert!(!err.body.message.is_empty());
+            seen += 1;
         }
+        // Four, not five: statistics moved out of this list into a real handler,
+        // and the count is asserted so a route cannot quietly fall out of it.
+        assert_eq!(seen, 4);
+    }
+
+    // --- statistics route ---------------------------------------------------
+
+    /// Hand-computed from `[1, 2, 3, 4]`, the `STAT-001` fixture:
+    /// mean 10/4 = 2.5, variance (2.25+0.25+0.25+2.25)/4 = 1.25, L1 = 10,
+    /// L2 = sqrt(30), histogram over [1,4] in 3 bins = [1, 1, 2].
+    fn hand_computed_statistics() -> q_statistics::TensorStatistics {
+        q_statistics::TensorStatistics {
+            count: 4,
+            min_value: 1.0,
+            max_value: 4.0,
+            mean: 2.5,
+            variance: 1.25,
+            l1_norm: 10.0,
+            l2_norm: 5.477225575051661,
+            zero_ratio: 0.0,
+            positive_ratio: 1.0,
+            negative_ratio: 0.0,
+            histogram: q_statistics::Histogram {
+                min: 1.0,
+                max: 4.0,
+                counts: vec![1, 1, 2],
+            },
+            approximate: false,
+            algorithm_version: 1,
+            backend: "cpu-reference".into(),
+        }
+    }
+
+    /// The `Q[10]` tensor of the fixture, whose id the route is keyed by.
+    fn q10_tensor_id(s: &Arc<AppState>) -> String {
+        let model_id = s.model_ids()[0].clone();
+        s.catalog()
+            .get_by_canonical_name(
+                &model_id,
+                "model.layers[10].self_attention.query_projection.weight",
+            )
+            .unwrap()
+            .unwrap()
+            .tensor_id
+    }
+
+    #[tokio::test]
+    async fn the_statistics_route_serves_a_persisted_row_with_a_fidelity_label() {
+        let s = state();
+        let tensor_id = q10_tensor_id(&s);
+        let row = q_catalog::StatisticsRow::new(
+            &tensor_id,
+            q_catalog::SubjectKind::Tensor,
+            hand_computed_statistics(),
+        )
+        .unwrap();
+        s.catalog().put_statistics(&row).unwrap();
+
+        let Json(body) = get_tensor_statistics(
+            State(s),
+            AxumPath(tensor_id.clone()),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(body.subject_id, tensor_id);
+        assert_eq!(body.subject_kind, "tensor");
+        assert_eq!(body.statistics_id, row.statistics_id);
+        assert_eq!(body.count, 4);
+        assert_eq!(body.min_value, 1.0);
+        assert_eq!(body.max_value, 4.0);
+        assert_eq!(body.mean, 2.5);
+        assert_eq!(body.variance, 1.25);
+        assert_eq!(body.l1_norm, 10.0);
+        assert_eq!(body.l2_norm, 30f64.sqrt());
+        assert_eq!(body.zero_ratio, 0.0);
+        assert_eq!(body.positive_ratio, 1.0);
+        assert_eq!(body.negative_ratio, 0.0);
+        assert_eq!(body.histogram.bins, 3);
+        assert_eq!(body.histogram.counts, vec![1, 1, 2]);
+        assert_eq!(body.algorithm_version, 1);
+        assert_eq!(body.backend, "cpu-reference");
+        // The label, and the flag it is derived from, both present.
+        assert!(!body.approximate);
+        assert_eq!(body.fidelity, "aggregate");
+
+        let wire = serde_json::to_value(&body).unwrap();
+        assert_eq!(wire["fidelity"], serde_json::json!("aggregate"));
+        assert_eq!(wire["approximate"], serde_json::json!(false));
+        assert_eq!(wire["histogram"]["bins"], serde_json::json!(3));
+    }
+
+    #[tokio::test]
+    async fn an_approximate_row_surfaces_as_sampled_never_as_aggregate() {
+        let s = state();
+        let tensor_id = q10_tensor_id(&s);
+        let mut stats = hand_computed_statistics();
+        stats.approximate = true;
+        s.catalog()
+            .put_statistics(
+                &q_catalog::StatisticsRow::new(&tensor_id, q_catalog::SubjectKind::Tensor, stats)
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let Json(body) = get_tensor_statistics(
+            State(s),
+            AxumPath(tensor_id),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(body.approximate);
+        assert_eq!(body.fidelity, "sampled");
+        assert_ne!(body.fidelity, "aggregate");
+        assert_ne!(body.fidelity, "exact");
+    }
+
+    #[tokio::test]
+    async fn the_wire_fidelity_is_the_single_mapping_not_a_re_spelled_literal() {
+        // Whatever `q-statistics` says for each flag value is what the route
+        // emits, so the two cannot be changed apart.
+        let s = state();
+        let tensor_id = q10_tensor_id(&s);
+        for approximate in [false, true] {
+            let mut stats = hand_computed_statistics();
+            stats.approximate = approximate;
+            let row =
+                q_catalog::StatisticsRow::new(&tensor_id, q_catalog::SubjectKind::Tensor, stats)
+                    .unwrap();
+            s.catalog().put_statistics(&row).unwrap();
+            let Json(body) = get_tensor_statistics(
+                State(s.clone()),
+                AxumPath(tensor_id.clone()),
+                Query(StatisticsQuery {
+                    algorithm_version: None,
+                }),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                body.fidelity,
+                q_statistics::StatisticsFidelity::from_approximate(approximate).as_str(),
+                "for approximate = {approximate}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_tensor_with_no_statistics_is_404_with_an_explanation_never_zeros() {
+        let s = state();
+        let tensor_id = q10_tensor_id(&s);
+        let err = get_tensor_statistics(
+            State(s),
+            AxumPath(tensor_id),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.status, StatusCode::NOT_FOUND);
+        assert_eq!(err.body.error, "not_found");
+        // The message says what is missing, how to produce it, and why an empty
+        // row is not returned instead.
+        assert!(err.body.message.contains("no statistics for tensor"));
+        assert!(err.body.message.contains("--persist"));
+        assert!(err.body.message.contains("row of zeros"));
+        // It is not a 501 any more, and carries no requirement ID.
+        assert_ne!(err.status, StatusCode::NOT_IMPLEMENTED);
+        assert!(err.body.requirement.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_tensor_id_is_404_rather_than_an_empty_statistics_row() {
+        let s = state();
+        let err = get_tensor_statistics(
+            State(s),
+            AxumPath("deadbeef".to_string()),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.status, StatusCode::NOT_FOUND);
+        assert!(err.body.message.contains("tensor `deadbeef`"));
+    }
+
+    #[tokio::test]
+    async fn the_route_serves_the_newest_algorithm_version_and_honours_a_pinned_one() {
+        let s = state();
+        let tensor_id = q10_tensor_id(&s);
+        for (version, mean) in [(1u32, 2.5f64), (2, 2.75)] {
+            let mut stats = hand_computed_statistics();
+            stats.algorithm_version = version;
+            stats.mean = mean;
+            s.catalog()
+                .put_statistics(
+                    &q_catalog::StatisticsRow::new(
+                        &tensor_id,
+                        q_catalog::SubjectKind::Tensor,
+                        stats,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+
+        let Json(newest) = get_tensor_statistics(
+            State(s.clone()),
+            AxumPath(tensor_id.clone()),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(newest.algorithm_version, 2);
+        assert_eq!(newest.mean, 2.75);
+
+        // The older algorithm is still readable — it was not overwritten.
+        let Json(pinned) = get_tensor_statistics(
+            State(s.clone()),
+            AxumPath(tensor_id.clone()),
+            Query(StatisticsQuery {
+                algorithm_version: Some(1),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(pinned.algorithm_version, 1);
+        assert_eq!(pinned.mean, 2.5);
+        assert_ne!(pinned.statistics_id, newest.statistics_id);
+
+        // A version nobody computed is 404 naming the version, not the newest row.
+        let err = get_tensor_statistics(
+            State(s),
+            AxumPath(tensor_id),
+            Query(StatisticsQuery {
+                algorithm_version: Some(7),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.status, StatusCode::NOT_FOUND);
+        assert!(err.body.message.contains("algorithm version 7"));
+    }
+
+    #[tokio::test]
+    async fn the_route_serves_statistics_another_process_persisted_to_a_catalog_file() {
+        // This is the `--persist` → `curl` path: one process writes the row, a
+        // freshly bootstrapped daemon reads it back out of the same file.
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("catalog.db");
+        let tensor_id = {
+            let cat = q_catalog::Catalog::open(&db).unwrap();
+            let seed = AppState::bootstrap(
+                DaemonConfig::new("127.0.0.1:0")
+                    .with_root("tiny", fixture_dir())
+                    .unwrap()
+                    .with_catalog(&db),
+            )
+            .unwrap();
+            let id = q10_tensor_id(&seed);
+            cat.put_statistics(
+                &q_catalog::StatisticsRow::new(
+                    &id,
+                    q_catalog::SubjectKind::Tensor,
+                    hand_computed_statistics(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            id
+        };
+
+        let served = AppState::bootstrap(
+            DaemonConfig::new("127.0.0.1:0")
+                .with_root("tiny", fixture_dir())
+                .unwrap()
+                .with_catalog(&db),
+        )
+        .unwrap();
+        let Json(body) = get_tensor_statistics(
+            State(served),
+            AxumPath(tensor_id),
+            Query(StatisticsQuery {
+                algorithm_version: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(body.mean, 2.5);
+        assert_eq!(body.histogram.counts, vec![1, 1, 2]);
+        assert_eq!(body.fidelity, "aggregate");
     }
 
     #[test]

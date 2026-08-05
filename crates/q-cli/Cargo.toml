@@ -15,11 +15,15 @@ q-nsir = { workspace = true }
 q-catalog = { workspace = true }
 q-weightql = { workspace = true }
 q-gpu = { workspace = true }
+q-statistics = { workspace = true }
 q-tensor-runtime = { workspace = true }
 q-cuda = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [[bin]]
 name = "q"

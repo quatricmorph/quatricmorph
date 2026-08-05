@@ -13,6 +13,7 @@ q-source = { workspace = true }
 q-safetensors = { workspace = true }
 q-nsir = { workspace = true }
 q-catalog = { workspace = true }
+q-statistics = { workspace = true }
 q-weightql = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
