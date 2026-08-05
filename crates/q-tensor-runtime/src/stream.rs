@@ -47,6 +47,7 @@
 //! | Situation | Answer |
 //! | --- | --- |
 //! | Configured staging exceeds the budget | [`QError::BudgetExceeded`] naming `host_staging`, before any read |
+//! | Accounted residency exceeds the configured ceiling `C` | [`QError::BudgetExceeded`] naming `max_resident`, before any read (`QM-0101`) |
 //! | Shape × dtype ≠ declared byte range | [`QError::MalformedArtifact`], before any read |
 //! | Rank ≠ 2 | Refused, never flattened — ADR-010 |
 //! | A dtype that cannot widen into `f32` exactly | [`QError::UnsupportedDType`], never rounded |
@@ -59,7 +60,7 @@
 use crate::{BlockData, BlockExtent, Lod, TensorBlock, TileId};
 use q_source::budget::{
     MemoryBudget, DEFAULT_BLOCK_DIMENSION, MAX_CONCURRENT_BLOCKS, MAX_HOST_STAGING_BYTES,
-    MAX_OUTPUT_QUEUE_DEPTH, MIN_BLOCK_DIMENSION,
+    MAX_OUTPUT_QUEUE_DEPTH, MAX_RESIDENT_BYTES, MIN_BLOCK_DIMENSION,
 };
 use q_source::dtype::{bf16_bits_to_f32, f16_bits_to_f32};
 use q_source::error::{QError, Result};
@@ -74,6 +75,29 @@ use std::time::Duration;
 
 /// Decoded blocks are always `f32` (`.plan/MEMORY_BUDGET.md` §4).
 const DECODED_BYTES_PER_ELEMENT: u64 = 4;
+
+/// Decoded blocks that can be live **beyond** the bounded queue's capacity.
+///
+/// Two, and both terms are real: one the reader holds while its `send` blocks on
+/// a full queue, and one the consumer holds. [`BlockStream::drive_bounded`]'s
+/// own documentation states the bound and
+/// `a_full_output_queue_blocks_the_reader_instead_of_growing` measures it — it
+/// was first written as `+ 1` and the guard run caught that at high water 3 with
+/// capacity 1.
+///
+/// It is a named constant here because [`BlockStreamConfig::accounted_resident_bytes`]
+/// needs the same number, and a residency ceiling checked against a different
+/// bound than the one the streaming loop actually holds would be checking the
+/// wrong thing.
+pub const LIVE_BLOCKS_OVER_QUEUE_CAPACITY: u64 = 2;
+
+/// Widest storage dtype, in bytes, for bounding the one run buffer before the
+/// tensor's dtype is known.
+///
+/// `F64`/`I64`/`U64` are 8 bytes. `BlockStream` refuses all three
+/// (`streams_exactly_into_f32`), so 8 is strictly conservative for anything that
+/// can actually stream — which is the right direction for a ceiling.
+const WIDEST_DTYPE_BYTES: u64 = 8;
 
 /// How long [`BlockStream::drive_bounded`] waits on an empty queue before
 /// declaring a deadlock.
@@ -100,6 +124,15 @@ pub struct BlockStreamConfig {
     pub max_output_queue_depth: usize,
     /// Adaptive halving floor. Halving never produces an edge below this.
     pub min_block_dimension: u64,
+    /// The **process** resident ceiling `C` this pass is admitted against
+    /// (`.plan/MASTER_PLAN.md` §4, `q_source::budget::MAX_RESIDENT_BYTES`).
+    ///
+    /// Different in kind from `max_host_staging_bytes`, and the difference is
+    /// the point of `QM-0101`: staging caps *the decoded blocks*, while this caps
+    /// everything the pass accounts for as resident. A configuration whose
+    /// accounted residency exceeds it is refused before any read, naming
+    /// `max_resident`.
+    pub max_resident_bytes: u64,
 }
 
 impl Default for BlockStreamConfig {
@@ -111,6 +144,7 @@ impl Default for BlockStreamConfig {
             max_concurrent_blocks: MAX_CONCURRENT_BLOCKS,
             max_output_queue_depth: MAX_OUTPUT_QUEUE_DEPTH,
             min_block_dimension: MIN_BLOCK_DIMENSION,
+            max_resident_bytes: MAX_RESIDENT_BYTES,
         }
     }
 }
@@ -135,6 +169,31 @@ impl BlockStreamConfig {
     pub fn with_max_host_staging_bytes(mut self, bytes: u64) -> Self {
         self.max_host_staging_bytes = bytes;
         self
+    }
+
+    /// Set the configured resident ceiling `C`.
+    pub fn with_max_resident_bytes(mut self, bytes: u64) -> Self {
+        self.max_resident_bytes = bytes;
+        self
+    }
+
+    /// Apply `.plan/MEMORY_BUDGET.md` §11's resolved budgets to this
+    /// configuration.
+    ///
+    /// The single point where the precedence chain reaches the streaming path,
+    /// so a run's block size, concurrency, queue depth, staging ceiling and
+    /// resident ceiling all come from the same resolution and are all reportable
+    /// with their provenance.
+    pub fn from_budgets(budgets: &q_source::config::StreamingBudgets) -> Self {
+        Self {
+            block_rows: budgets.block_rows.value,
+            block_columns: budgets.block_columns.value,
+            max_host_staging_bytes: budgets.max_host_staging_bytes.value,
+            max_concurrent_blocks: budgets.concurrent_blocks(),
+            max_output_queue_depth: budgets.output_queue_depth(),
+            min_block_dimension: MIN_BLOCK_DIMENSION,
+            max_resident_bytes: budgets.max_resident_bytes.value,
+        }
     }
 
     /// Elements in a full (unclamped) block.
@@ -163,6 +222,51 @@ impl BlockStreamConfig {
         )
     }
 
+    /// The named budget a resident-ceiling failure reports.
+    pub fn resident_budget(&self) -> MemoryBudget {
+        MemoryBudget::resident_at(self.max_resident_bytes)
+    }
+
+    /// Capacity of the bounded output queue this configuration produces.
+    ///
+    /// `min(max_output_queue_depth, max_concurrent_blocks)`, and the `min` is the
+    /// load-bearing part — see [`BlockStream::queue_capacity`], which delegates
+    /// here so the admission arithmetic and the running loop cannot disagree.
+    pub fn queue_capacity(&self) -> usize {
+        self.max_output_queue_depth
+            .min(self.max_concurrent_blocks)
+            .max(1)
+    }
+
+    /// Bytes this configuration accounts for as resident during one pass.
+    ///
+    /// ```text
+    /// accounted = (queue_capacity + 2) × decoded_block_bytes     decoded blocks live at once
+    ///           + block_columns × 8                             the one reusable run buffer
+    /// ```
+    ///
+    /// Three things it deliberately does **not** count, each stated so the number
+    /// is not mistaken for a process RSS:
+    ///
+    /// * the process itself — binary text, stacks, the allocator's own arenas;
+    /// * memory-mapped source pages, which never reach the allocator at all
+    ///   (`.plan/MEMORY_BUDGET.md` §3) and whose page-level residency this
+    ///   repository does not measure;
+    /// * anything a *consumer* of the blocks allocates.
+    ///
+    /// So this is the pass's **own** accounted residency, exact for what it
+    /// accounts for, and it is what a configuration is admitted against. The
+    /// process's peak RSS is a separate, external, approximate measurement
+    /// (`/usr/bin/time -l`), and `.plan/evidence/QM-0101.md` keeps the two
+    /// apart.
+    pub fn accounted_resident_bytes(&self) -> u64 {
+        let live_blocks =
+            (self.queue_capacity() as u64).saturating_add(LIVE_BLOCKS_OVER_QUEUE_CAPACITY);
+        let decoded = self.decoded_block_bytes().saturating_mul(live_blocks);
+        let run_buffer = self.block_columns.saturating_mul(WIDEST_DTYPE_BYTES);
+        decoded.saturating_add(run_buffer)
+    }
+
     /// Reject a configuration that could not be bounded, before any read.
     pub fn validate(&self) -> Result<()> {
         if self.block_rows == 0 || self.block_columns == 0 {
@@ -188,7 +292,15 @@ impl BlockStreamConfig {
                 "block stream needs min_block_dimension >= 1".to_string(),
             ));
         }
-        self.host_staging_budget().check(self.host_staging_bytes())
+        self.host_staging_budget()
+            .check(self.host_staging_bytes())?;
+        // The resident ceiling is checked last, and against `C` itself rather
+        // than `1.25 × C`: the 25 % of `.plan/MASTER_PLAN.md` §4 is a tolerance
+        // on the *measurement*, not headroom the planner may spend. Admitting a
+        // configuration that needs 1.2 × C and then reporting that the peak came
+        // in under 1.25 × C would be using the tolerance twice.
+        self.resident_budget()
+            .check(self.accounted_resident_bytes())
     }
 
     /// Both edges halved, or `None` at the floor.
@@ -612,10 +724,7 @@ impl<'a> BlockStream<'a> {
     /// module exists to hold. When `QM-0031` puts compact results on the queue
     /// instead, the depth ceiling is the one that applies.
     pub fn queue_capacity(&self) -> usize {
-        self.config
-            .max_output_queue_depth
-            .min(self.config.max_concurrent_blocks)
-            .max(1)
+        self.config.queue_capacity()
     }
 
     /// Extent of block `index`, row-major over the grid, **clamped** to the
@@ -1698,6 +1807,153 @@ mod tests {
     }
 
     // --- the residency arithmetic itself ------------------------------------
+
+    // --- the configured resident ceiling `C` (`QM-0101`, gate G1) ------------
+
+    /// The accounted residency is the *formula*, not a measurement, and it must
+    /// match the bound `drive_bounded` actually holds. If the two ever disagree
+    /// the admission check would be admitting against the wrong number.
+    #[test]
+    fn accounted_residency_is_the_live_block_bound_the_bounded_queue_actually_holds() {
+        let config = BlockStreamConfig::default();
+        // (min(64, 4) + 2) x 256 x 256 x 4 + 256 x 8.
+        assert_eq!(config.queue_capacity(), MAX_CONCURRENT_BLOCKS);
+        assert_eq!(
+            config.accounted_resident_bytes(),
+            (MAX_CONCURRENT_BLOCKS as u64 + LIVE_BLOCKS_OVER_QUEUE_CAPACITY) * 256 * 256 * 4
+                + 256 * WIDEST_DTYPE_BYTES
+        );
+        assert_eq!(config.accounted_resident_bytes(), 1_574_912);
+        // It exceeds `host_staging_bytes` by exactly the two extra live blocks
+        // plus the run buffer, which is what makes it a *different* budget rather
+        // than a renaming of the same one.
+        assert_eq!(
+            config.accounted_resident_bytes() - config.host_staging_bytes(),
+            2 * 256 * 256 * 4 + 256 * WIDEST_DTYPE_BYTES
+        );
+        // Halving the block edge quarters the block area, so residency tracks
+        // block size — the property the whole design rests on.
+        let small = config.with_block(64, 64);
+        assert_eq!(
+            small.accounted_resident_bytes(),
+            6 * 64 * 64 * 4 + 64 * WIDEST_DTYPE_BYTES
+        );
+        assert!(small.accounted_resident_bytes() * 15 < config.accounted_resident_bytes());
+        // And it is independent of any tensor: no descriptor was involved above.
+    }
+
+    #[test]
+    fn the_bounded_queues_high_water_never_exceeds_what_the_accounted_residency_assumed() {
+        let d = descriptor(vec![256, 256], DType::F32);
+        let shard = shard_for(&d);
+        let config = BlockStreamConfig::default().with_block(32, 32);
+        let mut stream = BlockStream::new(&shard, d, config).unwrap();
+        let outcome = stream
+            .drive_bounded(|_| {
+                std::thread::sleep(Duration::from_micros(50));
+                Ok(())
+            })
+            .unwrap();
+        let assumed = outcome.queue_capacity as u64 + LIVE_BLOCKS_OVER_QUEUE_CAPACITY;
+        assert!(
+            outcome.queue_high_water as u64 <= assumed,
+            "high water {} exceeded the {assumed} live blocks the residency arithmetic \
+             assumed, so accounted_resident_bytes understates the real peak",
+            outcome.queue_high_water
+        );
+        assert_eq!(outcome.blocks_emitted, 64);
+    }
+
+    #[test]
+    fn a_resident_ceiling_below_the_accounted_residency_is_refused_naming_max_resident() {
+        let d = descriptor(vec![512, 512], DType::F32);
+        let shard = shard_for(&d);
+        let needed = BlockStreamConfig::default().accounted_resident_bytes();
+        let config = BlockStreamConfig::default().with_max_resident_bytes(needed - 1);
+        let err = BlockStream::new(&shard, d.clone(), config).unwrap_err();
+        match &err {
+            QError::BudgetExceeded {
+                budget_name,
+                requested,
+                limit,
+            } => {
+                assert_eq!(*budget_name, "max_resident");
+                assert_eq!((*requested, *limit), (needed, needed - 1));
+            }
+            other => panic!("expected BudgetExceeded naming max_resident, got {other:?}"),
+        }
+        assert_eq!(shard.reads(), 0, "the refusal must cost no I/O");
+        // Exactly the needed amount is admitted: a boundary, not a blanket.
+        assert!(BlockStream::new(
+            &shard,
+            d,
+            BlockStreamConfig::default().with_max_resident_bytes(needed)
+        )
+        .is_ok());
+    }
+
+    /// The staging budget is checked *before* the resident ceiling, so a
+    /// configuration that breaks both reports the tighter, more specific one.
+    #[test]
+    fn the_staging_budget_is_reported_before_the_resident_ceiling_when_both_are_exceeded() {
+        let config = BlockStreamConfig::default()
+            .with_max_host_staging_bytes(512 * 1024)
+            .with_max_resident_bytes(1024);
+        match config.validate() {
+            Err(QError::BudgetExceeded { budget_name, .. }) => {
+                assert_eq!(budget_name, "host_staging")
+            }
+            other => panic!("expected the host_staging refusal first, got {other:?}"),
+        }
+    }
+
+    /// The default ceiling is the compiled 2 GiB, so an existing caller that
+    /// never heard of `QM-0101` keeps working unchanged.
+    #[test]
+    fn the_default_configuration_carries_the_compiled_two_gibibyte_ceiling_and_validates() {
+        let config = BlockStreamConfig::default();
+        assert_eq!(config.max_resident_bytes, MAX_RESIDENT_BYTES);
+        assert_eq!(config.resident_budget().name, "max_resident");
+        assert!(config.validate().is_ok());
+        assert!(config.accounted_resident_bytes() < config.max_resident_bytes);
+    }
+
+    /// `.plan/MEMORY_BUDGET.md` §11's chain has to reach this configuration, or
+    /// it is a chain nothing consults.
+    #[test]
+    fn a_configuration_built_from_resolved_budgets_carries_every_one_of_them() {
+        use q_source::config::{BudgetFlags, EmptyEnv, StreamingBudgets};
+        let budgets = StreamingBudgets::resolve(
+            &BudgetFlags {
+                max_resident_bytes: Some(3_528_244),
+                max_concurrent_blocks: Some(2),
+                block_rows: Some(128),
+                block_columns: Some(64),
+                max_output_queue_depth: Some(8),
+                max_host_staging_bytes: Some(4 * 1024 * 1024),
+            },
+            &EmptyEnv,
+            None,
+        )
+        .unwrap();
+        let config = BlockStreamConfig::from_budgets(&budgets);
+        assert_eq!(config.max_resident_bytes, 3_528_244);
+        assert_eq!(config.max_concurrent_blocks, 2);
+        assert_eq!((config.block_rows, config.block_columns), (128, 64));
+        assert_eq!(config.max_output_queue_depth, 8);
+        assert_eq!(config.max_host_staging_bytes, 4 * 1024 * 1024);
+        // The halving floor is not a §11 variable; it stays the compiled one.
+        assert_eq!(config.min_block_dimension, MIN_BLOCK_DIMENSION);
+        assert_eq!(
+            config.queue_capacity(),
+            2,
+            "concurrency binds below depth 8"
+        );
+        assert!(config.validate().is_ok());
+
+        let defaults = BlockStreamConfig::from_budgets(&StreamingBudgets::compiled_defaults());
+        assert_eq!(defaults, BlockStreamConfig::default());
+    }
 
     #[test]
     fn peak_residency_is_a_function_of_block_size_not_tensor_size() {

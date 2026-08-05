@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0100` reaches `Complete`.
+`QM-0100` and `QM-0030` are both `Complete`; claimed by `impl-agent-12`.
 
 ## Phase
 
@@ -193,3 +193,27 @@ coincidence.
 * The committed measurements file.
 * The commit SHA the runs were made against.
 * Whether page advice was required, and if so where it was applied.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| State | **Awaiting Independent Review** |
+| Lane | P (runs alone — it is the gate) |
+| Gate | **G1 — PASSES.** `C = 3,528,244 B` declared in `.plan/DEFINITION_OF_DONE.md` `V1-04`, independent of the measurement; peak RSS 3,850,240 B (worst of 20 release runs) ≤ 4,410,305 B; `N = 100.0000037`. Seen to fail at the same ceiling with `--io mmap` (331,038,720 B, 75.07× over, in all 13 runs) and at admission (`--resident-ceiling 1MiB` → exit 1 naming `max_resident`) |
+| Branch | `task/qm-0101-bounded-residency-proof` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0101` |
+| Base | `d49701c` |
+| Head | recorded in `.plan/evidence/QM-0101.md` `## Merge` by the merge step; the implementation commit is the single commit this branch adds over `d49701c` |
+| Agent | `impl-agent-12` |
+| Evidence | `.plan/evidence/QM-0101.md` |
+| Merge path | L |
+| Tests added | **+79** (545 → 624), binaries **45 → 47** |
+| Floor before | `scripts/baseline.json` rust 545 / 45 binaries, web 115 / 13 files |
+| Floor after | rust **624** / **47** binaries, web 115 / 13 (unchanged — no web file touched). `./scripts/verify-baseline.sh` exit 0, at floor |
+| Acceptance | 6 of 7 met; **AC-1 partially met** — 26 of 82 tensors stream (92.80 % of payload), the other 56 refused under `ADR-010` and reconciled to the byte. Recorded, not glossed |
+
+**What the reviewer should check first:** that `C` is declared in a file that
+predates the measurement (`.plan/DEFINITION_OF_DONE.md` `V1-04`) and is not
+`R / 1.25`; that the mmap row really does breach the *same* ceiling; and that
+`bytes_streamed + refused_payload_bytes == described_payload_bytes` exactly.

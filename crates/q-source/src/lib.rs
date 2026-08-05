@@ -29,6 +29,7 @@
 
 pub mod budget;
 pub mod cancel;
+pub mod config;
 pub mod descriptor;
 pub mod dtype;
 pub mod error;
@@ -40,12 +41,13 @@ pub mod role;
 
 pub use budget::MemoryBudget;
 pub use cancel::{Cancellable, CancellationToken, ResumePoint};
+pub use config::{BudgetFlags, BudgetOrigin, ResolvedBudget, StreamingBudgets};
 pub use descriptor::TensorDescriptor;
 pub use dtype::DType;
 pub use error::{QError, Result};
 pub use http::{HttpByteRange, HttpRangeSource, RangeFetcher};
 pub use ids::{content_fingerprint, ModelId, TensorId};
-pub use local::LocalFsSource;
+pub use local::{LocalFsSource, ReadMode};
 pub use manifest::{
     ArtifactKind, ByteStream, ModelManifest, ModelSource, ModelSourceExt, SourceFile,
 };

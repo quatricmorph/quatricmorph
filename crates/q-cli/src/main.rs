@@ -17,6 +17,8 @@
 //! q query    <DIR> <WEIGHTQL>            plan, and execute if executable
 //! q stats    <DIR> <ADDRESS> --rows --columns   CPU reference block statistics
 //!            [--persist [--catalog DB]]   write the row into tensor_statistics
+//! q stream   <DIR> [--resident-ceiling C]  stream every streamable tensor's
+//!            [--io mmap|pread]             blocks under a configured ceiling
 //! q backends                             what each compute backend can do
 //! ```
 
@@ -25,10 +27,13 @@ use q_catalog::{Catalog, ConfigMetadata, StatisticsRow, SubjectKind, TensorFilte
 use q_gpu::{Backend, CpuBackend};
 use q_nsir::{Registry, ResolvedModel};
 use q_safetensors::{ingest_local, IngestOutcome};
+use q_source::budget::parse_byte_size;
+use q_source::config::BudgetFlags;
 use q_source::error::{QError, Result};
 use q_source::role::TensorRole;
 use q_source::LocalFsSource;
 use q_statistics::TensorStatistics;
+use q_tensor_runtime::stream::BlockStreamConfig;
 use q_tensor_runtime::{BlockExtent, Lod, TileId};
 use q_weightql::{QueryEngine, QueryOutcome};
 use serde::Serialize;
@@ -125,8 +130,79 @@ enum Command {
         #[arg(long, value_name = "DB")]
         catalog: Option<PathBuf>,
     },
+    /// Stream every streamable tensor's blocks under a configured resident
+    /// ceiling, touching each payload byte exactly once.
+    ///
+    /// This is `QM-0101`'s measurement subject and gate `G1`'s. It reads no
+    /// catalog and builds no SQLite database: the pass needs tensor descriptors
+    /// and nothing else, and a database in the process would put megabytes of
+    /// unrelated residency inside the number being measured.
+    Stream {
+        model_dir: PathBuf,
+        /// The configured resident ceiling `C`, e.g. `2GiB`, `512MiB`, `3528244`.
+        ///
+        /// Highest-precedence link of `.plan/MEMORY_BUDGET.md` §11's chain. Falls
+        /// back to `QM_MAX_RESIDENT_BYTES`, then `--config`, then the compiled
+        /// `q_source::budget::MAX_RESIDENT_BYTES` (2 GiB).
+        #[arg(long, value_name = "BYTES")]
+        resident_ceiling: Option<String>,
+        /// Ceiling on decoded host staging, e.g. `512MiB`.
+        #[arg(long, value_name = "BYTES")]
+        host_staging: Option<String>,
+        #[arg(long, value_name = "N")]
+        concurrent_blocks: Option<u64>,
+        #[arg(long, value_name = "N")]
+        output_queue_depth: Option<u64>,
+        #[arg(long, value_name = "N")]
+        block_rows: Option<u64>,
+        #[arg(long, value_name = "N")]
+        block_columns: Option<u64>,
+        /// A TOML file with a `[budgets]` table — the third link of the chain.
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
+        /// How payload bytes are read: `mmap` maps the shard, `pread` seeks and
+        /// reads into one reusable buffer.
+        ///
+        /// The distinction is load-bearing for a residency measurement rather
+        /// than cosmetic: mapped pages count toward RSS while they are resident,
+        /// so a mapped pass over a 337 MiB checkpoint reports the file in its
+        /// peak RSS even though the pass never holds more than one block
+        /// (`.plan/MEMORY_BUDGET.md` §3).
+        #[arg(long, value_name = "MODE", default_value = "pread")]
+        io: IoMode,
+        /// Stop at a block boundary after this many blocks, and report where.
+        ///
+        /// A flag rather than a signal because the cancellation path has to be
+        /// reproducible in a test; a `SIGINT` race is not.
+        #[arg(long, value_name = "N")]
+        stop_after_blocks: Option<u64>,
+        /// Resume at this global block index, counting blocks in pass order.
+        #[arg(long, value_name = "N")]
+        resume_from_block: Option<u64>,
+        /// Fail rather than reporting a refusal when a tensor cannot stream.
+        ///
+        /// Off by default because it *must* be: `models/distilbert-distilgpt2`
+        /// holds 50 rank-1 and 6 rank-4 tensors that `ADR-010` refuses rather
+        /// than flattens, so a pass that demanded every tensor would fail on a
+        /// correct refusal. The refusals are reported, counted, and their bytes
+        /// reconciled against the described payload instead.
+        #[arg(long)]
+        require_all_tensors: bool,
+    },
     /// Report what each compute backend can actually do.
     Backends,
+}
+
+/// How `q stream` reads payload bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case")]
+enum IoMode {
+    /// Memory-mapped, via [`LocalFsSource`]. Mapped pages count toward RSS.
+    Mmap,
+    /// `seek` + `read` into one reusable buffer. No mapping, so no mapped page
+    /// can enter the residency measurement.
+    Pread,
 }
 
 fn main() -> ExitCode {
@@ -407,6 +483,327 @@ impl<'a> StatsReport<'a> {
 /// Pretty-print JSON, mapping the serializer error into the shared error type.
 fn json_out<T: serde::Serialize>(value: &T) -> Result<String> {
     serde_json::to_string_pretty(value).map_err(|e| QError::json("cli json output", e))
+}
+
+// ===========================================================================
+// `q stream` — QM-0101, gate G1
+// ===========================================================================
+
+/// What one `q stream` pass measured. `TASK.md`'s `## Data Contracts`, with
+/// three honesty-driven differences from the sketch there:
+///
+/// * `peak_resident_bytes` is `Option` and is **always `null` here**. A process
+///   cannot read its own maximum resident set size without a platform call this
+///   workspace has no dependency for, and emitting an in-process heap figure
+///   under a field named "peak resident" would be a measurement claim the number
+///   does not support. The RSS figure comes from `/usr/bin/time -l` outside the
+///   process and is recorded in `fixtures/residency-measurements.json`.
+/// * `accounted_resident_bytes` is added: the pass's **own** buffers, exact for
+///   what it accounts for, and the number a configuration is admitted against.
+/// * refusals, and the reconciliation of their bytes against the described
+///   payload, are added — a real checkpoint is mostly not rank-2, and `ADR-010`
+///   requires those tensors to be refused rather than flattened.
+#[derive(Debug, Clone, Serialize)]
+struct ResidencyReport {
+    /// Bytes the checkpoint's shards occupy on disk.
+    checkpoint_bytes: u64,
+    /// Payload bytes the headers describe, across every tensor.
+    described_payload_bytes: u64,
+    /// Bytes read from disk to plan the pass: headers and the shard index only.
+    metadata_bytes_read: u64,
+    /// The configured ceiling `C`, after `.plan/MEMORY_BUDGET.md` §11's chain.
+    resident_ceiling_bytes: u64,
+    /// Where `C` came from. §11: a run's budgets must be recoverable afterwards.
+    resident_ceiling_origin: String,
+    /// `1.25 × C` — what a measured peak RSS is compared against.
+    resident_tolerance_bytes: u64,
+    /// Always `null`: measured externally. See the type documentation.
+    peak_resident_bytes: Option<u64>,
+    /// How `peak_resident_bytes` is obtained, stated so the `null` is not read as
+    /// "nothing was measured".
+    peak_resident_measurement: &'static str,
+    /// The pass's own accounted residency. **Exact for what it accounts for**;
+    /// not a process RSS.
+    accounted_resident_bytes: u64,
+    /// `checkpoint_bytes / C`.
+    ratio_n: f64,
+    /// Payload bytes actually read and decoded, each exactly once.
+    bytes_streamed: u64,
+    elapsed_seconds: f64,
+    /// Position- and value-sensitive fold over every decoded element. Proves the
+    /// bytes were touched.
+    checksum: u64,
+    blocks_streamed: u64,
+    blocks_planned: u64,
+    tensors_total: usize,
+    tensors_streamed: usize,
+    tensors_refused: usize,
+    /// `bytes_streamed + refused_payload_bytes` must equal
+    /// `described_payload_bytes` on a complete pass — the tie that proves no
+    /// tensor was silently dropped.
+    refused_payload_bytes: u64,
+    payload_reconciles: bool,
+    complete: bool,
+    /// `Some(where)` when the pass stopped early at a block boundary.
+    stopped_at: Option<String>,
+    /// Absolute block index a resumed pass must start from.
+    next_block_index: u64,
+    io_mode: IoMode,
+    read_mode_note: &'static str,
+    budgets: q_source::config::StreamingBudgets,
+    refusals: Vec<q_tensor_runtime::residency::TensorRefusal>,
+}
+
+impl ResidencyReport {
+    fn render_text(&self) -> String {
+        fn line(out: &mut String, key: &str, value: String) {
+            out.push_str(&format!("{key:<26}{value}\n"));
+        }
+        let mut s = String::new();
+        line(
+            &mut s,
+            "checkpoint bytes",
+            self.checkpoint_bytes.to_string(),
+        );
+        line(
+            &mut s,
+            "payload described",
+            format!("{} bytes", self.described_payload_bytes),
+        );
+        line(
+            &mut s,
+            "metadata bytes read",
+            format!("{} bytes (headers only)", self.metadata_bytes_read),
+        );
+        line(
+            &mut s,
+            "resident ceiling C",
+            format!(
+                "{} bytes  ({})",
+                self.resident_ceiling_bytes, self.resident_ceiling_origin
+            ),
+        );
+        line(
+            &mut s,
+            "tolerance 1.25 x C",
+            format!("{} bytes", self.resident_tolerance_bytes),
+        );
+        line(
+            &mut s,
+            "accounted resident",
+            format!(
+                "{} bytes  (this pass's own buffers, exact)",
+                self.accounted_resident_bytes
+            ),
+        );
+        line(
+            &mut s,
+            "peak RSS",
+            format!(
+                "not measured in-process — {}",
+                self.peak_resident_measurement
+            ),
+        );
+        line(
+            &mut s,
+            "ratio N = bytes / C",
+            format!("{:.6}", self.ratio_n),
+        );
+        line(
+            &mut s,
+            "bytes streamed",
+            format!("{} bytes", self.bytes_streamed),
+        );
+        line(
+            &mut s,
+            "blocks streamed",
+            format!(
+                "{} of {} planned",
+                self.blocks_streamed, self.blocks_planned
+            ),
+        );
+        line(
+            &mut s,
+            "tensors",
+            format!(
+                "{} streamed, {} refused, {} total",
+                self.tensors_streamed, self.tensors_refused, self.tensors_total
+            ),
+        );
+        line(
+            &mut s,
+            "refused payload",
+            format!(
+                "{} bytes  (streamed + refused vs {} described: {})",
+                self.refused_payload_bytes,
+                self.described_payload_bytes,
+                if self.payload_reconciles {
+                    "reconciles"
+                } else if self.complete {
+                    "DOES NOT RECONCILE"
+                } else {
+                    "n/a — pass did not run to completion"
+                }
+            ),
+        );
+        line(&mut s, "checksum", format!("{:#018x}", self.checksum));
+        line(&mut s, "elapsed", format!("{:.3} s", self.elapsed_seconds));
+        line(
+            &mut s,
+            "io mode",
+            format!("{:?} — {}", self.io_mode, self.read_mode_note),
+        );
+        if let Some(at) = &self.stopped_at {
+            line(&mut s, "stopped at", at.clone());
+            line(
+                &mut s,
+                "resume with",
+                format!("--resume-from-block {}", self.next_block_index),
+            );
+        }
+        s.push_str("-- budgets, with provenance (.plan/MEMORY_BUDGET.md §11) --\n");
+        for b in self.budgets.all() {
+            line(&mut s, &b.name, format!("{}  ({})", b.value, b.origin));
+        }
+        if !self.refusals.is_empty() {
+            s.push_str(&format!(
+                "-- {} tensor(s) refused, never flattened (ADR-010) --\n",
+                self.refusals.len()
+            ));
+            for r in &self.refusals {
+                s.push_str(&format!(
+                    "  {} {:?} {} — {}{}\n",
+                    r.canonical_name,
+                    r.shape,
+                    r.dtype,
+                    r.reason,
+                    r.requirement_id
+                        .as_ref()
+                        .map(|q| format!(" [{q}]"))
+                        .unwrap_or_default()
+                ));
+            }
+        }
+        s
+    }
+}
+
+/// Parse a byte-size flag, refusing a malformed one **naming the flag**.
+///
+/// Never coerced to a default: a mistyped `--resident-ceiling` that quietly
+/// became the compiled 2 GiB would switch gate `G1` off, and the operator would
+/// have no way to tell from the output that their ceiling had been ignored.
+fn parse_size_flag(flag: &str, value: &Option<String>) -> Result<Option<u64>> {
+    match value {
+        None => Ok(None),
+        Some(text) => parse_byte_size(text)
+            .map(Some)
+            .map_err(|e| QError::QueryRejected(format!("{flag}: {e}"))),
+    }
+}
+
+/// Everything `q stream` was asked to do, gathered so the pass is testable
+/// without going through `clap`.
+#[derive(Debug, Clone)]
+struct StreamRequest {
+    model_dir: PathBuf,
+    flags: BudgetFlags,
+    config_path: Option<PathBuf>,
+    io: IoMode,
+    stop_after_blocks: Option<u64>,
+    resume_from_block: Option<u64>,
+    require_all_tensors: bool,
+}
+
+/// Stream every streamable tensor of the checkpoint at `request.model_dir`.
+///
+/// The order of operations is the point:
+///
+/// 1. resolve the budgets through `.plan/MEMORY_BUDGET.md` §11's chain;
+/// 2. **admit the configuration against the resident ceiling `C`** — inside
+///    [`q_tensor_runtime::residency::run`], before a single payload byte is read,
+///    so an over-budget run costs no I/O at all;
+/// 3. read headers only (`ingest_local`), never a catalog;
+/// 4. stream blocks, folding the checksum.
+///
+/// No `Catalog` is opened and no resolver is run. Both would be honest to
+/// include and both would put megabytes of unrelated residency — SQLite's page
+/// cache above all — inside the number this command exists to measure.
+fn stream_checkpoint(request: &StreamRequest) -> Result<ResidencyReport> {
+    let budgets = q_source::config::StreamingBudgets::resolve(
+        &request.flags,
+        &q_source::config::ProcessEnv,
+        request.config_path.as_deref(),
+    )?;
+    let config = BlockStreamConfig::from_budgets(&budgets);
+    // Admission before any I/O at all — including before the headers are read,
+    // so a refused ceiling costs nothing whatsoever.
+    config.validate()?;
+
+    let ingested = ingest_local(&request.model_dir)?;
+    let checkpoint_bytes: u64 = ingested
+        .manifest
+        .files
+        .iter()
+        .filter(|f| f.kind == q_source::ArtifactKind::SafeTensorsShard)
+        .map(|f| f.length)
+        .sum();
+
+    let source: Box<dyn q_source::ModelSource> = match request.io {
+        IoMode::Mmap => Box::new(LocalFsSource::open(&request.model_dir)?),
+        IoMode::Pread => Box::new(LocalFsSource::open_without_mapping(&request.model_dir)?),
+    };
+
+    let started = std::time::Instant::now();
+    let outcome = q_tensor_runtime::residency::run(
+        &*source,
+        &ingested.descriptors,
+        &q_tensor_runtime::residency::ResidencyRequest {
+            config,
+            stop_after_blocks: request.stop_after_blocks,
+            resume_from_block: request.resume_from_block,
+            require_all_tensors: request.require_all_tensors,
+        },
+    )?;
+    let elapsed_seconds = started.elapsed().as_secs_f64();
+
+    let ceiling = budgets.max_resident_bytes.value;
+    Ok(ResidencyReport {
+        checkpoint_bytes,
+        described_payload_bytes: ingested.described_payload_bytes,
+        metadata_bytes_read: ingested.bytes_read,
+        resident_ceiling_bytes: ceiling,
+        resident_ceiling_origin: budgets.max_resident_bytes.origin.as_str().to_string(),
+        resident_tolerance_bytes: q_source::budget::resident_tolerance_bytes(ceiling),
+        peak_resident_bytes: None,
+        peak_resident_measurement:
+            "external: /usr/bin/time -l `maximum resident set size`, recorded in \
+             fixtures/residency-measurements.json (approximate)",
+        accounted_resident_bytes: config.accounted_resident_bytes(),
+        ratio_n: checkpoint_bytes as f64 / ceiling as f64,
+        bytes_streamed: outcome.bytes_streamed,
+        elapsed_seconds,
+        checksum: outcome.checksum,
+        blocks_streamed: outcome.blocks_streamed,
+        blocks_planned: outcome.blocks_planned,
+        tensors_total: outcome.tensors_total,
+        tensors_streamed: outcome.tensors_streamed,
+        tensors_refused: outcome.tensors_refused,
+        refused_payload_bytes: outcome.refused_payload_bytes,
+        payload_reconciles: outcome.reconciles_against(ingested.described_payload_bytes),
+        complete: outcome.is_complete(),
+        stopped_at: outcome.stopped_at.clone(),
+        next_block_index: outcome.next_block_index,
+        io_mode: request.io,
+        read_mode_note: match request.io {
+            IoMode::Mmap => {
+                "mapped pages count toward RSS while resident (.plan/MEMORY_BUDGET.md §3)"
+            }
+            IoMode::Pread => "no mapping, so no mapped page enters the residency measurement",
+        },
+        budgets,
+        refusals: outcome.refusals,
+    })
 }
 
 fn parse_index(s: &str) -> Result<Vec<u64>> {
@@ -703,6 +1100,63 @@ fn run(cli: &Cli) -> Result<()> {
                             .display()
                     );
                 }
+            }
+        }
+
+        Command::Stream {
+            model_dir,
+            resident_ceiling,
+            host_staging,
+            concurrent_blocks,
+            output_queue_depth,
+            block_rows,
+            block_columns,
+            config,
+            io,
+            stop_after_blocks,
+            resume_from_block,
+            require_all_tensors,
+        } => {
+            let request = StreamRequest {
+                model_dir: model_dir.clone(),
+                flags: BudgetFlags {
+                    max_resident_bytes: parse_size_flag("--resident-ceiling", resident_ceiling)?,
+                    max_host_staging_bytes: parse_size_flag("--host-staging", host_staging)?,
+                    max_concurrent_blocks: *concurrent_blocks,
+                    max_output_queue_depth: *output_queue_depth,
+                    block_rows: *block_rows,
+                    block_columns: *block_columns,
+                },
+                config_path: config.clone(),
+                io: *io,
+                stop_after_blocks: *stop_after_blocks,
+                resume_from_block: *resume_from_block,
+                require_all_tensors: *require_all_tensors,
+            };
+            let report = stream_checkpoint(&request)?;
+            if cli.json {
+                println!("{}", json_out(&report)?);
+            } else {
+                print!("{}", report.render_text());
+            }
+            // A *whole* pass whose bytes do not reconcile is a bug in this
+            // command, not a finding about the checkpoint, and must not exit 0.
+            //
+            // Scoped to a pass that was asked to read everything: a resumed or
+            // stopped pass reads less than it planned **by design**, so applying
+            // the reconciliation there would fail `--resume-from-block 1251` —
+            // resuming exactly at the end, which is the resume point a completed
+            // pass reports and is therefore legitimate.
+            let whole_pass_requested =
+                request.resume_from_block.is_none() && request.stop_after_blocks.is_none();
+            if whole_pass_requested && !report.payload_reconciles {
+                return Err(QError::QueryRejected(format!(
+                    "streamed {} bytes and refused {} of {} described: the pass completed but \
+                     its bytes do not reconcile, so some tensor was neither read nor refused",
+                    report.bytes_streamed,
+                    report.refused_payload_bytes,
+                    report.described_payload_bytes
+                )));
             }
         }
 
@@ -1039,6 +1493,239 @@ mod tests {
         let wire = serde_json::to_value(&report).unwrap();
         assert_eq!(wire["fidelity"], serde_json::json!("sampled"));
         assert_eq!(wire["approximate"], serde_json::json!(true));
+    }
+
+    // --- q stream (QM-0101, gate G1) -----------------------------------------
+
+    fn stream_request(dir: PathBuf) -> StreamRequest {
+        StreamRequest {
+            model_dir: dir,
+            flags: BudgetFlags::default(),
+            config_path: None,
+            io: IoMode::Pread,
+            stop_after_blocks: None,
+            resume_from_block: None,
+            require_all_tensors: false,
+        }
+    }
+
+    #[test]
+    fn a_malformed_resident_ceiling_is_refused_naming_the_flag_never_silently_defaulted() {
+        for bad in [
+            "two gigabytes",
+            "2 gibibytes",
+            "-1",
+            "",
+            "GiB",
+            "1XiB",
+            "1e9",
+        ] {
+            let err = parse_size_flag("--resident-ceiling", &Some(bad.to_string()))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                err.contains("--resident-ceiling"),
+                "`{bad}` was refused without naming the flag: {err}"
+            );
+        }
+        // And the forms that must work, including the ones TASK.md's Suggested
+        // Commands use.
+        for (text, expected) in [
+            ("64MiB", 64 * 1024 * 1024),
+            ("2GiB", 2 * 1024 * 1024 * 1024),
+            ("512MiB", 512 * 1024 * 1024),
+            ("3528244", 3_528_244),
+            ("2GB", 2_000_000_000),
+        ] {
+            assert_eq!(
+                parse_size_flag("--resident-ceiling", &Some(text.to_string())).unwrap(),
+                Some(expected),
+                "`{text}`"
+            );
+        }
+        assert_eq!(parse_size_flag("--resident-ceiling", &None).unwrap(), None);
+    }
+
+    #[test]
+    fn a_stream_pass_over_the_fixture_reconciles_and_reports_the_ceilings_provenance() {
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        request.flags.max_resident_bytes = Some(3_528_244);
+        let report = stream_checkpoint(&request).unwrap();
+
+        assert_eq!(report.resident_ceiling_bytes, 3_528_244);
+        assert_eq!(report.resident_ceiling_origin, "cli-flag");
+        assert_eq!(report.resident_tolerance_bytes, 3_528_244 * 5 / 4);
+        assert_eq!(report.described_payload_bytes, 1_196_736);
+        assert_eq!(report.bytes_streamed, 1_196_736 - 25 * 48 * 4);
+        assert_eq!(report.refused_payload_bytes, 25 * 48 * 4);
+        assert!(report.complete);
+        assert!(report.payload_reconciles);
+        assert_eq!(report.tensors_refused, 25);
+        assert_ne!(report.checksum, 0);
+        // The pass's own buffers, at defaults: (4 + 2) blocks + one run buffer.
+        assert_eq!(report.accounted_resident_bytes, 6 * 256 * 256 * 4 + 256 * 8);
+    }
+
+    /// The field a reader is most likely to misread, so it is asserted: the CLI
+    /// never invents a peak-RSS number, and it says where the real one comes from.
+    #[test]
+    fn the_stream_report_leaves_peak_rss_null_and_states_that_it_is_measured_externally() {
+        let request = stream_request(fixture("tiny-llama-single"));
+        let report = stream_checkpoint(&request).unwrap();
+        let wire = serde_json::to_value(&report).unwrap();
+        assert!(
+            wire["peak_resident_bytes"].is_null(),
+            "a process cannot read its own peak RSS here, so this must be null rather than a \
+             plausible-looking number: {wire}"
+        );
+        let method = wire["peak_resident_measurement"].as_str().unwrap();
+        assert!(method.contains("/usr/bin/time -l"), "{method}");
+        assert!(method.contains("approximate"), "{method}");
+        // The accounted figure is present and is not passed off as the RSS.
+        assert!(wire["accounted_resident_bytes"].as_u64().unwrap() > 0);
+        assert_eq!(
+            wire["resident_ceiling_bytes"],
+            serde_json::json!(2u64 * 1024 * 1024 * 1024),
+            "with no flag, env var or config file, the compiled default is the ceiling"
+        );
+        assert_eq!(
+            wire["resident_ceiling_origin"],
+            serde_json::json!("compiled-default")
+        );
+    }
+
+    #[test]
+    fn a_resident_ceiling_below_the_configuration_refuses_before_reading_any_payload() {
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        // One byte under what the default block size and concurrency need.
+        request.flags.max_resident_bytes = Some(6 * 256 * 256 * 4 + 256 * 8 - 1);
+        let err = stream_checkpoint(&request).unwrap_err();
+        match &err {
+            QError::BudgetExceeded {
+                budget_name,
+                requested,
+                limit,
+            } => {
+                assert_eq!(*budget_name, "max_resident");
+                assert_eq!(*requested, 1_574_912);
+                assert_eq!(*limit, 1_574_911);
+            }
+            other => panic!("expected BudgetExceeded naming max_resident, got {other:?}"),
+        }
+        // Smaller blocks fit under the same ceiling, so the refusal is about the
+        // configuration rather than about the checkpoint.
+        request.flags.block_rows = Some(64);
+        request.flags.block_columns = Some(64);
+        let report = stream_checkpoint(&request).unwrap();
+        assert!(report.payload_reconciles);
+        assert_eq!(report.accounted_resident_bytes, 6 * 64 * 64 * 4 + 64 * 8);
+    }
+
+    #[test]
+    fn a_config_file_reaches_the_stream_report_and_a_malformed_one_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let good = dir.path().join("good.toml");
+        std::fs::write(&good, "[budgets]\nmax_resident_bytes = \"3MiB\"\n").unwrap();
+        let mut request = stream_request(fixture("tiny-llama-single"));
+        request.config_path = Some(good);
+        let report = stream_checkpoint(&request).unwrap();
+        assert_eq!(report.resident_ceiling_bytes, 3 * 1024 * 1024);
+        assert_eq!(report.resident_ceiling_origin, "config-file");
+
+        let bad = dir.path().join("bad.toml");
+        std::fs::write(&bad, "[budgets]\nmax_resident_bytes = \"3 megs\"\n").unwrap();
+        request.config_path = Some(bad);
+        let err = stream_checkpoint(&request).unwrap_err().to_string();
+        assert!(err.contains("max_resident_bytes"), "{err}");
+        assert!(err.contains("3 megs"), "{err}");
+
+        let unknown = dir.path().join("unknown.toml");
+        std::fs::write(&unknown, "[budgets]\nresident_ceiling = 4096\n").unwrap();
+        request.config_path = Some(unknown);
+        let err = stream_checkpoint(&request).unwrap_err().to_string();
+        assert!(err.contains("resident_ceiling"), "{err}");
+        assert!(err.contains("not a budget"), "{err}");
+    }
+
+    #[test]
+    fn requiring_every_tensor_turns_the_fixtures_rank_one_refusals_into_a_hard_failure() {
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        request.require_all_tensors = true;
+        let err = stream_checkpoint(&request).unwrap_err().to_string();
+        assert!(err.contains("rank 1"), "{err}");
+        // And without the flag the same refusals are reported rather than fatal.
+        request.require_all_tensors = false;
+        assert_eq!(stream_checkpoint(&request).unwrap().tensors_refused, 25);
+    }
+
+    #[test]
+    fn stopping_and_resuming_a_stream_pass_rejoins_into_one_uninterrupted_pass() {
+        let whole = stream_checkpoint(&stream_request(fixture("tiny-llama-2shard"))).unwrap();
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        request.stop_after_blocks = Some(30);
+        let first = stream_checkpoint(&request).unwrap();
+        assert_eq!(first.blocks_streamed, 30);
+        assert_eq!(first.next_block_index, 30);
+        assert!(first.stopped_at.is_some());
+        assert!(!first.complete);
+        assert!(!first.payload_reconciles);
+
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        request.resume_from_block = Some(first.next_block_index);
+        let second = stream_checkpoint(&request).unwrap();
+        assert_eq!(
+            first.bytes_streamed + second.bytes_streamed,
+            whole.bytes_streamed
+        );
+        assert_eq!(
+            first.checksum.wrapping_add(second.checksum),
+            whole.checksum,
+            "the resumed pass did not read exactly the blocks the stopped one missed"
+        );
+    }
+
+    #[test]
+    fn the_two_read_modes_agree_on_every_byte_and_differ_only_in_the_reported_note() {
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        let pread = stream_checkpoint(&request).unwrap();
+        request.io = IoMode::Mmap;
+        let mapped = stream_checkpoint(&request).unwrap();
+        assert_eq!(pread.checksum, mapped.checksum);
+        assert_eq!(pread.bytes_streamed, mapped.bytes_streamed);
+        assert_eq!(pread.blocks_streamed, mapped.blocks_streamed);
+        assert_ne!(pread.read_mode_note, mapped.read_mode_note);
+        assert!(mapped.read_mode_note.contains("RSS"));
+        // The default is the mode that keeps mapped pages out of the measurement.
+        assert_eq!(
+            <IoMode as clap::ValueEnum>::from_str("pread", false).unwrap(),
+            IoMode::Pread
+        );
+    }
+
+    #[test]
+    fn the_human_readable_stream_report_states_the_ceiling_its_origin_and_the_reconciliation() {
+        let mut request = stream_request(fixture("tiny-llama-2shard"));
+        request.flags.max_resident_bytes = Some(3_528_244);
+        let text = stream_checkpoint(&request).unwrap().render_text();
+        assert!(
+            text.contains("resident ceiling C        3528244 bytes  (cli-flag)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("tolerance 1.25 x C        4410305 bytes"),
+            "{text}"
+        );
+        assert!(text.contains("reconciles"), "{text}");
+        assert!(
+            text.contains("refused, never flattened (ADR-010)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("max_resident_bytes        3528244  (cli-flag)"),
+            "{text}"
+        );
+        // No fabricated RSS in the human form either.
+        assert!(text.contains("not measured in-process"), "{text}");
     }
 
     #[test]

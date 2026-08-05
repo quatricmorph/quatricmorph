@@ -32,8 +32,10 @@
 //! Only LOD 5 may carry exact values, and only on demand. Everything above it
 //! is summary data, labelled as such via [`q_source::AccessScale`].
 
+pub mod residency;
 pub mod stream;
 
+pub use residency::{ResidencyOutcome, ResidencyRequest, TensorRefusal};
 pub use stream::{BlockGrid, BlockStream, BlockStreamConfig, StreamOutcome, StreamedBlock};
 
 use q_source::error::{QError, Result};
