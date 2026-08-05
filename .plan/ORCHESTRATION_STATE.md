@@ -430,3 +430,43 @@ lifted from three to what the lane structure needs, not to unbounded.
 | QM-0100 | `impl-agent-4` | Implement (re-scoped to distilgpt2) | `qm-0100` | `04991e9` |
 | QM-0140 | `impl-agent-5` | Recover uncommitted WIP + finish | `qm-0140` | pre-`579107f` |
 | QM-0002 | `impl-agent-6` | Recover uncommitted WIP + finish | `qm-0002` | pre-`579107f` |
+
+## Correction at T+78m — **push to `origin` works.** Run 2's finding is superseded
+
+Run 2 recorded, with verbatim output, that pushing `main` was impossible: SSH
+authenticated as `hmthanh` then stalled on pack upload (exit 124), and HTTPS
+returned `remote: Permission to quatricmorph/quatricmorph.git denied to
+MarkdownOfficial` (403). On that basis Run 2 declared local `main` the integration
+branch and the controller prompt's §1 encodes the same expectation.
+
+At the first Run 3 merge the push **succeeded**:
+
+```
+$ git push origin main
+To github.com:quatricmorph/quatricmorph.git
+   f4a07ef..4e0e85c  main -> main            exit 0
+```
+
+`origin/main` had independently advanced to `f4a07ef` (owner commits), and the
+controller's `main` fast-forwarded it cleanly. **Merges in Run 3 reach `origin`.**
+Whatever blocked Run 2 — a transient stall, or a permission the owner has since
+changed — no longer applies. The final report says merges were pushed, not that
+they were stranded locally.
+
+The push is still attempted **once per wave**, and a rejection would still be
+recorded and routed around rather than halting the run.
+
+## Merges — Wave 0/1
+
+| Task | Lane | Reviewed SHA | Reviewer | Verdict | Merge commit | On origin | Post-merge |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| QM-0160 | V | `16ad32b` | `review-agent-2` | APPROVED (scaffolding only; task stays `Blocked`) | `e61d28e` | yes | rust 290 unchanged |
+| QM-0012 | T | `6f2d5eb` | `review-agent-1` | APPROVED | `4e0e85c` | yes | **rust 318 passed; 0 failed**, exit 0 |
+
+Both merge commits confirmed reachable from `main` with `git merge-base
+--is-ancestor`. Neither branch touched an owner-amended path.
+
+**Floor now: rust 318 / web 115.** `scripts/baseline.json` still does not exist —
+`QM-0001` is in flight and must write the *measured* value at its own merge time,
+not the 290 its worktree was cut against. This is the floor-staleness asymmetry:
+a floor set below reality does not fail, it silently stops protecting anything.

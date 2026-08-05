@@ -2,7 +2,13 @@
 
 ## Status
 
-In Progress
+Complete
+
+Merged to `main` as `4e0e85c` (squash, Path L) and pushed to `origin`. Independent
+review by `review-agent-1` at reviewed SHA `6f2d5eb`: **APPROVED**. Post-merge
+verification on the merged `main`: `cargo test --workspace` → **318 passed; 0
+failed**, exit 0 — exactly the reviewer's independently re-run count. Evidence:
+[`.plan/evidence/QM-0012.md`](../../evidence/QM-0012.md).
 
 No longer waits on `QM-0005` (deferred). Model-level metadata feeds the manifest's `model` block.
 
