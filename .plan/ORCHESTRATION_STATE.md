@@ -851,3 +851,62 @@ counts, `QM-0150` the web counts. §14 requires floor updates to **serialize**. 
 agent was told to touch only its own fields, to re-pin the `commit` field in the
 same edit (a prior reviewer confirmed **nothing in the suite catches false
 provenance** there), and to expect the controller to resolve the conflict at merge.
+
+## Controller error at T+10h20m — I double-dispatched onto a live agent, and I ignored a lock
+
+**What happened.** I dispatched `impl-agent-8` onto `QM-0150`. Another agent,
+`impl-agent-15` — belonging to a **concurrent controller session I cannot see** —
+was already live in `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0150`, six fixtures
+deep into the same task. `impl-agent-8` detected this, **wrote nothing, committed
+nothing**, and halted. Its evidence that the other agent was live rather than
+abandoned:
+
+| Sampled | `apps/web/diagnostics/src/__tests__/fixtures/` |
+| --- | --- |
+| 17:07:01 | did not exist |
+| 17:07:45 | 3 files |
+| 17:08:27 | 6 files |
+
+**Two mistakes, both mine.**
+
+1. **I treated a `locked` worktree as noise.** At reconstruction, `git worktree
+   list` showed `.qm-worktrees/qm-0121 [locked]`. **Locking is exactly how a
+   careful controller claims a worktree.** I read the lock, did not act on it,
+   `reset --hard`ed that worktree, and dispatched into it. It happened to be clean
+   with zero commits, so **no work was destroyed — that was luck, not care.**
+2. **I inferred exclusivity from a worktree listing taken minutes earlier.** At
+   reconstruction `qm-0150` did not exist. It was created afterwards by the other
+   session. §18 says reconstruct from Git — but a worktree list is a **snapshot of
+   a mutable resource**, not evidence of exclusivity, and I used it as though it
+   were.
+
+**Collateral I caused, disclosed rather than hidden.** `impl-agent-8`
+fast-forwarded the `qm-0150` branch `e82fe98 → e49ac24` on a then-clean tree,
+moving `impl-agent-15`'s base under them mid-run. Their uncommitted work survived
+intact — the merge touched only `CLAUDE.md` and `QM-0121/TASK.md`, neither of which
+they had modified. It also ran `npm install`, changing `apps/web/package-lock.json`
+by **+2/−1, purely additive** (adding `"diagnostics"` to the lock's `workspaces`
+array, mirroring what `impl-agent-15` had just written into `package.json`). It is
+**not** the backwards lockfile rewrite that nearly reverted `1cfdc9c` earlier —
+verified as additive, nothing reverted.
+
+**Decision: `impl-agent-15` keeps `QM-0150`.** They are substantially ahead and
+their approach is on-spec. I do **not** re-dispatch, and I do **not** clear their
+worktree. Duplicating a critical-path task carrying G4/G5 would guarantee a
+throwaway branch and a merge conflict in the surface the whole validation plan
+depends on.
+
+**Rule adopted for the rest of this run.** Before dispatching into any worktree:
+`git worktree list` for a `locked` marker, `git status --short` **twice, seconds
+apart**, and a check of file mtimes under the task's declared scope. A clean tree
+proves a commit happened; it does **not** prove nobody is working. This is the same
+lesson Run 2 recorded when it dispatched a reviewer into a live worktree — I
+repeated it in a new form, which is worth saying plainly.
+
+**`QM-0121` verified NOT affected.** Only `impl-agent-7` is in `qm-0121`. Its files
+(`crates/q-gpu/src/{lib,paired}.rs`, `crates/q-gpu/tests/`,
+`python/reference/paired_reduction_reference.py`) were written 17:07–17:09 and match
+the brief exactly. `python/reference/` is **not** scope creep:
+`.plan/DIAGNOSTIC_ARCHITECTURE.md` §9 *requires* "a committed Python/NumPy script
+under `python/`, run in CI-equivalent form", and `quantise_reference.py` from
+`QM-0120` already established the convention beside it.
