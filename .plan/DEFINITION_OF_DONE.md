@@ -26,25 +26,67 @@ here is **measured**, never asserted.
 
 | ID | Criterion | Now | Task | Evidence required |
 | --- | --- | --- | --- | --- |
-| `V1-01` | A real open-weight SafeTensors checkpoint of **≥ 24 GB on disk** is acquired, header-verified, and indexed | ⬜ | `QM-0100` | `du -sh` output; `q-cli inspect` listing tensor count, dtypes, and total parameters; the checkpoint's source URL and revision hash |
-| `V1-02` | Indexing that checkpoint reads **headers only** | ✅ mechanism / ⬜ at scale | `QM-0100` | `SRC-007`; bytes-read counter over the real checkpoint, expected ≪ 0.1 % of file size |
-| `V1-03` | **Peak resident bytes ≤ 1.25 × a configured ceiling `C ≤ 2 GB`** while streaming the whole checkpoint | ⬜ | `QM-0101` | `/usr/bin/time -l` maximum resident set size, alongside the checkpoint size and the ratio `N = size / C` |
-| `V1-04` | `N ≥ 100` — the checkpoint is at least 100× the resident ceiling | ⬜ | `QM-0101` | Arithmetic printed in the run-metadata block of the report |
-| `V1-05` | Peak residency is **flat in checkpoint size** — the same ceiling holds at three sizes | ⬜ | `QM-0101` | Three measured runs: the tiny fixture, `models/distilbert-distilgpt2` (339 MB), and the `V1-01` checkpoint |
+| `V1-01` | A real open-weight SafeTensors checkpoint is **present on disk**, header-verified, and indexed. **Re-scoped 2026-08-04**: the owner's directive (`579107f`) replaces the ≥ 24 GB requirement with `models/distilbert-distilgpt2` — **352,824,413 bytes**, single-file, F32, GPT-2 family | ⬜ | `QM-0100` | Measured byte size; `q-cli inspect` listing tensor count, dtypes, and total parameters; the checkpoint's source and licence as read from a file in the tree, or "not verified" |
+| `V1-02` | Indexing that checkpoint reads **headers only** | ✅ mechanism / ⬜ on the real file | `QM-0100` | `SRC-007`; bytes-read counter over the real checkpoint. Expected here: **8,277 header bytes of 352,824,413 = 0.00235 %**, well under the 0.1 % ceiling |
+| `V1-03` | **Peak resident bytes ≤ 1.25 × a configured ceiling `C`** while streaming the whole checkpoint | ⬜ | `QM-0101` | `/usr/bin/time -l` maximum resident set size on the **release binary**, alongside the checkpoint size and the ratio `N = size / C`. The `C ≤ 2 GB` figure was chosen against a 30 GB-class checkpoint; against a 337 MiB file the binding constraint is `N`, not `C` |
+| `V1-04` | `N ≥ 100` — the checkpoint is at least 100× the resident ceiling | ⬜ **at risk under the re-scope** | `QM-0101` | Arithmetic printed in the run-metadata block. Against 352,824,413 bytes, `N ≥ 100` requires **`C ≤ ~3.4 MB`**. Report the measured `N`; if the streaming path cannot hold 3.4 MB, **record the real N and say the ≥ 100 claim is not met** rather than restating it |
+| `V1-05` | Peak residency is **flat in checkpoint size** — the same ceiling holds across sizes | ⬜ | `QM-0101` | Measured runs at the sizes actually available: the tiny fixture (1.2 MB) and `models/distilbert-distilgpt2` (352,824,413 B). **The third, ≥ 24 GB size no longer exists on this machine**, so flatness is demonstrated across ~300× rather than across three orders of magnitude. State the span measured |
 | `V1-06` | Streaming is cancellable and resumable at a block boundary; a resumed run produces byte-identical output | 🟡 | `QM-0033` | Ingestion side ✅ (`SRC-009`, `SRC-010`); the conversion side needs the job runner. Kill mid-run, resume, `diff` the manifests |
 | `V1-07` | Completed block work is reused from cache on a second run | 🟡 | `QM-0032` | L1/L2 ✅ (`CACHE-001`…`CACHE-004`); wiring is `CACHE-008`. Second run reports cache hits and a materially shorter wall clock |
 
 ### Waiver — checkpoint size
 
-**The development machine has 21 GB of free disk.** v1's headline checkpoint is
-therefore capped at roughly 30–40 GB. The strategy document's 1.5 TB frontier-MoE
-example is **not provable on this hardware**, and v1 makes no claim about it.
+**Superseded 2026-08-04 by the repository owner's directive in commit `579107f`.**
 
-* What v1 claims: bounded residency, measured, on a checkpoint ≥ 24 GB — the
-  reference ceiling for a 24 GB-class GPU.
-* What v1 does not claim: that a 1.5 TB checkpoint has been streamed.
-* What closes the gap: external NVMe, or the NVIDIA Inception credits
-  ([`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §2). Neither is a v1 blocker.
+The previous waiver read: *"The development machine has 21 GB of free disk. v1's
+headline checkpoint is therefore capped at roughly 30–40 GB."* That sentence was
+already self-contradictory — 30–40 GB does not fit in 21 GB — because commit
+`f4a07ef` substituted `51 GB` → `21 GB` mechanically and left the derived figure
+behind. It is superseded rather than patched, because the owner has since removed
+the large-checkpoint requirement altogether:
+
+> "Focus on small and simple version first, please using model already download
+> inside `./models/distilbert-distilgpt2`, and ignore any larger MoE checkpoints"
+
+> "Only using model inside `distilbert-distilgpt2` instead of using large MoE
+> checkpoints is a **temporary** concession to the machine's disk. Only focus on
+> first MVP version to development."
+
+The 28.63 GB Qwen1.5-MoE-A2.7B checkpoint a previous run had downloaded was
+deleted from disk. (Free disk subsequently measured **54 GB** once APFS reclaimed
+the purgeable space, so disk is no longer the binding constraint — **but the
+owner's directive stands on its own and is not contingent on disk.** Do not
+"restore" the large-checkpoint requirement on the grounds that it would now fit.)
+
+**What v1 claims, under this waiver:**
+
+* Bounded residency, **measured**, on `models/distilbert-distilgpt2` —
+  352,824,413 bytes, single-file, F32, GPT-2 family, 82 tensors.
+* Header-only indexing at a **measured** 0.00235 % bytes-read ratio.
+* Whatever ratio `N = 352_824_413 / C` is actually measured, reported as measured.
+
+**What v1 explicitly does NOT claim, and which no document may imply it does:**
+
+* That a checkpoint **≥ 24 GB** has been streamed, indexed, or measured. It has not.
+* That a **1.5 TB** frontier-MoE checkpoint has been streamed. It has not.
+* That the **sharded** read path has been exercised on real data. distilgpt2 is a
+  single file with no `model.safetensors.index.json`. Multi-shard attribution is
+  covered only by `fixtures/tiny-llama-2shard`.
+* That **bf16 exact decode** (`SRC-016`) has been exercised on real data. This
+  checkpoint is F32 throughout.
+* That **MoE expert-keyed aggregation** has a real-checkpoint fixture. distilgpt2
+  has no experts, so `QM-0123` is provable only against generated fixtures.
+* That `N ≥ 100` holds, unless `QM-0101` actually measures it (which requires
+  `C ≤ ~3.4 MB` against this file).
+
+**What this concession gains:** distilgpt2 contains **six rank-4 tensors**
+(`transformer.h.N.attn.bias`, `[1,1,1024,1024]`), so `ADR-010`'s rank > 3 refusal
+— `bindAxes()` returning `NotImplemented` with `GRID-007` — becomes testable
+against real data for the first time, rather than only against a synthetic fixture.
+
+* What closes the gap: the owner lifting the temporary concession, external NVMe,
+  or the NVIDIA Inception credits
+  ([`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) §2). None is a v1 blocker.
 * What may **never** substitute for it: `CAT-006`, the synthetic 10¹² manifest.
   It proves metadata scale and is silent about streaming real bytes. Any document
   that lets it stand in for `V1-03` is wrong.

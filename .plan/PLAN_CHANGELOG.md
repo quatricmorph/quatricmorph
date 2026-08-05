@@ -301,3 +301,89 @@ creation, and completed worktrees are `cargo clean`ed and removed at merge rathe
 than at end of run. The distilgpt2 concession removes the checkpoint from the budget
 entirely but does **not** create slack for unbounded concurrency.
 **Evidence:** `df -h .` → `21Gi Avail, 96% Capacity`; `du -sh ../.qm-worktrees` → 14G.
+
+## 2026-08-04 — CONTROLLER — the checkpoint-size waiver was self-contradictory and is superseded
+
+**Discovered during:** `QM-0160` independent review; the reviewer declined to
+"fix" it because every available patch left the sentence still wrong.
+**Defect:** `.plan/DEFINITION_OF_DONE.md` §"Waiver — checkpoint size" read *"The
+development machine has 21 GB of free disk. v1's headline checkpoint is therefore
+capped at roughly 30–40 GB."* **30–40 GB does not fit in 21 GB.** The owner's
+commit `f4a07ef` substituted `51 GB` → `21 GB` mechanically across seven files and
+left the derived figure behind. The reviewer's judgement was correct: a remedy that
+leaves the sentence incoherent is inherited staleness, not a fix.
+**Correction:** The waiver is **superseded**, not patched, because commit
+`579107f` removed the large-checkpoint requirement entirely. The rewritten waiver
+states what v1 claims (bounded residency on the 352,824,413-byte distilgpt2, a
+measured 0.00235 % bytes-read ratio) and enumerates what it explicitly does **not**
+claim: ≥ 24 GB streamed, 1.5 TB streamed, the sharded path exercised on real data,
+bf16 exact decode exercised, MoE expert aggregation fixtured, or `N ≥ 100` unless
+`QM-0101` measures it. Criteria rows `V1-01`…`V1-05` are updated to match.
+**Also recorded:** free disk has since measured **54 GB** (APFS reclaimed the
+deleted checkpoint's purgeable space), so disk is no longer the binding constraint
+— **but the owner's directive is not contingent on disk** and must not be reverted
+on the grounds that a large checkpoint would now fit.
+**Files changed:** `.plan/DEFINITION_OF_DONE.md`
+**Dependency impact:** `QM-0100` and `QM-0101` acceptance evidence changes shape;
+`V1-04`'s `N ≥ 100` is marked **at risk** rather than assumed.
+**Evidence:** `git show f4a07ef --stat` (7 files, mechanical 51→21 substitution);
+`.plan/DEFINITION_OF_DONE.md:39` before the edit; `stat -f%z
+models/distilbert-distilgpt2/model.safetensors` → `352824413`; `df -h .` → 54Gi.
+
+## 2026-08-04 — QM-0160 — the task has no `## Files Expected to Change` section
+
+**Discovered during:** `QM-0160` independent review.
+**Defect:** `.plan/tasks/QM-0160-design-partner-outreach/TASK.md` omits the
+`## Files Expected to Change` section that every other task carries and that the
+reviewer's scope check depends on. The reviewer verified the 14 committed paths
+against `## Program Boundary` instead and found them all conformant, so the merge
+was sound — but the scope gate had to be improvised.
+**Correction:** Recorded. The section should be added by `QM-0002`, which owns
+plan-corpus reconciliation. Not fixed inline, because `QM-0160` was mid-merge and
+`QM-0002` is being edited concurrently in another worktree.
+**Files changed:** none yet — routed to `QM-0002`.
+**Dependency impact:** none.
+**Evidence:** the reviewer's scope ruling in `.plan/evidence/QM-0160.md`.
+
+## 2026-08-04 — QM-0012 — two defects in the task file, found by the reviewer, not by the implementer
+
+**Discovered during:** `QM-0012` independent review.
+**Defect 1:** `## Data Contracts` states `"parameter_count": 299184`. The correct
+value is **302256**. `299184` is `total_bytes / 4` — an F32-uniform assumption that
+the fixture's two BF16 tensors break. The reviewer re-derived 302256 independently
+by parsing the raw SafeTensors headers with plain `json`+`struct`, using no
+repository code. The normative `## Acceptance Criteria` item 2 and `## Scope` both
+give 302256, so the plan file states a number its own test suite disproves.
+**Defect 2:** `## Repository Evidence` describes `config.json` as being read by
+`q-architecture`. At the branch's base commit it was read by
+`crates/q-source/src/local.rs`. The claim became true only *after* this branch.
+**Correction:** Both recorded here and routed to `QM-0002`. Not fixed inline —
+`QM-0012` was already reviewed and merging, and amending the reviewed diff would
+have invalidated the review for a non-blocking documentation defect.
+**Files changed:** none yet — routed to `QM-0002`.
+**Dependency impact:** none. `QM-0012` merged as `4e0e85c` and is `Complete`.
+**Evidence:** `.plan/evidence/QM-0012.md` §Independent review, "Controller actions
+needed" items 1 and 2.
+
+## 2026-08-04 — CONTROLLER — push to `origin` succeeds; Run 2's credential finding is superseded
+
+**Discovered during:** the first Run 3 merge.
+**Defect:** Run 2 recorded, with verbatim output, that `git push origin main` was
+impossible (SSH stalled at exit 124; HTTPS returned `403 Permission ... denied to
+MarkdownOfficial`) and declared local `main` the integration branch. The controller
+prompt §1 encodes the same expectation.
+**Correction:** The push now succeeds. Merges reach `origin`.
+```
+$ git push origin main
+To github.com:quatricmorph/quatricmorph.git
+   f4a07ef..4e0e85c  main -> main            exit 0
+```
+**Consequence adopted:** because the owner is committing to this repository
+**during the run** (`579107f` at 06:49:34, `f4a07ef` at 06:51:38), the merge
+sequence now begins with `git pull --ff-only origin main` on **every** merge, not
+once per wave. A merge that clobbers an owner commit is worse than a slow run.
+`f4a07ef` was verified to be a proper ancestor of `main` (`git merge-base
+--is-ancestor f4a07ef main` → exit 0); no owner commit was lost.
+**Files changed:** `.plan/ORCHESTRATION_STATE.md`
+**Dependency impact:** none.
+**Evidence:** the push transcript above; `git log 579107f..f4a07ef --stat`.
