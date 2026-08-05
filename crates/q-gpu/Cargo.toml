@@ -16,3 +16,8 @@ serde = { workspace = true }
 
 [dev-dependencies]
 q-safetensors = { workspace = true }
+# tests/goldens/paired-reduction-goldens.json — the Python/NumPy reference
+# output for QM-0121. The golden is embedded with `include_str!`, so this is a
+# test input rather than an I/O policy, and it is absent from the built library.
+# The same idiom `q-quant` uses for tests/goldens/quant-goldens.json.
+serde_json = { workspace = true }

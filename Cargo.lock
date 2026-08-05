@@ -762,6 +762,7 @@ dependencies = [
  "q-statistics",
  "q-tensor-runtime",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
