@@ -959,3 +959,73 @@ on `QM-0150` that file is the surface gate **G4** depends on.
   `677 passed; 0 failed; 51 binaries` on `e49ac24` — exactly the recorded floor,
   confirming it is accurate on `main` — and the conformance suite adds a 52nd test
   binary.
+
+## Controller failure — two implementation agents on one worktree, and a branch reset from outside
+
+**What happened.** `QM-0121` was worked concurrently by **two** implementation agents
+in the same worktree and on the same branch. Separately, `QM-0011`'s agent found its
+branch had been moved by a `reset: moving to main` it did not run. Both are
+violations of controller §8 — *"Never let two agents share a writable worktree"* —
+and both originate here, not with the agents.
+
+**Probable cause.** A `QM-0121` agent dispatched before this session's context was
+summarised was still alive and pointed at `../.qm-worktrees/qm-0121`. The controller
+then removed and recreated worktrees at those same paths and dispatched fresh agents
+into them, so the surviving agent's writes landed in a worktree the controller
+believed it had just created. **The controller has no reliable inventory of agents
+dispatched before a context summarisation** — that is the root defect, and it is the
+second time in this run that a stale assumption about agent liveness caused a §8
+violation. The first was recorded at `85c7070`.
+
+**Damage assessment — measured, not assumed.**
+
+* `QM-0121`'s branch carries five coherent commits. The two halves divided cleanly
+  **by luck, not design**: the implementation agent's `## Not performed` recorded
+  that no NumPy reference or golden file was produced and that one *"remains
+  available to `QM-0122`, which needs one for G2"* — which is exactly what the second
+  agent then built. Neither overwrote, reverted, or claimed the other's work; the
+  second agent backed its work to scratchpad before touching anything, and both
+  documented the collision independently rather than concealing it.
+* Because the canonical evidence filename was already taken, the second half is
+  recorded at `.plan/evidence/QM-0121-differential-verification.md`.
+* `QM-0011` verified rather than assumed that the reset was harmless:
+  `git diff e82fe98 main --name-only -- crates/ architectures/ fixtures/ scripts/ apps/`
+  is empty, and `baseline.json` reads 677/51/115/13 at `e82fe98`, `e49ac24` and
+  `main` alike.
+
+**The residual risk being reviewed.** A collision's real danger is not overwritten
+work — it is a **coverage gap where each half assumed the other covered something
+neither did**. `review-agent-14` is explicitly tasked with reading both evidence
+files together and deciding whether their union satisfies the acceptance criteria.
+Approval is not assumed from the fact that the commits merge cleanly.
+
+**Correction adopted.** Before creating a worktree at a path that has existed before,
+the controller checks for live writes (`git -C <wt> status` plus file mtimes) rather
+than trusting that a prior agent has exited, and never reuses a worktree path within
+a run once its task has been dispatched.
+
+## Environment failure found by the floor guard, and repaired
+
+Both `QM-0121` and `QM-0011` reported `./scripts/verify-baseline.sh` exiting 1 on the
+web leg. The controller reproduced it **on `main` itself**:
+
+```
+cd apps/web && npx vitest run   →   Test Files 1 failed | 12 passed (13)
+                                    Tests 111 passed (111)      exit 1
+```
+
+Cause: the npm package `three@^0.185.1`, declared at
+`apps/web/quatricmorph-workspace/package.json:15`, was **not installed anywhere in
+the checkout**. `node_modules` is gitignored, so this is an environment defect, not a
+repository regression — and it was **not** present when the web gate was last
+measured green at 115/13 earlier in this run.
+
+**Repaired** by `npm install` in `apps/web` (exit 0, **no lockfile churn** —
+`git status --short apps/web/` empty). `main` now measures **13 files / 115 tests**,
+`verify-baseline.sh` exit 0.
+
+**The floor did its job, and both agents did theirs.** Each measured 111 against a
+floor of 115 and **refused to lower the floor**, one writing: *"lowering a floor to
+accommodate a broken environment is what the floor exists to prevent."* That is
+exactly right. Had either lowered it, four real tests would have been permanently
+licensed to vanish, and the guard would have gone on reporting success.
