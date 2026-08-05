@@ -2,7 +2,9 @@
 
 ## Status
 
-In Progress
+Complete
+
+Merged to `main` as `f962028` (squash, Path L) and pushed to `origin`. Independent review by `review-agent-4` at reviewed SHA `04ffffc`: **APPROVED**, including a two-way mutation test proving the golden round-trip is **not circular**. Post-merge on merged `main`: `cargo test --workspace` → **415 passed; 0 failed** (318 + 97).
 
 Depends only on the *shape* of the engine's output, not its data. Scheduled in
 Wave 1 deliberately: it is the contract between the engine, the CLI, the daemon,

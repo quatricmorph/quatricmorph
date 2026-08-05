@@ -2,7 +2,9 @@
 
 ## Status
 
-In Progress
+Complete
+
+Merged to `main` as `f132393` (squash, Path L) and pushed to `origin`. Independent review by `review-agent-5` at reviewed SHA `22260e7`: `CHANGES_REQUESTED` for three recording gaps, **all three resolved** (`b4b36b4` by the implementer, `c772110` by the controller) and re-verified before merge. Byte-identity of `ARCHITECTURE.md` §1–§16, §19, §20 confirmed by independent SHA-256.
 
 Implemented on `task/qm-0167-root-document-amendment` and awaiting independent
 review. The two definitions of "the first MVP" are reconciled and
