@@ -1,0 +1,611 @@
+{
+  "_comment": "QM-0011 cross-family resolver conformance corpus. One table asserting that every architecture plugin resolves what it claims and returns `unknown` for everything else (NSIR-001, NSIR-006, NSIR-008, MVP-08). Exercised by crates/q-nsir/tests/resolver_conformance.rs. This file is NOT a plugin manifest: Registry::load_dir looks for `<dir>/plugin.toml` under each subdirectory, so a plain file here is skipped, which `loading_from_the_repo_directory_matches_the_builtins` still proves.",
+
+  "_schema": "Top-level keys are plugin ids, except keys beginning with `_`, which are metadata and are never treated as a family. A family maps to an array of rows. A POSITIVE row carries `raw`, a non-null `canonical`, `role`, `component`, `operation`, `parameter`, `axes`, `layer`, `expert`. A NEGATIVE row carries `raw`, `canonical: null`, `why`, and — for an implemented family — `control`, the raw name of a POSITIVE row in the same family that must still resolve. The control is what stops a negative row from passing vacuously: against an empty rule table the negative would still say `unknown`, but its control would stop resolving and the assertion fails.",
+
+  "_provenance": "No expected value here was produced by running the resolver. Every `canonical` was written by hand from the address rule below, whose shape is fixed by the ARCHITECTURE.md section 6.1 example `model.layers[10].self_attention.query_projection.weight` and whose component and operation vocabulary is fixed by ARCHITECTURE.md section 4.2 (`component: attention`, `operation: query_projection`, `axes: [output_channel, input_channel]` for exactly that name) together with the declared `architectures/*/plugin.toml` rule tables, which are the resolver's INPUT rather than its output. Every Qwen row that also appears in fixtures/tiny-qwen-single/golden.json — the checked-in golden generated for QM-0010 — is cross-checked against it by `the_corpus_agrees_with_the_checked_in_qwen_fixture_golden_on_every_shared_raw_name`, so a transcription slip in either file fails the suite. Nothing here reaches the network.",
+
+  "_canonical_address_rule": "model[.layers[N]].<component>[.experts[E]].<operation>[.<parameter>]  (ARCHITECTURE.md section 6.1)",
+
+  "_component_segments": "attention -> self_attention (ARCHITECTURE.md section 6.1 verbatim); mlp -> mlp; moe -> moe; normalization -> normalization; router -> router; embedding -> embedding; output_head -> output_head.",
+
+  "_fidelity": "exact",
+
+  "_what_this_corpus_is_not": "It maps NAMES to declared labels. It establishes nothing about what any tensor means, has learned, or computes. `query_projection` is the checkpoint author's word propagated through a declared rule table, not a finding about the weights (ARCHITECTURE.md section 19). No row was produced from, or is validated against, a real checkpoint: no Qwen, Llama, Kimi or DeepSeek checkpoint is committed to this repository and none is downloaded.",
+
+  "generic": [
+    { "raw": "model.embed_tokens.weight",
+      "canonical": "model.embedding.token_embedding.weight",
+      "role": "token_embedding", "component": "embedding",
+      "operation": "token_embedding", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.norm.weight",
+      "canonical": "model.normalization.final_normalization.weight",
+      "role": "final_norm", "component": "normalization",
+      "operation": "final_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "lm_head.weight",
+      "canonical": "model.output_head.output_projection.weight",
+      "role": "lm_head", "component": "output_head",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.layers.4.self_attn.q_proj.weight",
+      "canonical": "model.layers[4].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.self_attn.k_proj.weight",
+      "canonical": "model.layers[4].self_attention.key_projection.weight",
+      "role": "attention_key_projection", "component": "attention",
+      "operation": "key_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.self_attn.v_proj.weight",
+      "canonical": "model.layers[4].self_attention.value_projection.weight",
+      "role": "attention_value_projection", "component": "attention",
+      "operation": "value_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.self_attn.o_proj.weight",
+      "canonical": "model.layers[4].self_attention.output_projection.weight",
+      "role": "attention_output_projection", "component": "attention",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.mlp.gate_proj.weight",
+      "canonical": "model.layers[4].mlp.gate_projection.weight",
+      "role": "mlp_gate_projection", "component": "mlp",
+      "operation": "gate_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.mlp.up_proj.weight",
+      "canonical": "model.layers[4].mlp.up_projection.weight",
+      "role": "mlp_up_projection", "component": "mlp",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.mlp.down_proj.weight",
+      "canonical": "model.layers[4].mlp.down_projection.weight",
+      "role": "mlp_down_projection", "component": "mlp",
+      "operation": "down_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.input_layernorm.weight",
+      "canonical": "model.layers[4].normalization.input_normalization.weight",
+      "role": "input_layernorm", "component": "normalization",
+      "operation": "input_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 4, "expert": null },
+
+    { "raw": "model.layers.4.post_attention_layernorm.weight",
+      "canonical": "model.layers[4].normalization.post_attention_normalization.weight",
+      "role": "post_attention_layernorm", "component": "normalization",
+      "operation": "post_attention_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 4, "expert": null },
+
+    { "raw": "some.unknown.tensor", "canonical": null,
+      "control": "model.embed_tokens.weight",
+      "why": "TASK.md section Data Contracts' own generic row: a name with no structure this table recognises." },
+
+    { "raw": "model.layers.4.self_attn.q_proj_v2.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Near-miss: a suffixed projection spelling the table does not declare. Nine characters from a rule that does match." },
+
+    { "raw": "model.layers.abc.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Bad layer syntax. The layer must stay absent rather than default to 0, and a suffix rule must not fire without one." },
+
+    { "raw": "model.layers.4.mlp.experts.0.down_proj.weight", "canonical": null,
+      "control": "model.layers.4.mlp.down_proj.weight",
+      "why": "The generic plugin declares no MoE rules and no expert segment. An expert tensor is unknown to it, not a dense down-projection." },
+
+    { "raw": "model.layers.4.mlp.gate.weight", "canonical": null,
+      "control": "model.layers.4.mlp.gate_proj.weight",
+      "why": "The MoE router. Five characters from `mlp.gate_proj.weight`, a different object, and the generic table is taught neither the router nor how to tell them apart." },
+
+    { "raw": "model.layers.4.self_attn.q_norm.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "A per-head query norm. Declared by the llama and qwen tables, deliberately not by the generic one." },
+
+    { "raw": "model.layers.4.self_attn.q_proj.bias", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "The generic table declares no bias rules. A bias is resolved by its declared name, never by its rank." },
+
+    { "raw": "visual.blocks.3.attn.qkv.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "A vision-tower name from a multimodal checkpoint: structurally a tensor, semantically unrecognised by a language-stack table." },
+
+    { "raw": "model.layers.4.self_attn.q_proj.weight.extra", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Extra trailing segment. A suffix rule matches the whole post-layer suffix, not a prefix of it." },
+
+    { "raw": "model.layers.4.extra.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Extra interposed segment. As above, from the other side." },
+
+    { "raw": "model.embed_tokens.bias", "canonical": null,
+      "control": "model.embed_tokens.weight",
+      "why": "Near-miss on an exact rule: the parameter differs, so the whole name differs." },
+
+    { "raw": "model.layers.4.self_attn.Q_proj.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Case near-miss. Matching is byte-exact; nothing is case-folded, because a checkpoint author's capitalisation is data, not noise." },
+
+    { "raw": "model.layer.4.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.4.self_attn.q_proj.weight",
+      "why": "Singular `layer` where the manifest declares `layers`. Without the declared layer segment there is no layer index and no suffix rule fires." },
+
+    { "raw": "model.layers.4.mlp.down_proj", "canonical": null,
+      "control": "model.layers.4.mlp.down_proj.weight",
+      "why": "Missing the trailing parameter segment." },
+
+    { "raw": "embed_tokens.weight", "canonical": null,
+      "control": "model.embed_tokens.weight",
+      "why": "An exact rule is matched against the whole name; dropping the `model.` prefix is a different name." }
+  ],
+
+  "llama": [
+    { "raw": "model.embed_tokens.weight",
+      "canonical": "model.embedding.token_embedding.weight",
+      "role": "token_embedding", "component": "embedding",
+      "operation": "token_embedding", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.norm.weight",
+      "canonical": "model.normalization.final_normalization.weight",
+      "role": "final_norm", "component": "normalization",
+      "operation": "final_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "lm_head.weight",
+      "canonical": "model.output_head.output_projection.weight",
+      "role": "lm_head", "component": "output_head",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_proj.weight",
+      "canonical": "model.layers[10].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_proj.bias",
+      "canonical": "model.layers[10].self_attention.query_projection.bias",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_proj.weight",
+      "canonical": "model.layers[10].self_attention.key_projection.weight",
+      "role": "attention_key_projection", "component": "attention",
+      "operation": "key_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_proj.bias",
+      "canonical": "model.layers[10].self_attention.key_projection.bias",
+      "role": "attention_key_projection", "component": "attention",
+      "operation": "key_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.v_proj.weight",
+      "canonical": "model.layers[10].self_attention.value_projection.weight",
+      "role": "attention_value_projection", "component": "attention",
+      "operation": "value_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.v_proj.bias",
+      "canonical": "model.layers[10].self_attention.value_projection.bias",
+      "role": "attention_value_projection", "component": "attention",
+      "operation": "value_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.o_proj.weight",
+      "canonical": "model.layers[10].self_attention.output_projection.weight",
+      "role": "attention_output_projection", "component": "attention",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_norm.weight",
+      "canonical": "model.layers[10].self_attention.query_normalization.weight",
+      "role": "attention_query_norm", "component": "attention",
+      "operation": "query_normalization", "parameter": "weight",
+      "axes": ["head_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_norm.weight",
+      "canonical": "model.layers[10].self_attention.key_normalization.weight",
+      "role": "attention_key_norm", "component": "attention",
+      "operation": "key_normalization", "parameter": "weight",
+      "axes": ["head_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.gate_proj.weight",
+      "canonical": "model.layers[10].mlp.gate_projection.weight",
+      "role": "mlp_gate_projection", "component": "mlp",
+      "operation": "gate_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.up_proj.weight",
+      "canonical": "model.layers[10].mlp.up_projection.weight",
+      "role": "mlp_up_projection", "component": "mlp",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.down_proj.weight",
+      "canonical": "model.layers[10].mlp.down_projection.weight",
+      "role": "mlp_down_projection", "component": "mlp",
+      "operation": "down_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.5.mlp.gate.weight",
+      "canonical": "model.layers[5].router.expert_routing.weight",
+      "role": "moe_router", "component": "router",
+      "operation": "expert_routing", "parameter": "weight",
+      "axes": ["expert", "hidden_channel"], "layer": 5, "expert": null },
+
+    { "raw": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].gate_projection.weight",
+      "role": "moe_expert_gate_projection", "component": "moe",
+      "operation": "gate_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].up_projection.weight",
+      "role": "moe_expert_up_projection", "component": "moe",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.mlp.experts.37.down_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].down_projection.weight",
+      "role": "moe_expert_down_projection", "component": "moe",
+      "operation": "down_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.input_layernorm.weight",
+      "canonical": "model.layers[10].normalization.input_normalization.weight",
+      "role": "input_layernorm", "component": "normalization",
+      "operation": "input_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.post_attention_layernorm.weight",
+      "canonical": "model.layers[10].normalization.post_attention_normalization.weight",
+      "role": "post_attention_layernorm", "component": "normalization",
+      "operation": "post_attention_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.0.self_attn.q_proj.weight",
+      "canonical": "model.layers[0].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 0, "expert": null },
+
+    { "raw": "model.layers.4294967295.self_attn.q_proj.weight",
+      "canonical": "model.layers[4294967295].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4294967295, "expert": null },
+
+    { "raw": "model.layers.3.mlp.experts.0.up_proj.weight",
+      "canonical": "model.layers[3].moe.experts[0].up_projection.weight",
+      "role": "moe_expert_up_projection", "component": "moe",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 3, "expert": 0 },
+
+    { "raw": "model.layers.10.self_attn.q_proj_v2.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "TASK.md section Test Cases row 2, verbatim. A near-miss on a declared suffix." },
+
+    { "raw": "model.layers.abc.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "TASK.md section Test Cases row 3, verbatim. Bad layer syntax: the layer stays absent rather than defaulting to 0." },
+
+    { "raw": "model.layers.4294967296.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.4294967295.self_attn.q_proj.weight",
+      "why": "A layer index one past u32::MAX. Out of range is absent, never truncated or wrapped — and the in-range neighbour is this row's control, so the refusal is about the index and not about the rest of the name." },
+
+    { "raw": "model.layers.-1.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A negative layer index. There is no layer -1; absent, not clamped to 0." },
+
+    { "raw": "model.layers..self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "An empty layer index." },
+
+    { "raw": "model.layers.10.self_attn.o_proj.bias", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.bias",
+      "why": "The table declares q/k/v projection biases and no output-projection bias. The control is a bias that IS declared, so this refusal is about the rule table and not about biases in general." },
+
+    { "raw": "model.layers.10.mlp.gate_proj.bias", "canonical": null,
+      "control": "model.layers.10.mlp.gate_proj.weight",
+      "why": "No MLP bias rule is declared." },
+
+    { "raw": "model.layers.0.mlp.shared_expert.up_proj.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "why": "An always-on shared expert. A shared expert is not a routed expert and must not be addressed as one; the control is the routed expert it must NOT be confused with." },
+
+    { "raw": "model.layers.0.mlp.shared_expert_gate.weight", "canonical": null,
+      "control": "model.layers.5.mlp.gate.weight",
+      "why": "A shared-expert gate. Not the MoE router, which is this row's control." },
+
+    { "raw": "visual.blocks.3.attn.qkv.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A vision-tower name. A language-stack table has no business claiming it." },
+
+    { "raw": "model.layers.10.self_attn.qkv_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A fused QKV projection. Not declared, so unknown — never split into three guesses." },
+
+    { "raw": "model.layers.10.mlp.experts.37.gate_proj.bias", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "why": "No expert bias rule is declared." },
+
+    { "raw": "model.layers.10.mlp.experts.abc.up_proj.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "why": "A non-numeric expert index. The expert stays absent, so no expert-suffix rule fires." },
+
+    { "raw": "model.layers.10.mlp.experts.37.w1.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "why": "An alternative expert-projection spelling this table does not declare." },
+
+    { "raw": "model.layers.10.self_attn.rotary_emb.inv_freq", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A rotary buffer. Not a parameter this table declares, and not invented." },
+
+    { "raw": "model.LAYERS.10.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "Case near-miss on the declared layer segment." },
+
+    { "raw": "lm_head.bias", "canonical": null,
+      "control": "lm_head.weight",
+      "why": "Near-miss on an exact rule." },
+
+    { "raw": "model.norm.bias", "canonical": null,
+      "control": "model.norm.weight",
+      "why": "Near-miss on an exact rule." }
+  ],
+
+  "qwen": [
+    { "raw": "model.embed_tokens.weight",
+      "canonical": "model.embedding.token_embedding.weight",
+      "role": "token_embedding", "component": "embedding",
+      "operation": "token_embedding", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.norm.weight",
+      "canonical": "model.normalization.final_normalization.weight",
+      "role": "final_norm", "component": "normalization",
+      "operation": "final_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "lm_head.weight",
+      "canonical": "model.output_head.output_projection.weight",
+      "role": "lm_head", "component": "output_head",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["vocabulary", "hidden_channel"], "layer": null, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_proj.weight",
+      "canonical": "model.layers[10].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_proj.bias",
+      "canonical": "model.layers[10].self_attention.query_projection.bias",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_proj.weight",
+      "canonical": "model.layers[10].self_attention.key_projection.weight",
+      "role": "attention_key_projection", "component": "attention",
+      "operation": "key_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_proj.bias",
+      "canonical": "model.layers[10].self_attention.key_projection.bias",
+      "role": "attention_key_projection", "component": "attention",
+      "operation": "key_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.v_proj.weight",
+      "canonical": "model.layers[10].self_attention.value_projection.weight",
+      "role": "attention_value_projection", "component": "attention",
+      "operation": "value_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.v_proj.bias",
+      "canonical": "model.layers[10].self_attention.value_projection.bias",
+      "role": "attention_value_projection", "component": "attention",
+      "operation": "value_projection", "parameter": "bias",
+      "axes": ["output_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.o_proj.weight",
+      "canonical": "model.layers[10].self_attention.output_projection.weight",
+      "role": "attention_output_projection", "component": "attention",
+      "operation": "output_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.q_norm.weight",
+      "canonical": "model.layers[10].self_attention.query_normalization.weight",
+      "role": "attention_query_norm", "component": "attention",
+      "operation": "query_normalization", "parameter": "weight",
+      "axes": ["head_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.self_attn.k_norm.weight",
+      "canonical": "model.layers[10].self_attention.key_normalization.weight",
+      "role": "attention_key_norm", "component": "attention",
+      "operation": "key_normalization", "parameter": "weight",
+      "axes": ["head_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.gate_proj.weight",
+      "canonical": "model.layers[10].mlp.gate_projection.weight",
+      "role": "mlp_gate_projection", "component": "mlp",
+      "operation": "gate_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.up_proj.weight",
+      "canonical": "model.layers[10].mlp.up_projection.weight",
+      "role": "mlp_up_projection", "component": "mlp",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.mlp.down_proj.weight",
+      "canonical": "model.layers[10].mlp.down_projection.weight",
+      "role": "mlp_down_projection", "component": "mlp",
+      "operation": "down_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.5.mlp.gate.weight",
+      "canonical": "model.layers[5].router.expert_routing.weight",
+      "role": "moe_router", "component": "router",
+      "operation": "expert_routing", "parameter": "weight",
+      "axes": ["expert", "hidden_channel"], "layer": 5, "expert": null },
+
+    { "raw": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].gate_projection.weight",
+      "role": "moe_expert_gate_projection", "component": "moe",
+      "operation": "gate_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].up_projection.weight",
+      "role": "moe_expert_up_projection", "component": "moe",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.mlp.experts.37.down_proj.weight",
+      "canonical": "model.layers[10].moe.experts[37].down_projection.weight",
+      "role": "moe_expert_down_projection", "component": "moe",
+      "operation": "down_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 10, "expert": 37 },
+
+    { "raw": "model.layers.10.input_layernorm.weight",
+      "canonical": "model.layers[10].normalization.input_normalization.weight",
+      "role": "input_layernorm", "component": "normalization",
+      "operation": "input_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.10.post_attention_layernorm.weight",
+      "canonical": "model.layers[10].normalization.post_attention_normalization.weight",
+      "role": "post_attention_layernorm", "component": "normalization",
+      "operation": "post_attention_normalization", "parameter": "weight",
+      "axes": ["hidden_channel"], "layer": 10, "expert": null },
+
+    { "raw": "model.layers.0.self_attn.q_proj.weight",
+      "canonical": "model.layers[0].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 0, "expert": null },
+
+    { "raw": "model.layers.4294967295.self_attn.q_proj.weight",
+      "canonical": "model.layers[4294967295].self_attention.query_projection.weight",
+      "role": "attention_query_projection", "component": "attention",
+      "operation": "query_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 4294967295, "expert": null },
+
+    { "raw": "model.layers.3.mlp.experts.0.up_proj.weight",
+      "canonical": "model.layers[3].moe.experts[0].up_projection.weight",
+      "role": "moe_expert_up_projection", "component": "moe",
+      "operation": "up_projection", "parameter": "weight",
+      "axes": ["output_channel", "input_channel"], "layer": 3, "expert": 0 },
+
+    { "raw": "model.layers.10.self_attn.q_proj_v2.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "TASK.md section Test Cases row 2, verbatim." },
+
+    { "raw": "model.layers.abc.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "TASK.md section Test Cases row 3, verbatim. Bad layer syntax." },
+
+    { "raw": "model.layers.4294967296.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.4294967295.self_attn.q_proj.weight",
+      "why": "One past u32::MAX. Out of range is absent, never wrapped; the in-range neighbour is the control." },
+
+    { "raw": "model.layers.-1.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A negative layer index." },
+
+    { "raw": "model.layers..self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "An empty layer index." },
+
+    { "raw": "model.layers.10.self_attn.o_proj.bias", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.bias",
+      "why": "The table declares q/k/v biases and no output-projection bias; the control is a bias that IS declared." },
+
+    { "raw": "model.layers.10.mlp.gate_proj.bias", "canonical": null,
+      "control": "model.layers.10.mlp.gate_proj.weight",
+      "why": "No MLP bias rule is declared." },
+
+    { "raw": "model.layers.0.mlp.shared_expert.up_proj.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "why": "An always-on shared expert, deliberately not taught (QM-0010 section Scope). A shared expert is not a routed expert; the control is the routed expert it must not be confused with." },
+
+    { "raw": "model.layers.0.mlp.shared_expert_gate.weight", "canonical": null,
+      "control": "model.layers.5.mlp.gate.weight",
+      "why": "A shared-expert gate. Not the MoE router, which is this row's control." },
+
+    { "raw": "visual.blocks.3.attn.qkv.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A vision-tower name. Vision and audio towers are out of scope; the language plugin has no business claiming them." },
+
+    { "raw": "model.layers.10.self_attn.qkv_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A fused QKV projection. Not declared, so unknown — never split into three guesses." },
+
+    { "raw": "model.layers.10.mlp.experts.37.gate_proj.bias", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "why": "No expert bias rule is declared." },
+
+    { "raw": "model.layers.10.mlp.experts.abc.up_proj.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.up_proj.weight",
+      "why": "A non-numeric expert index. The expert stays absent, so no expert-suffix rule fires." },
+
+    { "raw": "model.layers.10.mlp.experts.37.w1.weight", "canonical": null,
+      "control": "model.layers.10.mlp.experts.37.gate_proj.weight",
+      "why": "An alternative expert-projection spelling this table does not declare." },
+
+    { "raw": "model.layers.10.self_attn.rotary_emb.inv_freq", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A rotary buffer, not a declared parameter." },
+
+    { "raw": "model.LAYERS.10.self_attn.q_proj.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "Case near-miss on the declared layer segment." },
+
+    { "raw": "model.layers.10.some_future_thing.weight", "canonical": null,
+      "control": "model.layers.10.self_attn.q_proj.weight",
+      "why": "A name from a release this table predates. `unknown` is the correct answer, not a nearest guess (NSIR-001)." },
+
+    { "raw": "lm_head.bias", "canonical": null,
+      "control": "lm_head.weight",
+      "why": "Near-miss on an exact rule." },
+
+    { "raw": "model.norm.bias", "canonical": null,
+      "control": "model.norm.weight",
+      "why": "Near-miss on an exact rule." }
+  ],
+
+  "kimi": [
+    { "raw": "model.layers.10.self_attn.q_proj.weight", "canonical": null,
+      "why": "Declared-but-unimplemented: the manifest carries no rule table, so it claims nothing at all — not even the ARCHITECTURE.md section 6.1 name every implemented family resolves. These rows have no control by design; a plugin with an empty rule table has nothing that could serve as one, which is exactly the property being asserted. Their non-vacuity is carried by `an_unimplemented_family_never_claims_a_model_and_the_generic_fallback_answers_instead`, which shows the same name resolving through the generic fallback the registry selects instead." },
+    { "raw": "model.embed_tokens.weight", "canonical": null,
+      "why": "As above." },
+    { "raw": "model.layers.10.mlp.experts.37.down_proj.weight", "canonical": null,
+      "why": "As above." },
+    { "raw": "model.layers.10.some_future_thing.weight", "canonical": null,
+      "why": "As above." }
+  ],
+
+  "deepseek": [
+    { "raw": "model.layers.10.self_attn.q_proj.weight", "canonical": null,
+      "why": "Declared-but-unimplemented; see the kimi rows." },
+    { "raw": "model.embed_tokens.weight", "canonical": null,
+      "why": "As above." },
+    { "raw": "model.layers.10.mlp.experts.37.down_proj.weight", "canonical": null,
+      "why": "As above." },
+    { "raw": "model.layers.10.some_future_thing.weight", "canonical": null,
+      "why": "As above." }
+  ]
+}

@@ -1112,6 +1112,73 @@ mod tests {
         assert!(matches!(n.unique(), Err(QError::AmbiguousAlias { .. })));
     }
 
+    // ------------------------------------------------------------------------
+    // A characterization test — QM-0011.
+    //
+    // What follows RECORDS current behaviour. It does not endorse it, and it is
+    // not a requirement. `.plan/PLAN_CHANGELOG.md` (2026-08-05, "the `experts.`
+    // marker is unanchored") already carries the defect and the intended fix:
+    // anchor the marker on a path-segment boundary. That fix is a **production**
+    // change to `split_structure` above, which is byte-identical to base and
+    // shared with the Llama resolver, so it is outside `QM-0011`'s test-only
+    // boundary. The instruction that governs this case is explicit: if the fix
+    // is out of scope, document the behaviour without blessing it.
+    //
+    // When the marker is anchored, this test must be REPLACED by one asserting
+    // `expert == None` and `!resolved` — not deleted quietly, and not adjusted
+    // to keep passing.
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn an_unanchored_expert_marker_files_a_plural_shared_experts_name_as_routed_today() {
+        // `"experts."` is a substring of `"shared_experts."`, and the search at
+        // `split_structure`'s expert-marker branch is not anchored to a segment
+        // boundary, so the plural indexed spelling is read as routed expert 3.
+        let s = split_structure(
+            "model.layers.0.mlp.shared_experts.3.up_proj.weight",
+            "layers",
+            Some("experts"),
+        );
+        assert_eq!(s.layer, Some(0));
+        assert_eq!(
+            s.expert,
+            Some(3),
+            "recorded, not endorsed: a shared expert read as a routed one"
+        );
+        assert_eq!(s.suffix, "up_proj.weight");
+
+        // And end to end, through the public API, for both families that
+        // declare an expert segment.
+        let reg = Registry::builtin().unwrap();
+        for id in ["llama", "qwen"] {
+            let r = NsirResolver::new(reg.get(id).unwrap());
+            let got = r.resolve_name("model.layers.0.mlp.shared_experts.3.up_proj.weight");
+            assert!(got.resolved, "{id}");
+            assert_eq!(got.expert, Some(3), "{id}");
+            assert_eq!(
+                canonical_name(&got).unwrap(),
+                "model.layers[0].moe.experts[3].up_projection.weight",
+                "{id}"
+            );
+        }
+
+        // The two spellings this repository actually pins — Qwen2-MoE's
+        // SINGULAR, unindexed `shared_expert.` and its gate — are unaffected and
+        // stay `unknown`, which is why nothing shipped is wrong today. Whether
+        // any real checkpoint emits the plural indexed spelling above is **not**
+        // established by anything in this repository, and this test asserts
+        // nothing either way about that.
+        let r = NsirResolver::new(reg.get("qwen").unwrap());
+        for raw in [
+            "model.layers.0.mlp.shared_expert.up_proj.weight",
+            "model.layers.0.mlp.shared_expert_gate.weight",
+        ] {
+            let got = r.resolve_name(raw);
+            assert!(!got.resolved, "{raw}");
+            assert_eq!(got.expert, None, "{raw}");
+        }
+    }
+
     #[test]
     fn an_unambiguous_qwen_alias_resolves_to_one_canonical_address() {
         let m = tiny_qwen_model();

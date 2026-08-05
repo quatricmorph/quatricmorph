@@ -2,9 +2,9 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0010` reaches `Complete`.
+`QM-0010` is `Complete` and merged, so the block is lifted.
 
 **In v1.** `QM-0010`'s Qwen resolver is v1 work — v1's target checkpoints are Qwen-family — so the conformance suite that guards it is too. Lane T, Wave 2.
 
@@ -147,3 +147,65 @@ cargo test -p q-architecture                          # verified today
 * Suite output with the row count.
 * The deliberate-removal demonstration.
 * Negative-case count per family.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | `Awaiting Independent Review` |
+| Lane | T |
+| Wave | 2 |
+| Branch | `task/qm-0011-resolver-conformance` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0011` |
+| Base commit | **`e49ac24`** — the dispatch named `e82fe98`, and `git reflog` records `e49ac24 HEAD@{2026-08-05 17:03:09}: reset: moving to main`, a reset this agent did not run. See the note below |
+| Head commit | the single commit on this branch, subject `test(q-nsir): add resolver conformance suite [QM-0011]`. Authoritative: `git rev-parse task/qm-0011-resolver-conformance`. A commit cannot contain its own hash, which is why no SHA is written here |
+| Implementation agent | `impl-agent-16` |
+| Evidence record | `.plan/evidence/QM-0011.md` |
+| Merge path | L |
+
+**Tests added:** 29 — 28 in the new binary `crates/q-nsir/tests/resolver_conformance.rs`
+and 1 in `crates/q-nsir/src/resolver.rs` (test module only; no production line
+changed). Corpus: `architectures/conformance.json`, 120 rows over 5 families,
+60 positive and 60 negative (generic 12/15, llama 24/18, qwen 24/19, kimi 0/4,
+deepseek 0/4). Every one of the 29 was observed failing under a deliberate
+break before it passed; the 21-mutation battery and its verbatim red output are
+in `.plan/evidence/QM-0011.md` §Validation evidence.
+
+**Base moved mid-task, by something outside this agent.** The dispatch named
+`e82fe98`; `git reflog` records `e49ac24 HEAD@{2026-08-05 17:03:09}: reset:
+moving to main` about six minutes after work began, so `HEAD^` is `e49ac24`.
+Checked rather than assumed harmless: `git diff e82fe98 e49ac24 --stat` is
+`.plan/tasks/QM-0121-…/TASK.md` and `CLAUDE.md` only;
+`git diff e82fe98 main --name-only -- crates/ architectures/ fixtures/ scripts/ apps/`
+is **empty**; and `scripts/baseline.json` reads 677/51/115/13 at `e82fe98`,
+`e49ac24` and `main` (`1ea382d`) alike. No rebase was performed. Detail in
+`.plan/evidence/QM-0011.md` §Task.
+
+**Floor before → after:** rust 677 over 51 binaries → **706 over 52**;
+web 115 over 13 → unchanged (this branch changes no web file). 677 + 29 = 706
+reconciles exactly. `scripts/baseline.json` is raised, never lowered. Two other
+branches raise the same floor concurrently; the controller reconciles at merge.
+
+**`./scripts/verify-baseline.sh` exits 1** on a pre-existing environment gap, not
+on this branch: `three@^0.185.1` is declared at
+`apps/web/quatricmorph-workspace/package.json:15` and installed nowhere on this
+machine, so one vitest file fails to collect. The identical failure reproduces in
+the untouched main checkout. Every Rust, fixture and CLI-golden check passes and
+both Rust floors read "at floor". The web floor was **not** lowered. Detail in
+`.plan/evidence/QM-0011.md` §Validation evidence.
+
+**Controller action — `MVP-08`.** This file's §Requirements Covered names
+`MVP-08`, but `.plan/REQUIREMENT_TRACEABILITY.md:184` maps `MVP-08` to
+`QM-0010`, and no per-criterion text for it exists anywhere in the repository —
+only the band `MVP-02`…`MVP-09` at `.plan/DEFINITION_OF_DONE.md:181`. This suite
+does **not** independently witness `MVP-08`; it guards `QM-0010`'s work, which is
+where the criterion is mapped. Neither document was edited — reconciling a plan
+document is outside this task's boundary. Detail in `.plan/evidence/QM-0011.md`
+§Research and §Claim limits.
+
+**Reported, not fixed:** the unanchored `experts.` marker in
+`crates/q-nsir/src/resolver.rs` (`.plan/PLAN_CHANGELOG.md`, 2026-08-05) is a
+production defect outside this task's test-only boundary. It is characterized by
+`resolver::tests::an_unanchored_expert_marker_files_a_plural_shared_experts_name_as_routed_today`,
+which records the behaviour without endorsing it and must be **replaced** when
+the marker is anchored.
