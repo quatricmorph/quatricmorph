@@ -31,6 +31,10 @@
 //! [`Backend::check_workload`] refuses a workload that would not fit rather
 //! than discovering it mid-kernel.
 
+pub mod paired;
+
+pub use paired::{ChannelAxis, ChannelPartials, PairedPartials};
+
 use q_source::error::{QError, Result};
 use q_source::manifest::{ModelSource, ModelSourceExt};
 use q_source::{MemoryBudget, TensorDescriptor};
@@ -67,6 +71,24 @@ impl Workload {
     pub fn bytes(&self) -> u64 {
         self.element_count.saturating_mul(self.bytes_per_element)
     }
+
+    /// The workload of a **pair** of `rows × columns` `f32` blocks.
+    ///
+    /// A paired reduction holds both operands resident at once, so charging the
+    /// budget for one of them would let a pair through at twice the declared
+    /// limit. `.plan/DIAGNOSTIC_ARCHITECTURE.md` §5 counts "base block +
+    /// counterpart block" for exactly this reason.
+    ///
+    /// Saturating throughout: a shape whose product overflows `u64` must reduce
+    /// to a refused budget, never to a small number that passes.
+    pub fn for_paired_blocks(rows: usize, columns: usize) -> Workload {
+        Workload {
+            element_count: (rows as u64)
+                .saturating_mul(columns as u64)
+                .saturating_mul(2),
+            bytes_per_element: 4,
+        }
+    }
 }
 
 /// A compute backend.
@@ -84,6 +106,32 @@ pub trait Backend: Send + Sync {
 
     /// Dense matrix multiply of two already-materialized blocks.
     fn matmul(&self, a: &BlockData, b: &BlockData) -> Result<BlockData>;
+
+    /// Reduce a base block against a counterpart block of the same shape,
+    /// producing whole-block and per-channel partials.
+    ///
+    /// The counterpart is **any** second block. This method does not know, and
+    /// must not be told, where it came from: a simulated reconstruction, a
+    /// second checkpoint's block, or a sibling expert's block are all the same
+    /// call. See [`paired`] for the reasoning and for what the partials are.
+    ///
+    /// The default refuses, so a backend that has not implemented it says so
+    /// instead of returning zeroes that look like a perfect match.
+    fn paired_block_reduction(
+        &self,
+        base: &BlockData,
+        counterpart: &BlockData,
+        axis: ChannelAxis,
+    ) -> Result<PairedPartials> {
+        let _ = (base, counterpart, axis);
+        Err(QError::NotImplemented {
+            requirement: "QUANT-002",
+            detail: format!(
+                "backend {} does not implement the paired block reduction",
+                self.capabilities().backend_id
+            ),
+        })
+    }
 
     /// Refuse a workload larger than this backend can hold.
     fn check_workload(&self, workload: Workload) -> Result<()> {
@@ -198,6 +246,15 @@ impl Backend for CpuBackend {
             }
         }
         BlockData::new(a.rows, b.columns, out)
+    }
+
+    fn paired_block_reduction(
+        &self,
+        base: &BlockData,
+        counterpart: &BlockData,
+        axis: ChannelAxis,
+    ) -> Result<PairedPartials> {
+        self.reduce_paired_blocks(base, counterpart, axis)
     }
 }
 

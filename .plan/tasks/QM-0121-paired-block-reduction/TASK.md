@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Complete
 
 Unblock condition **met**: `QM-0120` reached `Complete` (merged `539c41c`, floor
 raised to 598/49, later 677/51). Dispatched by the controller on the critical path
@@ -216,3 +216,77 @@ cargo test -p q-gpu            # the 7 existing tests must still pass
 * The hand computation for the 3×4 case, written out in the evidence.
 * The asymmetric orientation fixture and both axis results.
 * Confirmation that the signature is provenance-neutral.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | Awaiting Independent Review |
+| Lane | Q |
+| Wave | 2 |
+| Branch | `task/qm-0121-metric-kernels` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0121` |
+| Base | `e49ac24` |
+| Head | `131d102` — five commits: `988d4c6`, `9b7dc84`, `131d102` by `impl-agent-7`; `670edb6`, `be721b4` by the concurrent differential-verification agent |
+| Agent | `impl-agent-7` |
+| Evidence | `.plan/evidence/QM-0121.md` |
+| Merge path | L |
+
+**Tests added:** 27 — 26 unit tests in `crates/q-gpu/src/paired.rs` and 1 in the
+new binary `crates/q-gpu/tests/paired_allocation_bounds.rs`.
+
+**Floor change:** `rust_tests` 677 → **704** by this agent's 27 tests, then → **715**
+by the other agent's 11; `rust_binaries` 51 → **52** → **53**. Raised only, never
+lowered — `main`'s floor was independently checked and is still 677/51.
+`677 + 27 = 704` and `704 + 11 = 715` reconcile exactly. Web floors
+untouched at `115 / 13` — this task changed no web file. `scripts/baseline.json`
+`commit` repinned to `131d102`, the first commit whose own tree measures 715/53.
+
+**Branch-name note:** the branch is `task/qm-0121-metric-kernels` because it was
+pre-created from an illustrative example name; the task is
+`QM-0121-paired-block-reduction`. The `qm-0121` id is what identifies it.
+
+**Read this before reviewing:** a second agent was concurrently writing its own
+QM-0121 artefacts into the same worktree. None of it was deleted, modified, or
+committed here; see `.plan/evidence/QM-0121.md` §Claim limits, and the note there
+on the web gate, which fails for an environment reason (`three` is not installed)
+that predates this branch and is unaffected by it.
+
+### Addendum — the differential-verification half (`impl-agent-14`)
+
+Appended inside this section rather than as a second `## Orchestration` heading,
+because a parser reads these headings. The table above describes the
+implementation half only; the rows below supersede its **Head** and **Floor
+change** for the branch as a whole.
+
+| Field | Value |
+| --- | --- |
+| Controller state | Awaiting Independent Review |
+| Lane | Q |
+| Branch | `task/qm-0121-metric-kernels` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0121` |
+| Base | `e82fe98` (dispatch brief); `e49ac24` is the branch point actually present |
+| Head | **`670edb6`** |
+| Agent | `impl-agent-14` |
+| Evidence | `.plan/evidence/QM-0121-differential-verification.md` |
+| Merge path | L |
+
+**Tests added:** 11, in the new binary
+`crates/q-gpu/tests/paired_reference_goldens.rs` — the differential test against
+`python/reference/paired_reduction_reference.py`, the NumPy reference
+`.plan/evidence/QM-0121.md` §Not performed records as absent from the
+implementation half and as needed for gate **G2**.
+
+**Floor change:** `rust_tests` 704 → **715**, `rust_binaries` 52 → **53**, both
+raised only; `704 + 11 = 715` and `52 + 1 = 53` reconcile exactly. Web floors
+untouched at `115 / 13`. `scripts/baseline.json` `commit` is left at `988d4c6`,
+a real ancestor a reviewer can check out, and the new note there says plainly
+that that commit yields 704/52 on its own and 715/53 once this binary is present.
+**Two other branches are raising this floor concurrently; the controller
+reconciles at merge.**
+
+**Found by the verification:** the kernel **panicked** instead of refusing on a
+`BlockData` whose declared shape outran its buffer. Fixed by `require_dense` in
+`crates/q-gpu/src/paired.rs`, which `impl-agent-7` then absorbed into `988d4c6`
+with a unit test of its own. This is the only edit `impl-agent-14` made to
+another agent's file.
