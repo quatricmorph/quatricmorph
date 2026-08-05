@@ -796,3 +796,43 @@ on both value and byte offset (including the asymmetric causal-mask pair
 `[0,0,5,3] = 1.0` vs `[0,0,3,5] = 0.0`), and all four 2-D entry points refuse
 with context — e.g. `q stats` → `error: query rejected: block extents apply to
 rank-2 tensors; got rank 4`. Full detail in `.plan/evidence/QM-0100.md`.
+
+## 2026-08-05 — QM-0010 — three spec arrows disagree with shipped Llama behaviour; the code wins
+
+**Discovered during:** `QM-0010` implementation, confirmed independently by `review-agent-8` against the base tree
+**Defect:** `QM-0010/TASK.md`'s abbreviated canonical-address arrows spell
+`moe.expert[37]`, `query_norm` and `moe.router`. The repository produces
+`moe.experts[37]`, `query_normalization` and `router.expert_routing`.
+**Correction:** resolved toward the shipped form, because each is **pre-existing
+unmodified behaviour** made normative by AC-2 and AC-8 — following the spec would
+have *changed shipped Llama behaviour*, which is outside this task entirely.
+`ARCHITECTURE.md` §6.1 contradicts none of the three. Verified at
+`canonical_name`'s `.experts[{expert}]` emission at base, `llama/plugin.toml:200`,
+and `llama/plugin.toml:241-245`.
+**Files changed:** none — recorded rather than edited, since the arrows are
+abbreviations and the task's normative sections already agree with the code.
+**Dependency impact:** none.
+**Evidence:** `llama_resolves_moe_expert_tensors` already asserted `experts[37]` at
+base; `.plan/evidence/QM-0010.md` §Independent review carries the reviewer's
+line-cited confirmation.
+
+## 2026-08-05 — QM-0010 — latent: the `experts.` marker is unanchored and would mis-file `shared_experts.N.`
+
+**Discovered during:** `QM-0010` implementation; volunteered by the implementer and
+confirmed by `review-agent-8`
+**Defect:** `crates/q-nsir/src/resolver.rs:64-77` locates MoE experts with an
+unanchored `suffix.find("experts.")`. `"experts."` is a substring of
+`"shared_experts."`, so a name like `model.layers.N.mlp.shared_experts.3.up_proj.weight`
+would be filed as **routed expert 3** — a shared expert misreported as a routed one.
+**Why it was NOT fixed in `QM-0010`:** the code path is byte-identical to base and
+shared with the Llama resolver, placing it outside the gate `QM-0010/TASK.md` sets
+for `resolver.rs` edits. No name in the committed Qwen manifest reaches it; the
+fixture pins only the safe **singular** `shared_expert.` form. **Whether a real
+Qwen checkpoint emits the plural indexed spelling is not established by anything in
+this repository, and is asserted neither way.** `generic` is safe (no MoE rules).
+**Correction:** anchor the marker on a segment boundary. Recorded here for a
+follow-up task rather than fixed opportunistically outside its owning scope.
+**Files changed:** none.
+**Dependency impact:** none. Not a release blocker on current evidence.
+**Evidence:** `resolver.rs:64-77`; fixture assertion at `generate_fixtures.py`
+`:1057-1060` / `:1070` pinning the singular form only.
