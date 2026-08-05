@@ -771,3 +771,83 @@ networked install inside a do-not-touch boundary was the correct call.
 
 No repair task is created. Filing one would have been the controller inventing
 work the plan does not represent, against a design the merged code documents.
+
+---
+
+# Run 3 continuation — resumed at T+10h07m on the user's instruction
+
+The 5-hour budget **expired at 2026-08-05T04:49:41Z**. Work continued past it and
+the user then instructed "Continue", so the run is treated as **extended by the
+user**, not as still inside its original budget. Every report from here states
+elapsed time honestly rather than pretending the deadline still applies.
+
+## State reconstructed from Git, not from this file
+
+Between the Run 3 report (`ae11873`) and the resume point, substantial work landed
+that the controller did not itself perform. Reconstructed per §18:
+
+| Fact | Value |
+| --- | --- |
+| `main` at resume | `e82fe98`, then `2fa4fa6` (owner) → rebased to `e49ac24` |
+| Tasks `Complete` | **13** — was 5 at the report. Added: `QM-0001`, `QM-0002`, `QM-0010`, `QM-0020`, `QM-0030`, `QM-0101`, `QM-0120` |
+| Distribution | 13 Complete · 33 Blocked · 44 Deferred = 90 |
+| **Floor now ENFORCED** | `scripts/baseline.json` exists: **rust 677 / 51 binaries, web 115 / 13 files**, pinned to `c35d204` |
+| `./scripts/verify-baseline.sh` on `main` | **exit 0**, 43 s, all 13 CLI goldens green — re-run by the controller at resume |
+| Disk | 52 GB free. A background disk watchdog is running (alerts under 12 GB) |
+
+The floor guard the Run 3 report recorded as *"did not land"* **has since landed
+and is working.** That report's statement was true when written and is superseded
+here rather than edited.
+
+## The owner is still committing during the run
+
+`origin/main` had advanced to `2fa4fa6` (`chore: update CLAUDE.md`) while the
+controller held `e7f0b1c`. The push was **correctly rejected** as a
+non-fast-forward. Resolved by **rebasing the controller's commit on top of the
+owner's**, never by forcing:
+
+```
+$ git rebase origin/main      → Successfully rebased
+$ git push origin main        → 2fa4fa6..e49ac24  main -> main
+```
+
+The owner's commit is preserved. **Pull before every merge remains binding.**
+
+## Critical path advanced
+
+```
+QM-0100 ✓ → QM-0101 ✓ → QM-0030 ✓ → QM-0120 ✓ → QM-0121 (dispatched) → QM-0122 ══ G2
+```
+
+## Dispatch at resume — three agents
+
+| Task | Lane | Agent | Worktree | Why now |
+| --- | --- | --- | --- | --- |
+| `QM-0121` paired block reduction | Q | `impl-agent-7` | `qm-0121` | **Critical path.** Unblock condition met (`QM-0120` Complete). `QM-0122` behind it carries **G2** |
+| `QM-0150` heat-map surface | S | `impl-agent-8` | `qm-0150` | **Critical path** (`→ QM-0161 → QM-0162` = G5) and carries **G4** at `QM-0151`. Web-only, so it costs no Rust build CPU |
+| `QM-0011` resolver conformance | T | `impl-agent-9` | `qm-0011` | Unblock condition met (`QM-0010` Complete). Test-module-only scope |
+
+## QM-0031 is unblocked but **deliberately held** — file-scope collision
+
+`QM-0031` (CPU statistics pass) has both its v1 unblock dependencies satisfied —
+`QM-0030` and `QM-0020` are `Complete`, and `QM-0022` was dropped as deferred. It
+is genuinely ready.
+
+**It is not dispatched, because its declared `## Files Expected to Change` includes
+`crates/q-gpu/src/lib.rs` — the single file `QM-0121` is editing right now.**
+§14 requires comparing a candidate's declared scope against every active task's
+files before starting it, and §10 lists exactly this class of collision as
+forbidden concurrency. `QM-0031` is queued behind `QM-0121`'s merge.
+
+Note this collision is **not** in `.plan/EXECUTION_ORDER.md` §6's forbidden-sequence
+table, which lists the `q-catalog` chain and the `QM-0120`→`QM-0125` chain but not
+`q-gpu`. Recorded as a plan finding: **`crates/q-gpu/src/lib.rs` is a third shared
+mutable file** and belongs in that table alongside `crates/q-catalog/src/lib.rs`.
+
+## `scripts/baseline.json` — three-way contention, controller resolves
+
+All three dispatched agents will raise the floor: `QM-0121` and `QM-0011` the rust
+counts, `QM-0150` the web counts. §14 requires floor updates to **serialize**. Each
+agent was told to touch only its own fields, to re-pin the `commit` field in the
+same edit (a prior reviewer confirmed **nothing in the suite catches false
+provenance** there), and to expect the controller to resolve the conflict at merge.
