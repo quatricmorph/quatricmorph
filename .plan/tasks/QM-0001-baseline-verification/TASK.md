@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Complete
 
 > **Controller correction, 2026-08-04 (Run 2).** Every `web: 101` in this task is
 > **stale**. `QM-0006` repaired `apps/web`'s test collection — commit `103297d` had
@@ -282,3 +282,23 @@ to 999 → exit 1, `baseline regression: 290 < 999 (rust tests)`; one Rust test
 deliberately broken → exit 1, naming
 `tests::hand_computed_moments_on_a_small_fixture`. Both restorations verified
 byte-exact.
+
+## Orchestration
+
+- Controller state: Complete
+- Lane: P   Wave: 0
+- Branch: task/qm-0001-baseline-verification
+- Base commit: 145257b
+- Implementation commit: b0c9b46   Reviewed commit: ee30636
+- Implementation agent: impl-agent-7   Independent reviewer: review-agent-6
+- Review result: APPROVED (zero blocking findings; both guard-firing demos re-run by the reviewer)
+- Evidence record: .plan/evidence/QM-0001.md
+- Merge path: L (local squash)   Merge commit: ac412cb   Commit pin: e365667
+- Floor RE-MEASURED at merge: authored 290/39 (stale, measured at 793e122) -> merged 415/42.
+  Web 115/13 unchanged. The guard fires only on a too-HIGH floor, so the authored
+  number would have been silently permissive by 125 tests.
+- Post-merge verification: PASSED - verify-baseline.sh exit 0, self-test 46 run/0 failed,
+  fire demo exit 1 ("baseline regression: 415 < 999"), fmt 0, clippy 0,
+  `git merge-base --is-ancestor ac412cb main` exit 0
+- Acceptance criterion 5 (CI invokes it and passes): NOT satisfied, NOT claimed - CI never observed
+- PLAN_CHANGELOG.md conflict resolved by union in chronological order; no findings dropped
