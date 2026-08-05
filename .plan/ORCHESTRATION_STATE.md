@@ -1164,3 +1164,60 @@ merged, and the floor is re-measured **on the merged tree** before proceeding �
 Controller bookkeeping is committed on `chore/controller-r4-findings`, never appended
 directly to `main`, because both sessions append to `PLAN_CHANGELOG.md` and this file
 and concurrent appends to one file lose writes.
+
+## Run 4 — outcome
+
+**Merged, verified and pushed: two tasks.**
+
+| Task | Squash merge | Post-merge floor on the merged tree |
+| --- | --- | --- |
+| `QM-0153` | `65b623f` | rust 744/54 · web **361/22** · 13 CLI goldens ok · exit 0 |
+| `QM-0126` | `3f8b833` | rust **745/54** · web 361/22 · exit 0 · `license-audit.sh` exit 0 |
+
+Both were implemented by one agent and reviewed by a **different** agent that did not
+write them, and both reviews did real work rather than rubber-stamping:
+
+* `QM-0153`'s reviewer **mutation-tested** acceptance criterion 5 on scratchpad copies
+  instead of watching the suite pass — a gross truncation fails 8 tests including all
+  four channel-coverage assertions, a one-group off-by-one fails exactly those four.
+  The tests bite. It also overturned the implementer's own pessimistic reading of AC6,
+  finding the criterion **met** once *aggregation factor* and `Cell.aggregated` are
+  kept distinct as the spec's Data Contracts section already does.
+* `QM-0126`'s reviewer hand-computed all 18 fixture figures **before running anything**
+  and traced every write path to the returned values, establishing that the only writer
+  is a `memcpy` from a device buffer seeded with nothing, gated on
+  `MTLCommandBufferStatusCompleted`, with no host arithmetic in the chain. Correct
+  non-zero output is possible only if the kernel really executed.
+
+`baseline.json` conflicted between the two branches on `rust_tests` and was resolved
+keeping **both** raised floors; `QM-0126`'s branch text citing web at 336/21 was
+corrected to 361/22, which `QM-0153` had already raised.
+
+**Newly unblocked by this run, and left `Blocked` deliberately:**
+
+| Task | Unblocked by | Why not started |
+| --- | --- | --- |
+| `QM-0127` | `QM-0126` Complete | ~25 minutes remained; implement + independent review + merge does not fit, and a half-finished branch is worse than a clean hand-off |
+| `QM-0122` | `QM-0121` Complete | Gate G2, the largest frontier task; the other controller session holds **uncommitted** partial work in `qm0122-g2` that this session did not adopt |
+
+**Two preconditions `QM-0127` inherits**, from a finding its reviewer surfaced that
+the implementer did not know rather than withheld: `build.rs` passes only
+`-O2 -std=metal3.0`, and `xcrun metal` defaults to `-fmetal-math-mode=fast`, so the
+compiler is *licensed* to reassociate. It demonstrably did not — the AIR shows a
+single serial phi chain per metric stepping `+256`, exactly as documented — so nothing
+merged is false, but the documented reduction order is **not pinned**. `QM-0127` must
+pin the math mode, and must account for `ninf`: f32 `b*b` overflows above ~1.8e19
+where the f64 CPU reference does not, a divergence class the accumulation doc does not
+mention. Setting a tolerance without both would set it against a fiction.
+
+**Follow-up work identified but not performed** (no task exists yet; needs one):
+`paintHeatmap` draws neither degradation mark — it never drew `QM-0150`'s dash either
+— so the marks reach the page only via the SVG that `present.ts` places beside the
+canvas. Extending it needs the recording-context harness to implement `setLineDash`
+and path ops.
+
+**What this run did not do, stated plainly.** It advanced no task on the critical path
+to gate G2. `QM-0122` is where the diagnostic engine becomes real, and it stands
+exactly where it stood at 12:10Z. Half the five-hour budget was lost to an
+account-level quota ceiling shared with a second controller session, and three of the
+four frontier tasks were contested or file-blocked for the other half.
