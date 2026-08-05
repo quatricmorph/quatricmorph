@@ -1,6 +1,6 @@
 {
   "_comment": "QM-0001 test floor, enforced by scripts/verify-baseline.sh. The floor may only ever be RAISED; a task that lowers it is rejected in review. Counts were measured on the commit below by running `cargo test --workspace` and `cd apps/web && npx vitest run`. Derivations for every cli_golden value are in .plan/evidence/QM-0001.md.",
-  "commit": "PENDING",
+  "commit": "7f81cf3",
   "_floor_raised_by": "QM-0020 raised rust_tests 434 -> 477 (measured `cargo test --workspace` on this branch: 477 passed; 0 failed; 43 binaries; exit 0). rust_binaries is unchanged at 43: every test added lives in an existing crate's `#[cfg(test)]` module, so no new test binary appeared. Two other branches are raising this floor concurrently; the controller reconciles the final value at merge.",
   "rust_tests": 502,
   "rust_binaries": 43,
