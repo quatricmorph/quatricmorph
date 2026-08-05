@@ -90,7 +90,18 @@ export function layerIndexOf(address: string): number | null {
 export type EmptyState = { explanation: string; requirementIds: string[] }
 
 export type LegendEntry = {
-  kind: 'magnitude' | 'uniform' | 'aggregated' | 'fidelity' | 'undefined'
+  /**
+   * `aggregated` and `engine-coarse` are deliberately separate entries with
+   * separate marks (`QM-0153`): one is the renderer merging columns, the other
+   * is the engine's own coarseness, and a reader shown one mark for both learns
+   * the wrong thing about their data.
+   *
+   * The second is not called `sampled`, though it is `CellFidelity`'s name for
+   * the same state, because this entry also carries an `approximate` run — and
+   * a field of the surface literally valued `sampled` on an approximate run is
+   * precisely the mislabelling `surface.test.ts` walks the value to catch.
+   */
+  kind: 'magnitude' | 'uniform' | 'aggregated' | 'engine-coarse' | 'fidelity' | 'undefined'
   label: string
   colour: string
   greyscale: string
@@ -104,6 +115,8 @@ export type Legend = {
   notAClaim: string
   /** `exact`, `sampled` or `approximate`, from the manifest. */
   fidelityLabel: Fidelity
+  /** Which coarseness is whose: the engine's word against the renderer's merge. */
+  fidelityNote: string
   aggregationNote: string
   /** The range colour and fill are normalised against — not an absolute scale. */
   scaleNote: string
@@ -311,6 +324,7 @@ export function surfaceStrings(surface: Surface): string[] {
     surface.heatmap.legend.encodes,
     surface.heatmap.legend.notAClaim,
     surface.heatmap.legend.aggregationNote,
+    surface.heatmap.legend.fidelityNote,
     surface.heatmap.legend.scaleNote,
     surface.heatmap.legend.fidelityLabel,
     surface.ranking.caveat,
@@ -391,6 +405,19 @@ function buildLegend(grid: Grid): Legend {
     })
   }
 
+  if (grid.fidelity !== 'exact') {
+    entries.push({
+      kind: 'engine-coarse',
+      // Names the mark `render.ts` draws for it — a filled corner wedge — and
+      // sets it against the merge dash in the same breath, because the two are
+      // the pair a reader is most likely to conflate.
+      label: `a corner wedge marks ${grid.fidelity} values from the engine; a dashed border marks columns the renderer merged`,
+      colour: '#ffffff',
+      greyscale: '#ffffff',
+      glyph: '◣',
+    })
+  }
+
   if (grid.undefinedCellCount > 0) {
     const undefinedEncoding = encodeMagnitude(null, domain)
     entries.push({
@@ -407,6 +434,13 @@ function buildLegend(grid: Grid): Legend {
       'Colour, fill width and glyph all encode relative weight-space error, sqrt(sum_sq_delta / sum_sq_base).',
     notAClaim: REQUIRED_WORDING.colour,
     fidelityLabel: grid.fidelity,
+    // Two different coarsenesses, told apart in words as well as in marks.
+    // Without this line a reader who sees a merged cell on a sampled run has no
+    // way to know which of the two the caveat is about.
+    // No apostrophe anywhere in this line: `wrap()` measures the unescaped
+    // text and the image carries `&apos;`, so a contraction pushes the drawn
+    // line past the right margin.
+    fidelityNote: `The numbers on this map are ${grid.fidelity}, which describes how they were obtained. Column merging describes only how they are drawn, and never changes the label a number carries.`,
     aggregationNote:
       grid.aggregationFactor > 1
         ? `Columns are merged ${grid.aggregationFactor} to a cell, by maximum rather than mean, so one bad channel is not averaged away.`

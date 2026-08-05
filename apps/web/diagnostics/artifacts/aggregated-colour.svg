@@ -9,13 +9,13 @@
 <text x="20.00" y="147.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 0 · exact</text>
 <text x="20.00" y="172.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 1 · exact</text>
 <text x="20.00" y="197.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">outside the layer stack · exact</text>
-<rect class="cell" data-layer="0" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="0.7500000000000001" data-selected="false" data-glyph="#" x="260.64" y="132.00" width="675.36" height="22.00" fill="#737373" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="cell" data-layer="0" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="0.7500000000000001" data-selected="false" data-glyph="#" x="260.64" y="132.00" width="675.36" height="22.00" fill="#e31a1c" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
 <rect class="bar" x="429.48" y="137.50" width="337.68" height="16.50" fill="#111827" stroke="none"/>
 <text x="263.64" y="148.00" font-family="ui-monospace, monospace" font-size="11" fill="#ffffff">#</text>
-<rect class="cell" data-layer="1" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="1" data-selected="false" data-glyph="█" x="260.64" y="157.00" width="675.36" height="22.00" fill="#3d3d3d" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="cell" data-layer="1" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="1" data-selected="false" data-glyph="█" x="260.64" y="157.00" width="675.36" height="22.00" fill="#800026" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
 <rect class="bar" x="429.48" y="157.00" width="337.68" height="22.00" fill="#111827" stroke="none"/>
 <text x="263.64" y="173.00" font-family="ui-monospace, monospace" font-size="11" fill="#ffffff">█</text>
-<rect class="cell" data-layer="none" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="0" data-selected="false" data-glyph="·" x="260.64" y="182.00" width="675.36" height="22.00" fill="#fcfcfc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="cell" data-layer="none" data-column="0" data-fidelity="exact" data-cell-fidelity="aggregated" data-aggregated="true" data-defined="true" data-fill-fraction="0" data-selected="false" data-glyph="·" x="260.64" y="182.00" width="675.36" height="22.00" fill="#ffffcc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
 <rect class="bar" x="429.48" y="204.00" width="337.68" height="0.00" fill="#111827" stroke="none"/>
 <text x="263.64" y="198.00" font-family="ui-monospace, monospace" font-size="11" fill="#111827">·</text>
 <text x="20.00" y="234.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Legend</text>
@@ -26,17 +26,17 @@
 <text x="20.00" y="319.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">The numbers on this map are exact, which describes how they were obtained. Column merging describes only how they are</text>
 <text x="20.00" y="336.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">drawn, and never changes the label a number carries.</text>
 <text x="20.00" y="353.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">The scale is relative to this map: the lightest cell is 0.1 and the darkest is 0.5. It is not an absolute threshold.</text>
-<rect class="swatch" x="20.00" y="360.00" width="14.00" height="12.00" fill="#fcfcfc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="360.00" width="14.00" height="12.00" fill="#ffffcc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="370.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">·  tier 1 of 6 — fill 0%</text>
-<rect class="swatch" x="20.00" y="377.00" width="14.00" height="12.00" fill="#ededed" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="377.00" width="14.00" height="12.00" fill="#ffeda0" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="387.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">:  tier 2 of 6 — fill 20%</text>
-<rect class="swatch" x="20.00" y="394.00" width="14.00" height="12.00" fill="#dddddd" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="394.00" width="14.00" height="12.00" fill="#fed976" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="404.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">+  tier 3 of 6 — fill 40%</text>
-<rect class="swatch" x="20.00" y="411.00" width="14.00" height="12.00" fill="#aaaaaa" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="411.00" width="14.00" height="12.00" fill="#fd8d3c" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="421.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">=  tier 4 of 6 — fill 60%</text>
-<rect class="swatch" x="20.00" y="428.00" width="14.00" height="12.00" fill="#737373" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="428.00" width="14.00" height="12.00" fill="#e31a1c" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="438.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">#  tier 5 of 6 — fill 80%</text>
-<rect class="swatch" x="20.00" y="445.00" width="14.00" height="12.00" fill="#3d3d3d" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<rect class="swatch" x="20.00" y="445.00" width="14.00" height="12.00" fill="#800026" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="455.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">█  tier 6 of 6 — fill 100%</text>
 <rect class="swatch" x="20.00" y="462.00" width="14.00" height="12.00" fill="#ffffff" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
 <text x="40.00" y="472.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">e  every value on this map is exact</text>

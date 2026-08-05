@@ -13,6 +13,10 @@
  * * **Merge by maximum, never by mean.** A mean of three healthy channels and
  *   one catastrophic one looks unremarkable, and the catastrophic channel is
  *   the finding the reader opened the tool for.
+ * * **Three states, not two** (`QM-0153`). A cell is `exact`, `aggregated` —
+ *   the renderer merged columns — or `sampled`, which is the engine's own
+ *   coarseness arriving from the manifest. `cellFidelityOf` is where that is
+ *   decided, and the two coarsenesses never share a mark or a legend entry.
  * * **Redundant encoding.** Magnitude is carried by colour *and* by a fill
  *   fraction *and* by an ordinal glyph, so it survives greyscale printing and
  *   colour-vision differences. `ARCHITECTURE.md` §19: a colour is not a
@@ -65,6 +69,47 @@ export type Cell = {
   /** Propagated from the manifest. The engine's coarseness, not the renderer's. */
   fidelity: Fidelity
   sources: string[]
+}
+
+/**
+ * What a cell's number is, and how it is drawn — in three states, never two.
+ *
+ * `sampled` is the **engine's** coarseness: the number itself was not computed
+ * over every element. `aggregated` is the **renderer's**: the number is exactly
+ * what the engine published, and this display merged neighbouring columns to
+ * stay under the cell ceiling. Collapsing them into one flag would tell a
+ * reader the data is coarse when only the picture is, or the reverse.
+ *
+ * `channelsPerCell` is `number | null` rather than `number` because
+ * `Cell.channelsPerCell` is: manifest v1's summary projection publishes one
+ * number per layer and no shape, so the channel extent is genuinely unpublished
+ * for those cells. Claiming `1` there would assert a resolution the manifest
+ * never gave. (`QM-0153`'s data contract writes `number`; this is the minimal
+ * widening that keeps the type from having to invent an extent.)
+ */
+export type CellFidelity =
+  | { kind: 'exact' }
+  | { kind: 'aggregated'; channelsPerCell: number | null }
+  | { kind: 'sampled' }
+
+/**
+ * Classify one cell for marker selection.
+ *
+ * The engine's coarseness wins over the renderer's, because a merged cell of
+ * sampled numbers is first of all sampled — a reader told only "merged" would
+ * believe the underlying numbers were complete. Nothing is lost by the
+ * precedence: `Cell.aggregated` and `Cell.channelsPerCell` are still on the
+ * cell, and `render.ts` draws both marks when both apply.
+ *
+ * The manifest's own word (`Cell.fidelity`: `exact`, `sampled` or
+ * `approximate`) is what the surface *displays*; this function only chooses a
+ * mark, so an `approximate` run is marked like a sampled one and still reads
+ * "approximate" everywhere a reader can see.
+ */
+export function cellFidelityOf(cell: Cell): CellFidelity {
+  if (cell.fidelity !== 'exact') return { kind: 'sampled' }
+  if (cell.aggregated) return { kind: 'aggregated', channelsPerCell: cell.channelsPerCell }
+  return { kind: 'exact' }
 }
 
 export type Row = {

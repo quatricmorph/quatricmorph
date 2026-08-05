@@ -49,9 +49,15 @@ const ARTIFACTS: Record<string, () => string> = {
   'tensor-greyscale.svg': () =>
     surfaceToSvg(buildSurface(manifestFrom('full.v1.json', 'full')), { palette: 'greyscale' }),
   // The same manifest under a cell ceiling small enough to force aggregation.
+  // Both palettes: QM-0153's evidence is that the degraded state is legible in
+  // colour *and* in greyscale, and one image cannot show that.
   'aggregated-greyscale.svg': () =>
     surfaceToSvg(buildSurface(manifestFrom('full.v1.json', 'full'), { cellCeiling: 3 }), {
       palette: 'greyscale',
+    }),
+  'aggregated-colour.svg': () =>
+    surfaceToSvg(buildSurface(manifestFrom('full.v1.json', 'full'), { cellCeiling: 3 }), {
+      palette: 'colour',
     }),
   // Nothing was measured: an explanation, not an empty grid.
   'empty-colour.svg': () => surfaceToSvg(buildSurface(manifestFrom('summary.empty.json')), { palette: 'colour' }),

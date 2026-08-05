@@ -193,6 +193,28 @@ signatures and launch geometry and have **never been compiled**. See
 | CUDA-005 | Quantization / Morton packing kernels | **Hardware-Unverified** | — | `gpu/cuda/quantize.cu` | **none — never compiled or executed** |
 | CUDA-006 | VRAM ceiling enforced before a launch | Verified | — | `crates/q-cuda/src/lib.rs` | `tests::the_vram_ceiling_is_enforced_without_a_device` (arithmetic on a declared limit, not a device query) |
 
+## SURF — v1 diagnostic surface
+
+The v1 surface is the diagnostics heat map over layer x channel, fed by the
+report manifest. It is not the deferred Cesium viewer or matrix workspace.
+
+| ID | Description | Status | Maps to | Files | Test(s) |
+| --- | --- | --- | --- | --- | --- |
+| SURF-001 | Heat-map surface over layer x channel, fed by the manifest | Implemented | `QM-0150` | `apps/web/diagnostics/src/heatmap.ts`, `src/render.ts` | `heatmap.test.ts`, `artifacts.test.ts` |
+| SURF-002 | Degradation to an aggregate above a rendering ceiling, stated in the UI | Verified | `QM-0153` | `apps/web/diagnostics/src/heatmap.ts`, `src/render.ts`, `src/app.ts` | `degradation.test.ts` — 24 tests, including the AC5 channel-coverage assertions shown by mutation to fail under both a gross truncation and a one-group off-by-one |
+
+`MAX_HEATMAP_CELLS` is 250 000; above it, columns aggregate **by maximum, never by
+mean** — a mean would hide one catastrophic channel inside a healthy group, which is
+the finding the tool exists to surface. Aggregation carries a persistent marker
+legible without hover and in greyscale, and `sampled` (engine-side coarseness) is
+rendered and captioned distinctly from `aggregated` (renderer-side).
+
+**Not claimed:** no screenshot was taken — there is no browser in the build
+environment. Committed SVG artifacts from the same draw plan stand in and are
+asserted byte-for-byte; they are not screenshots. The 2-D canvas painter draws
+neither mark (it never drew `QM-0150`'s dash either); the marked SVG is placed on the
+page beside the canvas.
+
 ## API — local daemon
 
 | ID | Description | Status | Maps to | Files | Test(s) |

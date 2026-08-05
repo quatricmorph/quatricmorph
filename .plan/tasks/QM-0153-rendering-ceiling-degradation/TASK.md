@@ -2,9 +2,7 @@
 
 ## Status
 
-Blocked
-
-Unblocks when `QM-0150` reaches `Complete`.
+Complete
 
 ## Phase
 
@@ -157,6 +155,81 @@ cd apps/web && npx vitest run diagnostics
 
 ## Completion Evidence
 
-* Screenshots of the degraded state, colour and greyscale.
-* Test output including the coverage assertion.
-* The legend text as rendered.
+Full derivation, including the failing-first output and the rendered legend
+text: `.plan/evidence/QM-0153.md`.
+
+**Failing first** — the 24 tests of
+`apps/web/diagnostics/src/__tests__/degradation.test.ts` were written and run
+before any source change and committed in that state as `9950ec7`:
+
+```bash
+git checkout 9950ec7
+cd apps/web && npx vitest run diagnostics/src/__tests__/degradation.test.ts
+```
+
+```
+ Test Files  1 failed (1)
+      Tests  13 failed | 11 passed (24)
+```
+
+Three lines of that file changed afterwards, in two assertions, when the legend
+entry kind became `engine-coarse` rather than `sampled`; nothing else moved, and
+the 13/11 split is reproducible at that SHA.
+
+The 11 that passed are the anti-truncation coverage assertions — they hold on
+`main` today, and exist to fail if a truncation path is ever added.
+
+**Passing** — implementation commit `9401dc8`:
+
+```bash
+cd apps/web && npx vitest run
+```
+
+```
+ Test Files  22 passed (22)
+      Tests  361 passed (361)
+```
+
+Floor raised in the same commit: `336 + 24 + 1 = 361` tests over `21 + 1 = 22`
+files (24 new in `degradation.test.ts`, 1 new committed image in
+`artifacts.test.ts`). Rust untouched at 744/54.
+
+**The legend as rendered**, read out of the committed
+`apps/web/diagnostics/artifacts/sampled-greyscale.svg` and
+`aggregated-colour.svg`:
+
+```
+Columns are merged 2 to a cell, by maximum rather than mean, so one bad channel is not averaged away.
+The numbers on this map are sampled, which describes how they were obtained. Column merging describes only how they are
+drawn, and never changes the label a number carries.
+- -  cells with a dashed border aggregate more than one channel, by maximum (factor 2)
+◣  a corner wedge marks sampled values from the engine; a dashed border marks columns the renderer merged
+```
+
+**Not performed** — no screenshot was taken: no browser and no headless
+renderer is available here. The committed SVGs are renderings from the same
+draw plan the browser canvas consumes, asserted byte-for-byte by
+`artifacts.test.ts`; they are not screenshots and are not offered as such. The
+2-D canvas painter still draws neither mark (it never drew the aggregation dash
+either); `present.ts` writes the marked SVG onto the page beside it, so the
+marks are on screen, but the canvas element itself is unmarked. Both are set
+out in the evidence file.
+
+**Gates** — `./scripts/verify-baseline.sh` exit 0 on `253e559`:
+
+```
+  ok    rust tests: measured 744, floor 744 — at floor
+  ok    rust test binaries: measured 54, floor 54 — at floor
+  ok    web tests: measured 361, floor 361 — at floor
+  ok    web test files: measured 22, floor 22 — at floor
+  ...all 13 CLI goldens ok
+elapsed: 134s (budget: 300s)
+verify-baseline: OK
+```
+
+**Departures from the plan**, both recorded in the evidence file:
+`render.ts` was changed although it is not in `Files Expected to Change` —
+criteria 2 and 4 are about a mark a reader can see and nothing else draws one;
+and `CellFidelity`'s `aggregated` variant carries `channelsPerCell: number |
+null` rather than `number`, because manifest v1's summary projection publishes
+no channel extent and `number` would force a claim of one channel.

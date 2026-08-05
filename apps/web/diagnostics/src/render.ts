@@ -18,12 +18,22 @@
  * distinguish the hues.
  */
 
-import { encodeMagnitude, type Cell, type Grid } from './heatmap.js'
+import { cellFidelityOf, encodeMagnitude, type Cell, type Grid } from './heatmap.js'
 import type { Refusal } from './manifest-client.js'
 import type { Surface } from './app.js'
 
 /** The opening of a heat-map cell rectangle. Tests count and read these. */
 export const CELL_RECT_MARKER = '<rect class="cell"'
+
+/**
+ * The opening of the mark drawn on a cell whose *number* is coarse (`QM-0153`).
+ *
+ * A filled triangular wedge in the cell's top-right corner. Deliberately a
+ * different kind of mark from the aggregation dash — a solid shape against a
+ * broken outline — because the two say different things and appear together on
+ * the same cell whenever a sampled run is also merged for display.
+ */
+export const SAMPLED_MARK_MARKER = '<path class="sampled-mark"'
 
 export type Palette = 'colour' | 'greyscale'
 
@@ -70,6 +80,31 @@ const SELECTION_STROKE = '#111827'
  * words name it too (`app.ts`, `buildLegend`).
  */
 const AGGREGATED_DASH = '3 2'
+/** The longest side of the sampled wedge, in pixels, before it is clipped to the cell. */
+const SAMPLED_WEDGE = 6
+
+/**
+ * The wedge that marks an engine-side-coarse cell.
+ *
+ * A shape rather than a colour, so it is the same mark under both palettes and
+ * survives a greyscale print. Its ink flips to white over the dark end of the
+ * ramp for the same reason the magnitude glyph's does — a near-black wedge on a
+ * near-black fill is a mark that is present in the file and absent to the eye.
+ */
+function sampledWedge(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  tier: number | null,
+  where: 'cell' | 'legend',
+): string {
+  const size = Math.max(1, Math.min(SAMPLED_WEDGE, width, height))
+  const right = x + width
+  const path = `M ${n(right - size)} ${n(y)} L ${n(right)} ${n(y)} L ${n(right)} ${n(y + size)} Z`
+  const fill = (tier ?? 0) >= 4 ? '#ffffff' : INK
+  return `${SAMPLED_MARK_MARKER} data-in="${where}" d="${path}" fill="${fill}"/>`
+}
 
 /** A cell's geometry inside the plot area, in the order rows and columns appear. */
 type Placed = { cell: Cell; x: number; y: number; width: number; height: number }
@@ -254,6 +289,7 @@ export function surfaceToSvg(surface: Surface, options: SvgOptions): string {
   y = emit(parts, 20, y, surface.heatmap.legend.encodes, { fill: MUTED })
   y = emit(parts, 20, y, surface.heatmap.legend.notAClaim, { fill: MUTED })
   y = emit(parts, 20, y, surface.heatmap.legend.aggregationNote, { fill: MUTED })
+  y = emit(parts, 20, y, surface.heatmap.legend.fidelityNote, { fill: MUTED })
   y = emit(parts, 20, y, surface.heatmap.legend.scaleNote, { fill: MUTED })
   for (const entry of surface.heatmap.legend.entries) {
     // The aggregation entry's swatch carries the same dash the aggregated
@@ -262,6 +298,10 @@ export function surfaceToSvg(surface: Surface, options: SvgOptions): string {
     parts.push(
       `<rect class="swatch" x="20.00" y="${n(y - 10)}" width="14.00" height="12.00" fill="${swatchOf(entry, options.palette)}" stroke="${RULE}" stroke-width="0.5" stroke-dasharray="${dash}"/>`,
     )
+    // And the sampled entry's swatch carries the wedge, for the same reason.
+    if (entry.kind === 'engine-coarse') {
+      parts.push(sampledWedge(20, y - 10, 14, 12, 0, 'legend'))
+    }
     parts.push(text(40, y, `${entry.glyph}  ${entry.label}`, { fill: MUTED }))
     y += LINE_HEIGHT
   }
@@ -339,10 +379,15 @@ function cellSvg(placed: Placed, grid: Grid, options: SvgOptions, gutter: number
   const selected = isSelected(cell, options.selected)
   const barHeight = height * encoding.fillFraction
 
+  const cellFidelity = cellFidelityOf(cell)
+
   const attributes = [
     `data-layer="${cell.layerIndex === null ? 'none' : cell.layerIndex}"`,
     `data-column="${cell.columnIndex}"`,
+    // The manifest's own word, unchanged: `approximate` is never relabelled
+    // `sampled` just because the two share a mark.
     `data-fidelity="${cell.fidelity}"`,
+    `data-cell-fidelity="${cellFidelity.kind}"`,
     `data-aggregated="${cell.aggregated}"`,
     `data-defined="${encoding.defined}"`,
     `data-fill-fraction="${encoding.fillFraction}"`,
@@ -358,6 +403,13 @@ function cellSvg(placed: Placed, grid: Grid, options: SvgOptions, gutter: number
     // with no colour at all.
     `<rect class="bar" x="${n(left + width * 0.25)}" y="${n(y + height - barHeight)}" width="${n(width * 0.5)}" height="${n(barHeight)}" fill="${INK}" stroke="none"/>`,
   ]
+
+  // The engine's coarseness, marked on every cell it applies to and not only in
+  // the header: a reader looking at one cell must be able to see that its
+  // number was not computed over every element.
+  if (cellFidelity.kind === 'sampled') {
+    svg.push(sampledWedge(left, y, width, height, encoding.tier, 'cell'))
+  }
 
   // The third redundant channel: an ordinal glyph, where the cell is wide
   // enough to carry one. Its ink flips against dark fills so it stays readable.
