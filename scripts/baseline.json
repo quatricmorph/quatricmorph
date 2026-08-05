@@ -1,8 +1,8 @@
 {
   "_comment": "QM-0001 test floor, enforced by scripts/verify-baseline.sh. The floor may only ever be RAISED; a task that lowers it is rejected in review. Counts were measured on the commit below by running `cargo test --workspace` and `cd apps/web && npx vitest run`. Derivations for every cli_golden value are in .plan/evidence/QM-0001.md.",
-  "commit": "ac412cb",
-  "rust_tests": 415,
-  "rust_binaries": 42,
+  "commit": "PENDING",
+  "rust_tests": 434,
+  "rust_binaries": 43,
   "web_tests": 115,
   "web_files": 13,
 

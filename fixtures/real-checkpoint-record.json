@@ -1,0 +1,61 @@
+{
+  "_comment": "QM-0100. Every field below is a MEASURED value, read from files in this tree on 2026-08-05. Fields that no file in the tree records are null. models/ is gitignored, so this repository redistributes no weights; this record is what keeps the plan's numbers auditable after the checkpoint is deleted to reclaim disk. Verified by tests/tests/real_checkpoint_record.rs.",
+
+  "name": "distilbert-distilgpt2",
+  "source_uri": null,
+  "revision": null,
+  "provenance_note": "No file in this tree records where the checkpoint was fetched from or at which revision. models/distilbert-distilgpt2/README.md is the upstream model card and links to huggingface.co/gpt2, which is the teacher model, not this artifact's source or revision. Recorded as null rather than guessed.",
+
+  "licence": "apache-2.0",
+  "licence_source": "models/distilbert-distilgpt2/README.md — YAML front matter `license: apache-2.0` (line 6), corroborated by `- **License:** Apache 2.0` (line 36)",
+
+  "bytes_on_disk": 352824413,
+  "sha256_of_file": "e1ff18884359fe8beb795a5f414feb85a6ce3d929ad019c0d958c039d2b94a1b",
+
+  "shard_count": 1,
+  "has_index_json": false,
+  "shard_files": ["model.safetensors"],
+
+  "header_length_bytes": 8277,
+  "data_offset_bytes": 8285,
+  "header_fraction_of_file_percent": 0.0023481935191372373,
+  "sha256_of_header": "eb37d19b5aafc986c8a7011642f605a4b38afd48f13e385c27ca218736017be0",
+  "sha256_of_header_covers": "the 8277 JSON header bytes at absolute file range [8, 8285). The leading little-endian u64 length prefix is NOT included. For the 8285-byte range [0, 8285) that does include the prefix, the digest is 20ed923e186530aab856708c7e06f600300114271f9c6bfa4b5071cef69dd50a. There is no model.safetensors.index.json to hash.",
+
+  "tensor_count": 82,
+  "parameter_count": 88204032,
+  "parameter_count_note": "Sum of the product of every tensor's shape, from the header. It counts the six rank-4 causal-mask buffers, which are registered buffers rather than trainable parameters: 88204032 - (6 * 1048576) = 81912576, matching the 'has 82 million parameters' claim in the model card. Independent corroboration, not a derivation from this codebase.",
+
+  "dtypes": { "F32": 82 },
+  "rank_histogram": { "1": 50, "2": 26, "4": 6 },
+  "rank4_tensor_names": [
+    "transformer.h.0.attn.bias",
+    "transformer.h.1.attn.bias",
+    "transformer.h.2.attn.bias",
+    "transformer.h.3.attn.bias",
+    "transformer.h.4.attn.bias",
+    "transformer.h.5.attn.bias"
+  ],
+  "rank4_shape": [1, 1, 1024, 1024],
+  "rank4_note": "ADR-010 caps the implemented visualization rank at 3 and requires rank > 3 to refuse rather than flatten. ADR-010 places that ceiling at the axis-binding / block / tile layers, NOT at the metadata layer: q_source::TensorDescriptor::shape is deliberately arbitrary-rank, so ingestion and `q inspect` list these six at their true [1,1,1024,1024] shape. The designed refusal, bindAxes() returning NotImplemented carrying GRID-007, is unimplemented in this tree and is owned by QM-0061 (and QM-0040 for the block planner). This checkpoint is the first real artifact that makes that refusal testable against real data.",
+
+  "safetensors_metadata": { "format": "pt" },
+  "architecture": "gpt2",
+  "architecture_source": "models/distilbert-distilgpt2/config.json — `model_type: \"gpt2\"`, `architectures: [\"GPT2LMHeadModel\"]`, `n_layer: 6`",
+  "has_experts": false,
+
+  "coverage_not_established": [
+    "Sharded read path — this checkpoint is a single file with no model.safetensors.index.json, so multi-shard attribution is NOT exercised by real data. It stays covered only by fixtures/tiny-llama-2shard and q-safetensors' ingests_a_sharded_checkpoint.",
+    "bf16 exact decode (SRC-016) — all 82 tensors are F32, so the bf16 path is NOT exercised by real data and stays covered by fixtures. SRC-014's fp8 refusal is likewise not exercised here.",
+    "MoE expert-keyed aggregation — GPT-2 has no experts, so there is NO real-checkpoint fixture for it. QM-0123 is provable only against generated fixtures and the deferred MOE-001 seam gains nothing from this checkpoint.",
+    "24 GB scale — this file is 352824413 bytes (~337 MiB). The plan's >= 24 GB scale claim is NOT established on real data. crates/q-catalog/tests/trillion_scale_manifest.rs remains metadata-only and opens no artifact."
+  ],
+
+  "measurement": {
+    "measured_on": "2026-08-05",
+    "measured_at_commit": "04991e9",
+    "byte_and_header_facts": "exact — Python struct.unpack('<Q') + json.loads + math.prod over the header bytes, and os.path.getsize for the file length",
+    "hashes": "exact — hashlib.sha256 / shasum -a 256",
+    "independent_of_code_under_test": true
+  }
+}

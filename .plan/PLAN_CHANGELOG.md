@@ -741,3 +741,58 @@ non-fatal: raising the floor is the job of the task that added the tests.
 carries the measured `793e122` value.
 **Dependency impact:** none.
 **Evidence:** `.plan/evidence/QM-0001.md` §10 and `## Claim limits` 1–2.
+## 2026-08-05 — QM-0100 — the real checkpoint makes ADR-010's `GRID-007` refusal testable, but the refusal is unimplemented and belongs to QM-0061
+
+**Discovered during:** `QM-0100` implementation (verifying the local
+`models/distilbert-distilgpt2` checkpoint from its header alone).
+**Defect:** Two related gaps, one in a task brief and one in the code.
+
+1. `QM-0100`'s controller brief asserted that the six rank-4
+   `transformer.h.N.attn.bias` tensors (`[1, 1, 1024, 1024]`) must be **refused
+   by `q inspect`** per ADR-010, and required a test named
+   `refuses_rank_four_attn_bias_rather_than_flattening`. **This is the wrong
+   layer.** ADR-010 states that `q_source::TensorDescriptor::shape` is
+   "arbitrary rank already" and that "the metadata layer is rank-agnostic";
+   the ceiling sits at the **axis binding, block, tile and layout** layers, as
+   `rank >3   bindAxes() returns NotImplemented carrying GRID-007`. Making
+   `inspect` refuse these six would have contradicted ADR-010 rather than
+   honouring it. The controller identified and corrected this mid-task; recorded
+   here so the wrong reading does not resurface.
+2. **`bindAxes()` and `GRID-007` exist nowhere in the tree.** A whole-repository
+   search (excluding `node_modules`, `.git`, `target`) finds them only in
+   `.plan/` and `docs/decisions/`, never in code. `schemas/visualization/spatial-contract.json`
+   and its `axis_binding.max_implemented_rank` do not exist either. So ADR-010's
+   designed refusal is, today, undefended by any test in either language.
+
+**Correction:** No plan task content changed, and **`QM-0100` did not implement
+`bindAxes()`** — it is outside that task's declared `## Files Expected to
+Change` (`.gitignore`, `crates/q-cli/src/main.rs`), and putting ADR-010's
+refusal in the wrong layer would be worse than leaving it absent. The finding is
+recorded for the tasks that own it:
+
+* **`QM-0061`** (`.plan/tasks/QM-0061-axis-binding/TASK.md`) owns `bindAxes()`,
+  destined for `spatial/axes.ts` per `.plan/TARGET_ARCHITECTURE.md` line 80.
+* **`QM-0040`** (LOD block planner) carries its own rank-4 →
+  `NotImplemented`/`GRID-007` test case.
+* **`QM-0004`** owns `axis_binding.max_implemented_rank` in the spatial
+  contract, asserted from both languages at G1 by `QM-0005`.
+
+**The new fact those tasks gain:** ADR-010's rank ceiling now has a **real
+artifact** to be tested against, not just a synthetic fixture.
+`models/distilbert-distilgpt2/model.safetensors` contains exactly six rank-4
+tensors, `transformer.h.{0..5}.attn.bias`, shape `[1, 1, 1024, 1024]`, F32. Any
+of the three tasks above can use them directly. `QM-0100` records their names in
+`fixtures/real-checkpoint-record.json` (`rank4_tensor_names`) so the fact
+survives deletion of the gitignored checkpoint.
+
+**Dependency impact:** None. No task is blocked or reordered. `QM-0061`,
+`QM-0040` and `QM-0004` gain a real-data fixture they did not have.
+
+**Evidence:** `grep -rn "bindAxes\|GRID-007"` over the repository returns only
+`.plan/` and `docs/decisions/` hits. `QM-0100` verified the adjacent invariant
+that *is* testable today — nothing flattens: ingestion preserves
+`[1, 1, 1024, 1024]`, exact rank-4 scalar reads match an independent Python read
+on both value and byte offset (including the asymmetric causal-mask pair
+`[0,0,5,3] = 1.0` vs `[0,0,3,5] = 0.0`), and all four 2-D entry points refuse
+with context — e.g. `q stats` → `error: query rejected: block extents apply to
+rank-2 tensors; got rank 4`. Full detail in `.plan/evidence/QM-0100.md`.

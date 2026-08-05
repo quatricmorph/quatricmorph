@@ -2,7 +2,7 @@
 
 ## Status
 
-Ready
+In Progress
 
 **Re-scoped by the repository owner in commit `579107f`.** The original task
 acquired a ≥ 24 GB sharded MoE checkpoint over a multi-hour download. The owner
@@ -318,3 +318,40 @@ task**, because the checkpoint is single-file. It stays covered by
 * **An explicit statement of the coverage this checkpoint does not provide** —
   sharded path, bf16 exact decode, MoE expert-keyed aggregation, and ≥ 24 GB scale.
 * `git check-ignore -v models/` and an empty `git status --short models/`.
+
+## Orchestration
+
+| Field | Value |
+| --- | --- |
+| Controller state | **Awaiting Independent Review** |
+| Lane | P |
+| Wave | 0 |
+| Branch | `task/qm-0100-real-checkpoint-verification` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0100` |
+| Base commit | `04991e9` |
+| Commits on branch | `e64a7a3` implementation · `10bf3bb` commit-SHA row · `61ad753` verified-degradation evidence · `4th` review-fix (streamed truncation fixture, module-doc correction, env-var semantics, recorded-fraction assertion) |
+| Head commit | **`git rev-parse HEAD` is authoritative** — a commit cannot name its own SHA. `git log --oneline main..HEAD` lists all of them; merge path L squashes them into one |
+| Agent | `impl-agent-4` |
+| Evidence | `.plan/evidence/QM-0100.md` |
+| Merge path | L (local squash) |
+| Tests added | **19**, all in `tests/tests/real_checkpoint_record.rs` |
+| Floor change | **290 → 309** (`cargo test --workspace`, exit 0, measured in this worktree at base `04991e9`) |
+| Production code changed | **none** — `q-cli` already carried the bytes-read counter; `.gitignore` needed no edit |
+
+**Carried findings for the controller**
+
+* The binary is **`q`**, not `q-cli` (`[[bin]] name = "q"`). This task's
+  `## Suggested Commands` block is wrong and should be corrected by whoever owns
+  it; every measurement here used `./target/release/q`.
+* `git check-ignore -v models/` **exits 1**, because 9 files under `models/` are
+  tracked and `check-ignore` skips index-tracked paths. Acceptance criterion 8
+  is met via `git check-ignore --no-index -v models/` and the file-path form,
+  both exit 0, plus an empty `git status --short models/`. Recorded, not
+  substituted.
+* ADR-010's `bindAxes()`/`GRID-007` refusal **exists nowhere in the tree** and is
+  owned by `QM-0061` / `QM-0040` / `QM-0004`. Not implemented here (out of
+  declared file scope). Logged in `.plan/PLAN_CHANGELOG.md`; the six real rank-4
+  tensors are now a real-data fixture those tasks can use.
+* No floor guard was in force at implementation time — `scripts/baseline.json`
+  does not exist on this base and `QM-0001` owns it. Counts are recorded in the
+  evidence record only.
