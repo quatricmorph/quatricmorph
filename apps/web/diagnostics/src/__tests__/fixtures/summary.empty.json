@@ -1,0 +1,56 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "engine_version": "0.1.0",
+    "backend": "cpu",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 0.0,
+    "peak_resident_bytes": 2883584,
+    "bytes_read": 0
+  },
+  "model": {
+    "model_id": "synthetic-cancelled",
+    "source_uri": "file:///fixtures/synthetic-cancelled",
+    "revision_hash": "0000000000000000000000000000000000000000",
+    "checkpoint_bytes": 353822720,
+    "parameter_count": 88437760,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int4",
+    "granularity": { "kind": "per_group", "group_size": 128 },
+    "zero_point": "asymmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 0,
+    "sum_sq_base": 0.0,
+    "sum_sq_delta": 0.0,
+    "sum_abs_delta": 0.0,
+    "max_abs_delta": 0.0,
+    "bytes_at_base_precision": 0,
+    "bytes_at_target_precision": 0
+  },
+  "layers": [],
+  "experts": [],
+  "ranking": [],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": []
+  },
+  "fidelity": "exact",
+  "refusals": [
+    {
+      "requirement_id": "QUANT-003",
+      "what": "every tensor in the checkpoint",
+      "why": "The run was cancelled before the first tensor completed. Nothing was measured; the zeroes above are the absence of a measurement, not a measurement of zero."
+    }
+  ]
+}

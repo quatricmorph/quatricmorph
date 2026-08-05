@@ -30,9 +30,23 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const WEB_ROOT = resolve(HERE, '..', '..', '..', '..')
 
-/** Hand-written expectation. Not read from any file this test validates. */
-const EXPECTED_WORKSPACES = ['quatricmorph-workspace', 'model-viewer', 'query-interface']
-const EXPECTED_INCLUDE_GLOB_COUNT = 4
+/**
+ * Hand-written expectation. Not read from any file this test validates.
+ *
+ * `diagnostics` was added by `QM-0150` (the heat-map surface). These two
+ * constants are *pins*: any package added to `apps/web` necessarily turns them
+ * red, which is the point — a new workspace must be registered deliberately, in
+ * both files, by someone who also updated this list. Widening the pin is not
+ * weakening the guard; the assertions below are still exact equality on the
+ * full list and an exact glob count.
+ */
+const EXPECTED_WORKSPACES = [
+  'quatricmorph-workspace',
+  'model-viewer',
+  'query-interface',
+  'diagnostics',
+]
+const EXPECTED_INCLUDE_GLOB_COUNT = 5
 const RENAMED_AWAY_FROM = 'matrix-workspace'
 
 interface WebPackageJson {
@@ -117,7 +131,7 @@ describe('QM-0006 web workspace paths', () => {
     ).toEqual([])
   })
 
-  it('the_workspaces_array_names_exactly_the_three_web_applications', () => {
+  it('the_workspaces_array_names_exactly_the_four_web_applications', () => {
     expect(readWebPackageJson().workspaces).toEqual(EXPECTED_WORKSPACES)
   })
 

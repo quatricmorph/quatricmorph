@@ -1,0 +1,50 @@
+{
+  "manifest_version": 2,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000002",
+    "engine_version": "0.2.0",
+    "backend": "cpu",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 1.0,
+    "peak_resident_bytes": 1048576,
+    "bytes_read": 0
+  },
+  "model": {
+    "model_id": "synthetic-future",
+    "source_uri": "file:///fixtures/synthetic-future",
+    "revision_hash": "0000000000000000000000000000000000000002",
+    "checkpoint_bytes": 0,
+    "parameter_count": 0,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int8",
+    "granularity": { "kind": "per_tensor" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 0,
+    "sum_sq_base": 0.0,
+    "sum_sq_delta": 0.0,
+    "sum_abs_delta": 0.0,
+    "max_abs_delta": 0.0,
+    "bytes_at_base_precision": 0,
+    "bytes_at_target_precision": 0
+  },
+  "layers": [],
+  "experts": [],
+  "ranking": [],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": []
+  },
+  "fidelity": "exact",
+  "refusals": []
+}

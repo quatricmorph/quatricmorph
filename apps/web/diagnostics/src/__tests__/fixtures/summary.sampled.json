@@ -1,0 +1,87 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000153",
+    "engine_version": "0.1.0",
+    "backend": "metal",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 3.0,
+    "peak_resident_bytes": 1073741824,
+    "bytes_read": 1024
+  },
+  "model": {
+    "model_id": "synthetic-sampled",
+    "source_uri": "file:///fixtures/synthetic-sampled",
+    "revision_hash": "0000000000000000000000000000000000000153",
+    "checkpoint_bytes": 8000,
+    "parameter_count": 2000,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int4",
+    "granularity": { "kind": "per_tensor" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 128,
+    "block_columns": 128,
+    "resident_ceiling_bytes": 1073741824
+  },
+  "totals": {
+    "count": 2000,
+    "sum_sq_base": 500.0,
+    "sum_sq_delta": 20.0,
+    "sum_abs_delta": 80.0,
+    "max_abs_delta": 0.4,
+    "bytes_at_base_precision": 8000,
+    "bytes_at_target_precision": 1000
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 100.0,
+        "sum_sq_delta": 4.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.2,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 500
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 400.0,
+        "sum_sq_delta": 16.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.4,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 500
+      }
+    }
+  ],
+  "experts": [],
+  "ranking": [
+    {
+      "address": "model.layers[0].mlp.down_projection.weight",
+      "relative_error": 0.2,
+      "parameter_count": 1000
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": []
+  },
+  "fidelity": "sampled",
+  "refusals": [
+    {
+      "requirement_id": "EVAL-001",
+      "what": "accuracy estimate",
+      "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+    }
+  ]
+}

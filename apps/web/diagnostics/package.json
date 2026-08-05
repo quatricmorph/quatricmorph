@@ -1,0 +1,17 @@
+{
+  "name": "diagnostics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Quantisation-error heat-map surface — reads schemas/diagnostics/manifest.v1.json; no Cesium, no Three.js, no GLB, no tile traversal (SURF-001)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0"
+  }
+}

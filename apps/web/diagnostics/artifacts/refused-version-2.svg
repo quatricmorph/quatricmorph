@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="167.00" viewBox="0 0 960 167.00">
+<rect class="page" x="0" y="0" width="960" height="167.00" fill="#ffffff"/>
+<text x="20.00" y="28.00" font-family="ui-monospace, monospace" font-size="15" fill="#111827">Nothing was rendered.</text>
+<text x="20.00" y="49.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">reason: unsupported_version</text>
+<text x="20.00" y="66.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">manifest_version 2 is not the version this build reads (1). Nothing is rendered: a reader that</text>
+<text x="20.00" y="83.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">guesses at an unknown layout produces a plausible wrong answer.</text>
+<text x="20.00" y="100.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">manifest_version found: 2 · manifest_version supported: 1</text>
+<text x="20.00" y="117.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">No placeholder data is shown: a plausible picture drawn from an unreadable manifest</text>
+<text x="20.00" y="134.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">is worse than no picture.</text>
+</svg>

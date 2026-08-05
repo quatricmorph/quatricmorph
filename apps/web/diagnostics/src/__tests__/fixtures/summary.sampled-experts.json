@@ -1,0 +1,138 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000154",
+    "engine_version": "0.1.0",
+    "backend": "metal",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 4.0,
+    "peak_resident_bytes": 1073741824,
+    "bytes_read": 2048
+  },
+  "model": {
+    "model_id": "synthetic-sampled-moe",
+    "source_uri": "file:///fixtures/synthetic-sampled-moe",
+    "revision_hash": "0000000000000000000000000000000000000154",
+    "checkpoint_bytes": 16000,
+    "parameter_count": 4000,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int4",
+    "granularity": { "kind": "per_tensor" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 128,
+    "block_columns": 128,
+    "resident_ceiling_bytes": 1073741824
+  },
+  "totals": {
+    "count": 4000,
+    "sum_sq_base": 1000.0,
+    "sum_sq_delta": 40.0,
+    "sum_abs_delta": 160.0,
+    "max_abs_delta": 0.5,
+    "bytes_at_base_precision": 16000,
+    "bytes_at_target_precision": 2000
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 2000,
+        "sum_sq_base": 400.0,
+        "sum_sq_delta": 4.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.2,
+        "bytes_at_base_precision": 8000,
+        "bytes_at_target_precision": 1000
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 2000,
+        "sum_sq_base": 100.0,
+        "sum_sq_delta": 25.0,
+        "sum_abs_delta": 80.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 8000,
+        "bytes_at_target_precision": 1000
+      }
+    }
+  ],
+  "experts": [
+    {
+      "layer_index": 1,
+      "expert_index": 0,
+      "aggregate": {
+        "count": 500,
+        "sum_sq_base": 64.0,
+        "sum_sq_delta": 1.0,
+        "sum_abs_delta": 8.0,
+        "max_abs_delta": 0.1,
+        "bytes_at_base_precision": 2000,
+        "bytes_at_target_precision": 250
+      }
+    },
+    {
+      "layer_index": 1,
+      "expert_index": 1,
+      "aggregate": {
+        "count": 500,
+        "sum_sq_base": 25.0,
+        "sum_sq_delta": 4.0,
+        "sum_abs_delta": 16.0,
+        "max_abs_delta": 0.3,
+        "bytes_at_base_precision": 2000,
+        "bytes_at_target_precision": 250
+      }
+    },
+    {
+      "layer_index": 1,
+      "expert_index": 2,
+      "aggregate": {
+        "count": 0,
+        "sum_sq_base": 0.0,
+        "sum_sq_delta": 0.0,
+        "sum_abs_delta": 0.0,
+        "max_abs_delta": 0.0,
+        "bytes_at_base_precision": 2000,
+        "bytes_at_target_precision": 250
+      }
+    }
+  ],
+  "ranking": [
+    {
+      "address": "model.layers[1].mlp.down_projection.weight",
+      "relative_error": 0.5,
+      "parameter_count": 2000
+    },
+    {
+      "address": "model.layers[0].mlp.up_projection.weight",
+      "relative_error": 0.1,
+      "parameter_count": 2000
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": [
+      {
+        "keep_set": ["model.layers[1].mlp.down_projection.weight"],
+        "added_bytes": 6144,
+        "error_removed_fraction": 0.62
+      }
+    ]
+  },
+  "fidelity": "sampled",
+  "refusals": [
+    {
+      "requirement_id": "EVAL-001",
+      "what": "accuracy estimate",
+      "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+    }
+  ]
+}

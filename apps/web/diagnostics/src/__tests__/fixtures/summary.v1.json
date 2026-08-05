@@ -1,0 +1,128 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000150",
+    "engine_version": "0.1.0",
+    "backend": "cpu",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 12.5,
+    "peak_resident_bytes": 2147483648,
+    "bytes_read": 353822720
+  },
+  "model": {
+    "model_id": "synthetic-three-layer",
+    "source_uri": "file:///fixtures/synthetic-three-layer",
+    "revision_hash": "0000000000000000000000000000000000000150",
+    "checkpoint_bytes": 12000,
+    "parameter_count": 3000,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int8",
+    "granularity": { "kind": "per_output_channel" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 3000,
+    "sum_sq_base": 564.0,
+    "sum_sq_delta": 30.0,
+    "sum_abs_delta": 120.0,
+    "max_abs_delta": 0.5,
+    "bytes_at_base_precision": 12000,
+    "bytes_at_target_precision": 3000
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 400.0,
+        "sum_sq_delta": 4.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.125,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 1000
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 100.0,
+        "sum_sq_delta": 25.0,
+        "sum_abs_delta": 50.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 1000
+      }
+    },
+    {
+      "layer_index": 2,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 64.0,
+        "sum_sq_delta": 1.0,
+        "sum_abs_delta": 30.0,
+        "max_abs_delta": 0.25,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 1000
+      }
+    }
+  ],
+  "experts": [],
+  "ranking": [
+    {
+      "address": "model.layers[1].mlp.down_projection.weight",
+      "relative_error": 0.5,
+      "parameter_count": 4096
+    },
+    {
+      "address": "model.layers[2].self_attention.query_projection.weight",
+      "relative_error": 0.125,
+      "parameter_count": 2048
+    },
+    {
+      "address": "model.layers[0].mlp.up_projection.weight",
+      "relative_error": 0.1,
+      "parameter_count": 1024
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": [
+      {
+        "keep_set": ["model.layers[1].mlp.down_projection.weight"],
+        "added_bytes": 6144,
+        "error_removed_fraction": 0.5
+      },
+      {
+        "keep_set": [
+          "model.layers[1].mlp.down_projection.weight",
+          "model.layers[2].self_attention.query_projection.weight"
+        ],
+        "added_bytes": 9216,
+        "error_removed_fraction": 0.75
+      }
+    ]
+  },
+  "fidelity": "exact",
+  "refusals": [
+    {
+      "requirement_id": "EVAL-001",
+      "what": "accuracy estimate",
+      "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+    },
+    {
+      "requirement_id": "GRID-007",
+      "what": "rank-4 tensor model.layers[1].router.gate_projection.weight",
+      "why": "ADR-010 implements rank <= 3 and refuses above it; a flattened shape would invite the reader to see adjacency that does not exist."
+    }
+  ]
+}

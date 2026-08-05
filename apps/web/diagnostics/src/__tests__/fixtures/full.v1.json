@@ -1,0 +1,170 @@
+{
+  "manifest_version": 1,
+  "projection": "full",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000150",
+    "engine_version": "0.1.0",
+    "backend": "cpu",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 12.5,
+    "peak_resident_bytes": 2147483648,
+    "bytes_read": 353822720
+  },
+  "model": {
+    "model_id": "synthetic-two-layer",
+    "source_uri": "file:///fixtures/synthetic-two-layer",
+    "revision_hash": "0000000000000000000000000000000000000151",
+    "checkpoint_bytes": 4096,
+    "parameter_count": 244,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int8",
+    "granularity": { "kind": "per_output_channel" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 244,
+    "sum_sq_base": 1064.0,
+    "sum_sq_delta": 93.0,
+    "sum_abs_delta": 200.0,
+    "max_abs_delta": 0.5,
+    "bytes_at_base_precision": 488,
+    "bytes_at_target_precision": 244
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 80,
+        "sum_sq_base": 500.0,
+        "sum_sq_delta": 68.0,
+        "sum_abs_delta": 90.0,
+        "max_abs_delta": 0.4,
+        "bytes_at_base_precision": 160,
+        "bytes_at_target_precision": 80
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 48,
+        "sum_sq_base": 64.0,
+        "sum_sq_delta": 16.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 96,
+        "bytes_at_target_precision": 48
+      }
+    }
+  ],
+  "experts": [],
+  "tensors": [
+    {
+      "address": "model.embedding.token_embedding.weight",
+      "role": "token_embedding",
+      "dtype": "F16",
+      "shape": [16, 8],
+      "aggregate": {
+        "count": 128,
+        "sum_sq_base": 500.0,
+        "sum_sq_delta": 5.0,
+        "sum_abs_delta": 70.0,
+        "max_abs_delta": 0.2,
+        "bytes_at_base_precision": 256,
+        "bytes_at_target_precision": 128
+      }
+    },
+    {
+      "address": "model.layers[0].mlp.up_projection.weight",
+      "role": "mlp_up_projection",
+      "dtype": "F16",
+      "shape": [6, 8],
+      "aggregate": {
+        "count": 48,
+        "sum_sq_base": 400.0,
+        "sum_sq_delta": 64.0,
+        "sum_abs_delta": 60.0,
+        "max_abs_delta": 0.4,
+        "bytes_at_base_precision": 96,
+        "bytes_at_target_precision": 48
+      }
+    },
+    {
+      "address": "model.layers[0].self_attention.query_projection.weight",
+      "role": "attention_query_projection",
+      "dtype": "F16",
+      "shape": [4, 8],
+      "aggregate": {
+        "count": 32,
+        "sum_sq_base": 100.0,
+        "sum_sq_delta": 4.0,
+        "sum_abs_delta": 30.0,
+        "max_abs_delta": 0.15,
+        "bytes_at_base_precision": 64,
+        "bytes_at_target_precision": 32
+      }
+    },
+    {
+      "address": "model.layers[1].mlp.down_projection.weight",
+      "role": "mlp_down_projection",
+      "dtype": "F16",
+      "shape": [8, 6],
+      "aggregate": {
+        "count": 48,
+        "sum_sq_base": 64.0,
+        "sum_sq_delta": 16.0,
+        "sum_abs_delta": 40.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 96,
+        "bytes_at_target_precision": 48
+      }
+    }
+  ],
+  "ranking": [
+    {
+      "address": "model.layers[1].mlp.down_projection.weight",
+      "relative_error": 0.5,
+      "parameter_count": 48
+    },
+    {
+      "address": "model.layers[0].mlp.up_projection.weight",
+      "relative_error": 0.4,
+      "parameter_count": 48
+    },
+    {
+      "address": "model.layers[0].self_attention.query_projection.weight",
+      "relative_error": 0.2,
+      "parameter_count": 32
+    },
+    {
+      "address": "model.embedding.token_embedding.weight",
+      "relative_error": 0.1,
+      "parameter_count": 128
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": [
+      {
+        "keep_set": ["model.layers[1].mlp.down_projection.weight"],
+        "added_bytes": 48,
+        "error_removed_fraction": 0.17
+      }
+    ]
+  },
+  "fidelity": "exact",
+  "refusals": [
+    {
+      "requirement_id": "EVAL-001",
+      "what": "accuracy estimate",
+      "why": "Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "`src/__tests__` is excluded from the build's type check because its files import",
+    "node:fs, node:path and node:url, and `@types/node` is not a dependency of any",
+    "package in apps/web. Adding it would change the dependency set, which QM-0150 is",
+    "not authorised to do. The test sources are still type-stripped and executed by",
+    "vitest; what is not checked here is their types, exactly as in",
+    "quatricmorph-workspace, whose build is `vite build` alone for the same reason."
+  ],
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src"],
+  "exclude": ["src/__tests__"]
+}

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640.00" viewBox="0 0 960 640.00">
+<rect class="page" x="0" y="0" width="960" height="640.00" fill="#ffffff"/>
+<text x="20.00" y="24.00" font-family="ui-monospace, monospace" font-size="14" fill="#111827">Quantisation-error heat-map — synthetic-sampled @ 0000000000000000000000000000000000000153</text>
+<text x="20.00" y="41.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">run 0000000000000000000000000000000000000000000000000000000000000153 · int4 · backend metal · architecture generic</text>
+<text x="20.00" y="58.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">(unknown)</text>
+<text x="20.00" y="75.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">every value below is SAMPLED</text>
+<text x="20.00" y="92.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">drill: model</text>
+<text x="20.00" y="109.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">One cell per layer: the summary projection and manifest v1 publish no per-channel partials, so no finer column exists to</text>
+<text x="20.00" y="126.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">draw.</text>
+<text x="20.00" y="164.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 0 · sampled</text>
+<text x="20.00" y="189.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 1 · sampled</text>
+<rect class="cell" data-layer="0" data-column="0" data-fidelity="sampled" data-aggregated="true" data-defined="true" data-fill-fraction="0" data-selected="false" data-glyph="≡" x="156.48" y="149.00" width="779.52" height="22.00" fill="#c4c4c4" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="bar" x="351.36" y="171.00" width="389.76" height="0.00" fill="#111827" stroke="none"/>
+<text x="159.48" y="165.00" font-family="ui-monospace, monospace" font-size="11" fill="#111827">≡</text>
+<rect class="cell" data-layer="1" data-column="0" data-fidelity="sampled" data-aggregated="true" data-defined="true" data-fill-fraction="0" data-selected="false" data-glyph="≡" x="156.48" y="174.00" width="779.52" height="22.00" fill="#c4c4c4" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="bar" x="351.36" y="196.00" width="389.76" height="0.00" fill="#111827" stroke="none"/>
+<text x="159.48" y="190.00" font-family="ui-monospace, monospace" font-size="11" fill="#111827">≡</text>
+<text x="20.00" y="226.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Legend</text>
+<text x="20.00" y="243.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Colour, fill width and glyph all encode relative weight-space error, sqrt(sum_sq_delta / sum_sq_base).</text>
+<text x="20.00" y="260.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">A colour is not a finding. Cell colour, fill and glyph encode one measured quantity — relative weight-space error — and</text>
+<text x="20.00" y="277.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">nothing else. What a layer does, and what quantising it costs in accuracy, are not measured here.</text>
+<text x="20.00" y="294.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">No column merging was needed: every cell is drawn at the resolution the manifest publishes.</text>
+<text x="20.00" y="311.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Every measured cell on this map has the same value, 0.2. There is no lightest and no darkest, so no cell is drawn as worse</text>
+<text x="20.00" y="328.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">than another, and nothing here says whether 0.2 is large.</text>
+<rect class="swatch" x="20.00" y="335.00" width="14.00" height="12.00" fill="#c4c4c4" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="345.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">≡  every measured cell has the same value (0.2); there is no spread to rank</text>
+<rect class="swatch" x="20.00" y="352.00" width="14.00" height="12.00" fill="#ffffff" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="362.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">s  every value on this map is sampled</text>
+<rect class="swatch" x="20.00" y="369.00" width="14.00" height="12.00" fill="#ffffff" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<text x="40.00" y="379.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">- -  cells with a dashed border aggregate more than one channel, by maximum (factor 1)</text>
+<text x="20.00" y="402.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Ranked by relative weight-space error</text>
+<text x="20.00" y="419.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Ranked by relative weight-space error, a proxy for sensitivity.</text>
+<text x="20.00" y="436.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">1. model.layers[0].mlp.down_projection.weight — 0.2 (1000 params) [sampled]</text>
+<text x="20.00" y="459.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Mixed-precision frontier</text>
+<text x="20.00" y="476.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Greedy over error-per-byte; not proven optimal.</text>
+<text x="20.00" y="493.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">No frontier was computed for this run. The refusals below say why.</text>
+<text x="20.00" y="516.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Declared gaps</text>
+<text x="20.00" y="533.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">EVAL-001 — accuracy estimate</text>
+<text x="36.00" y="550.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration.</text>
+<text x="20.00" y="573.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration.</text>
+<text x="20.00" y="590.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">A colour is not a finding. Cell colour, fill and glyph encode one measured quantity — relative weight-space error — and</text>
+<text x="20.00" y="607.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">nothing else. What a layer does, and what quantising it costs in accuracy, are not measured here.</text>
+</svg>

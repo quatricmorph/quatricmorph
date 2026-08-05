@@ -11,6 +11,7 @@ export default defineConfig({
       'quatricmorph-workspace/src/**/__tests__/**/*.test.ts',
       'model-viewer/src/**/__tests__/**/*.test.ts',
       'query-interface/src/**/__tests__/**/*.test.ts',
+      'diagnostics/src/**/__tests__/**/*.test.ts',
     ],
   },
 })

@@ -1,0 +1,87 @@
+{
+  "manifest_version": 1,
+  "projection": "summary",
+  "run": {
+    "run_id": "0000000000000000000000000000000000000000000000000000000000000154",
+    "engine_version": "0.1.0",
+    "backend": "cpu",
+    "started_at": "2026-08-05T00:00:00Z",
+    "elapsed_seconds": 2.0,
+    "peak_resident_bytes": 1048576,
+    "bytes_read": 512
+  },
+  "model": {
+    "model_id": "synthetic-zero-base",
+    "source_uri": "file:///fixtures/synthetic-zero-base",
+    "revision_hash": "0000000000000000000000000000000000000154",
+    "checkpoint_bytes": 4000,
+    "parameter_count": 1000,
+    "architecture": "generic",
+    "resolver_confidence": "unknown"
+  },
+  "config": {
+    "precision": "int8",
+    "granularity": { "kind": "per_tensor" },
+    "zero_point": "symmetric",
+    "round": "nearest_even",
+    "block_rows": 256,
+    "block_columns": 256,
+    "resident_ceiling_bytes": 2147483648
+  },
+  "totals": {
+    "count": 1000,
+    "sum_sq_base": 100.0,
+    "sum_sq_delta": 25.0,
+    "sum_abs_delta": 50.0,
+    "max_abs_delta": 0.5,
+    "bytes_at_base_precision": 4000,
+    "bytes_at_target_precision": 1000
+  },
+  "layers": [
+    {
+      "layer_index": 0,
+      "aggregate": {
+        "count": 1000,
+        "sum_sq_base": 100.0,
+        "sum_sq_delta": 25.0,
+        "sum_abs_delta": 50.0,
+        "max_abs_delta": 0.5,
+        "bytes_at_base_precision": 4000,
+        "bytes_at_target_precision": 1000
+      }
+    },
+    {
+      "layer_index": 1,
+      "aggregate": {
+        "count": 0,
+        "sum_sq_base": 0.0,
+        "sum_sq_delta": 0.0,
+        "sum_abs_delta": 0.0,
+        "max_abs_delta": 0.0,
+        "bytes_at_base_precision": 0,
+        "bytes_at_target_precision": 0
+      }
+    }
+  ],
+  "experts": [],
+  "ranking": [
+    {
+      "address": "model.layers[0].mlp.down_projection.weight",
+      "relative_error": 0.5,
+      "parameter_count": 1000
+    }
+  ],
+  "frontier": {
+    "method": "greedy_error_per_byte",
+    "claim": "Greedy over error-per-byte; not proven optimal.",
+    "steps": []
+  },
+  "fidelity": "exact",
+  "refusals": [
+    {
+      "requirement_id": "QUANT-003",
+      "what": "layer 1",
+      "why": "No tensor of layer 1 was examined. Its zero partials are the absence of a measurement, not a measurement of zero."
+    }
+  ]
+}

@@ -2,10 +2,11 @@
 
 ## Status
 
-Blocked
+Complete
 
-Unblocks when `QM-0140` reaches `Complete`. Needs the **schema**, not the data —
-it is built against synthetic manifests in Wave 2, deliberately early.
+Claimed by `impl-agent-15` on branch `task/qm-0150-heatmap-surface`, base
+`e82fe98`. `QM-0140` is `Complete`, so the schema this consumes exists. Still
+built against synthetic manifests, deliberately early.
 
 ## Phase
 
@@ -195,3 +196,42 @@ cd apps/web/diagnostics && npx vite build && npx vite preview
 * Web test output with counts.
 * The request log showing summary-only initial load.
 * The version-refusal state.
+
+## Orchestration
+
+**Awaiting Independent Review — fix cycle 1 complete.**
+
+| Field | Value |
+| --- | --- |
+| Lane | S |
+| Branch | `task/qm-0150-heatmap-surface` |
+| Worktree | `/Users/thanh/Quatricmorph/.qm-worktrees/qm-0150` |
+| Base | `e82fe98` |
+| Head | Three commits on top of the base: `c2dc194` `feat(web): add the diagnostics heatmap surface`, `6db4dd8` `docs(plan): record independent review verdict`, and this one, subject `fix(web): clear the canvas on refusal and make the labelling test unfoolable [QM-0150]`. Its SHA is not written here: a commit cannot carry its own hash, and this table is inside it. Read it with `git rev-parse task/qm-0150-heatmap-surface`. Same reasoning as `scripts/baseline.json`'s `_qm_0101_measurement_note`. |
+| Agent | `impl-agent-17` (fix cycle **1 of at most 3**); implementation was `impl-agent-15`, review `review-agent-16` |
+| Review answered | `review-agent-16`, **CHANGES_REQUESTED** on `c2dc194` — B1 stale canvas on refusal, B2 defeatable labelling test, B3 under-scanning vocabulary checker, B4 legend naming an undrawn mark; plus the degenerate zero-span legend, and the keyword-guard limit recorded under `## Claim limits` |
+| Evidence | `.plan/evidence/QM-0150.md` — see `## Fix cycle 1`. The reviewer's `## Independent review` section is unmodified. |
+| Merge path | L |
+| Tests added | +221 web tests over +8 files, all in `apps/web/diagnostics` (+27 over +1 file in this cycle) |
+| Floor before | rust 677 / 51 binaries · web 115 / 13 files |
+| Floor after | rust 677 / 51 binaries (unchanged — no Rust touched) · web 336 / 21 files |
+| Rust note | `cargo test --workspace` measures 677 / 51 on this branch, which does not contain `QM-0011` or `QM-0121`; `main` is at 744 / 54. No Rust file is in this branch's diff. The controller reconciles the Rust floor at merge. |
+
+Two things the reviewer should look at first.
+
+1. **`apps/web/quatricmorph-workspace/src/util/__tests__/workspace-paths.test.ts`
+   was edited.** `QM-0006`'s guard pins the workspace list and the include-glob
+   count by hand, so any package added to `apps/web` turns those two assertions
+   red. `EXPECTED_WORKSPACES` gained `'diagnostics'` and
+   `EXPECTED_INCLUDE_GLOB_COUNT` went 4 → 5; both assertions are still exact and
+   the file's test count is unchanged. It is the only edit to a pre-existing web
+   package.
+2. **Manifest v1 publishes no per-channel error**, so this surface draws one
+   cell per layer (summary) or per tensor (full), each spanning the output
+   channels the tensor's `shape` declares and each labelled `aggregated`. The
+   column planner is written and tested at per-channel resolution for the day a
+   manifest carries it; nothing here invents a channel value.
+   `.plan/evidence/QM-0150.md` §Research records the reasoning in full.
+
+**G4 is not satisfied by this task.** No reader other than the implementing
+agent has looked at the surface. `QM-0151` is the legibility review.

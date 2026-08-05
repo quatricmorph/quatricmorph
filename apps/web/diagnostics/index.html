@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quatricmorph — quantisation-error heat-map</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #ffffff;
+        color: #111827;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      h1 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      p.boundary {
+        color: #4b5563;
+        font-size: 12px;
+        margin: 0 0 16px;
+        max-width: 78ch;
+      }
+      canvas {
+        border: 1px solid #9ca3af;
+        display: block;
+        margin-bottom: 16px;
+      }
+      /*
+        The rule above is what makes this necessary. `hidden` hides an element
+        through the user-agent stylesheet, and any author rule setting `display`
+        on the same element wins over it. Without this, the canvas that a
+        refusal hides would stay on screen as an empty bordered frame above
+        "Nothing was rendered."
+      */
+      canvas[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Quantisation-error heat-map</h1>
+    <p class="boundary">
+      Reads one diagnostics manifest (<code>schemas/diagnostics/manifest.v1.json</code>) and paints
+      where relative weight-space error is large. It does not measure accuracy, and a colour here is
+      not a finding about what the model does. A manifest this build cannot read is refused rather
+      than partially rendered.
+    </p>
+    <canvas id="heatmap-canvas" width="960" height="320"></canvas>
+    <div id="diagnostics"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

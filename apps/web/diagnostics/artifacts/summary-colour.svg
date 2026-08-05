@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="818.00" viewBox="0 0 960 818.00">
+<rect class="page" x="0" y="0" width="960" height="818.00" fill="#ffffff"/>
+<text x="20.00" y="24.00" font-family="ui-monospace, monospace" font-size="14" fill="#111827">Quantisation-error heat-map — synthetic-three-layer @ 0000000000000000000000000000000000000150</text>
+<text x="20.00" y="41.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">run 0000000000000000000000000000000000000000000000000000000000000150 · int8 · backend cpu · architecture generic (unknown)</text>
+<text x="20.00" y="58.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">every value below is EXACT</text>
+<text x="20.00" y="75.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">drill: model</text>
+<text x="20.00" y="92.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">One cell per layer: the summary projection and manifest v1 publish no per-channel partials, so no finer column exists to</text>
+<text x="20.00" y="109.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">draw.</text>
+<text x="20.00" y="147.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 0 · exact</text>
+<text x="20.00" y="172.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 1 · exact</text>
+<text x="20.00" y="197.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">layer 2 · exact</text>
+<rect class="cell" data-layer="0" data-column="0" data-fidelity="exact" data-aggregated="true" data-defined="true" data-fill-fraction="0" data-selected="false" data-glyph="·" x="150.00" y="132.00" width="786.00" height="22.00" fill="#ffffcc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="bar" x="346.50" y="154.00" width="393.00" height="0.00" fill="#111827" stroke="none"/>
+<text x="153.00" y="148.00" font-family="ui-monospace, monospace" font-size="11" fill="#111827">·</text>
+<rect class="cell" data-layer="1" data-column="0" data-fidelity="exact" data-aggregated="true" data-defined="true" data-fill-fraction="1" data-selected="false" data-glyph="█" x="150.00" y="157.00" width="786.00" height="22.00" fill="#800026" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="bar" x="346.50" y="157.00" width="393.00" height="22.00" fill="#111827" stroke="none"/>
+<text x="153.00" y="173.00" font-family="ui-monospace, monospace" font-size="11" fill="#ffffff">█</text>
+<rect class="cell" data-layer="2" data-column="0" data-fidelity="exact" data-aggregated="true" data-defined="true" data-fill-fraction="0.062499999999999986" data-selected="false" data-glyph="·" x="150.00" y="182.00" width="786.00" height="22.00" fill="#ffffcc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<rect class="bar" x="346.50" y="202.63" width="393.00" height="1.37" fill="#111827" stroke="none"/>
+<text x="153.00" y="198.00" font-family="ui-monospace, monospace" font-size="11" fill="#111827">·</text>
+<text x="20.00" y="234.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Legend</text>
+<text x="20.00" y="251.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Colour, fill width and glyph all encode relative weight-space error, sqrt(sum_sq_delta / sum_sq_base).</text>
+<text x="20.00" y="268.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">A colour is not a finding. Cell colour, fill and glyph encode one measured quantity — relative weight-space error — and</text>
+<text x="20.00" y="285.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">nothing else. What a layer does, and what quantising it costs in accuracy, are not measured here.</text>
+<text x="20.00" y="302.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">No column merging was needed: every cell is drawn at the resolution the manifest publishes.</text>
+<text x="20.00" y="319.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">The scale is relative to this map: the lightest cell is 0.1 and the darkest is 0.5. It is not an absolute threshold.</text>
+<rect class="swatch" x="20.00" y="326.00" width="14.00" height="12.00" fill="#ffffcc" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="336.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">·  tier 1 of 6 — fill 0%</text>
+<rect class="swatch" x="20.00" y="343.00" width="14.00" height="12.00" fill="#ffeda0" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="353.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">:  tier 2 of 6 — fill 20%</text>
+<rect class="swatch" x="20.00" y="360.00" width="14.00" height="12.00" fill="#fed976" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="370.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">+  tier 3 of 6 — fill 40%</text>
+<rect class="swatch" x="20.00" y="377.00" width="14.00" height="12.00" fill="#fd8d3c" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="387.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">=  tier 4 of 6 — fill 60%</text>
+<rect class="swatch" x="20.00" y="394.00" width="14.00" height="12.00" fill="#e31a1c" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="404.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">#  tier 5 of 6 — fill 80%</text>
+<rect class="swatch" x="20.00" y="411.00" width="14.00" height="12.00" fill="#800026" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="421.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">█  tier 6 of 6 — fill 100%</text>
+<rect class="swatch" x="20.00" y="428.00" width="14.00" height="12.00" fill="#ffffff" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="none"/>
+<text x="40.00" y="438.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">e  every value on this map is exact</text>
+<rect class="swatch" x="20.00" y="445.00" width="14.00" height="12.00" fill="#ffffff" stroke="#9ca3af" stroke-width="0.5" stroke-dasharray="3 2"/>
+<text x="40.00" y="455.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">- -  cells with a dashed border aggregate more than one channel, by maximum (factor 1)</text>
+<text x="20.00" y="478.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Ranked by relative weight-space error</text>
+<text x="20.00" y="495.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Ranked by relative weight-space error, a proxy for sensitivity.</text>
+<text x="20.00" y="512.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">1. model.layers[1].mlp.down_projection.weight — 0.5 (4096 params) [exact]</text>
+<text x="20.00" y="529.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">2. model.layers[2].self_attention.query_projection.weight — 0.125 (2048 params) [exact]</text>
+<text x="20.00" y="546.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">3. model.layers[0].mlp.up_projection.weight — 0.1 (1024 params) [exact]</text>
+<text x="20.00" y="569.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Mixed-precision frontier</text>
+<text x="20.00" y="586.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Greedy over error-per-byte; not proven optimal.</text>
+<text x="20.00" y="603.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">1. keep 1 tensor(s) — +6144 bytes, 0.5 of squared error removed [exact]</text>
+<text x="20.00" y="620.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">2. keep 2 tensor(s) — +9216 bytes, 0.75 of squared error removed [exact]</text>
+<text x="20.00" y="643.00" font-family="ui-monospace, monospace" font-size="13" fill="#111827">Declared gaps</text>
+<text x="20.00" y="660.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">EVAL-001 — accuracy estimate</text>
+<text x="36.00" y="677.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration.</text>
+<text x="20.00" y="694.00" font-family="ui-monospace, monospace" font-size="12" fill="#111827">GRID-007 — rank-4 tensor model.layers[1].router.gate_projection.weight</text>
+<text x="36.00" y="711.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">ADR-010 implements rank &lt;= 3 and refuses above it; a flattened shape would invite the reader to see adjacency that does</text>
+<text x="36.00" y="728.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">not exist.</text>
+<text x="20.00" y="751.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">Weight-space error only. Accuracy impact is not measured — run your evaluation on the recommended configuration.</text>
+<text x="20.00" y="768.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">A colour is not a finding. Cell colour, fill and glyph encode one measured quantity — relative weight-space error — and</text>
+<text x="20.00" y="785.00" font-family="ui-monospace, monospace" font-size="12" fill="#4b5563">nothing else. What a layer does, and what quantising it costs in accuracy, are not measured here.</text>
+</svg>
