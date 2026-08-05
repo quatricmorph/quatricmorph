@@ -1174,6 +1174,13 @@ and concurrent appends to one file lose writes.
 | `QM-0153` | `65b623f` | rust 744/54 · web **361/22** · 13 CLI goldens ok · exit 0 |
 | `QM-0126` | `3f8b833` | rust **745/54** · web 361/22 · exit 0 · `license-audit.sh` exit 0 |
 
+Both gate exit codes were **re-measured on `009b827`** after this record was first
+written, because the original readings were taken through a pipe — `cmd | tail; echo $?`
+reports `tail`'s status, not the script's. Re-run directly: `verify-baseline.sh` exit
+**0** (745/54 rust, 361/22 web, all at floor) and `license-audit.sh` exit **0**. The
+figures were right; the way they were derived was not, which in a repository whose rule
+is *cite the command, derive the number* is worth correcting rather than leaving.
+
 Both were implemented by one agent and reviewed by a **different** agent that did not
 write them, and both reviews did real work rather than rubber-stamping:
 
@@ -1193,12 +1200,31 @@ write them, and both reviews did real work rather than rubber-stamping:
 keeping **both** raised floors; `QM-0126`'s branch text citing web at 336/21 was
 corrected to 361/22, which `QM-0153` had already raised.
 
-**Newly unblocked by this run, and left `Blocked` deliberately:**
+**The frontier is four tasks, not two — this table was wrong when first written and is
+corrected here.**
 
-| Task | Unblocked by | Why not started |
-| --- | --- | --- |
-| `QM-0127` | `QM-0126` Complete | ~25 minutes remained; implement + independent review + merge does not fit, and a half-finished branch is worse than a clean hand-off |
-| `QM-0122` | `QM-0121` Complete | Gate G2, the largest frontier task; the other controller session holds **uncommitted** partial work in `qm0122-g2` that this session did not adopt |
+The original derivation collected every `QM-XXXX` appearing anywhere in a blocked
+task's `## Status` section and required all of them `Complete`. Those sections also
+carry **parenthetical mentions of dropped or rewired dependencies**, which poisoned the
+check: `QM-0031` reads "Unblocks when `QM-0030` and `QM-0020` reach `Complete`.
+(`QM-0022` dropped — deferred.)", so the never-to-be-completed `QM-0022` filtered it
+out. `QM-0037` was lost the same way to a parenthetical `QM-0034`. Re-derived by
+parsing **only the unblock clause, truncated at the first `(`**:
+
+| Task | Unblocked by | Since | Why not started |
+| --- | --- | --- | --- |
+| `QM-0031` | `QM-0020` + `QM-0030` Complete | **before this run began** | Missed by the faulty parse for the whole run — the single most consequential error this controller made |
+| `QM-0037` | `QM-0126` Complete | this run | Unblocked by this run's own merge; missed by the same parse |
+| `QM-0127` | `QM-0126` Complete | this run | ~25 minutes remained; implement + independent review + merge does not fit, and a half-finished branch is worse than a clean hand-off |
+| `QM-0122` | `QM-0121` Complete | this run | Gate G2, the largest frontier task; the other controller session holds **uncommitted** partial work in `qm0122-g2` that this session did not adopt |
+
+**`QM-0031` is very likely free to take.** Its worktree `qm0031-stats` sat at zero
+commits and zero dirty files from `12:16Z` to `15:08Z` — by the same canary rule that
+correctly showed `QM-0122` was live, that reads as abandoned. Its
+`crates/q-gpu/src/lib.rs` conflict with `QM-0126` is now moot, because `QM-0126` has
+merged. Recorded, deliberately not acted on: confirming a foreign worktree is dead is
+the next controller's call to make with fresh evidence, not this one's on three-hour-old
+observations.
 
 **Two preconditions `QM-0127` inherits**, from a finding its reviewer surfaced that
 the implementer did not know rather than withheld: `build.rs` passes only

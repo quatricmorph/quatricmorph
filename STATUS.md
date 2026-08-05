@@ -200,7 +200,7 @@ report manifest. It is not the deferred Cesium viewer or matrix workspace.
 
 | ID | Description | Status | Maps to | Files | Test(s) |
 | --- | --- | --- | --- | --- | --- |
-| SURF-001 | Heat-map surface over layer x channel, fed by the manifest | Implemented | `QM-0150` | `apps/web/diagnostics/src/heatmap.ts`, `src/render.ts` | `heatmap.test.ts`, `artifacts.test.ts` |
+| SURF-001 | Heat-map surface over layer x channel, fed by the manifest | Verified | `QM-0150` | `apps/web/diagnostics/src/heatmap.ts`, `src/render.ts` | `heatmap.test.ts`, `artifacts.test.ts` |
 | SURF-002 | Degradation to an aggregate above a rendering ceiling, stated in the UI | Verified | `QM-0153` | `apps/web/diagnostics/src/heatmap.ts`, `src/render.ts`, `src/app.ts` | `degradation.test.ts` — 24 tests, including the AC5 channel-coverage assertions shown by mutation to fail under both a gross truncation and a one-group off-by-one |
 
 `MAX_HEATMAP_CELLS` is 250 000; above it, columns aggregate **by maximum, never by
@@ -278,15 +278,15 @@ page beside the canvas.
 
 | Status | Count |
 | --- | --- |
-| Verified | 105 |
+| Verified | 106 |
 | Stub (returns `NotImplemented` carrying its own ID) | 10 |
 | Not Started | 8 |
 | Hardware-Unverified | 5 |
-| Implemented (works, no dedicated test) | 2 |
+| Implemented (works, no dedicated test) | 1 |
 | Partial | 2 |
 | Split status (`GPU-003` — Metal implemented and unverified, wgpu not started) | 1 |
 
-105 + 10 + 8 + 5 + 2 + 2 + 1 = 133. `GPU-003` is counted on its own line rather than
+106 + 10 + 8 + 5 + 1 + 2 + 1 = 133. `GPU-003` is counted on its own line rather than
 folded into either neighbour: its two backends are at genuinely different stages, and
 filing the row under one of them would overstate the other.
 
