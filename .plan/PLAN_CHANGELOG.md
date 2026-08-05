@@ -1201,3 +1201,46 @@ cosmetics. Recorded here instead.
 were both already correct — only prose was stale.
 **Evidence:** reviewer measured `cargo test -p q-quant` → 53 = 45 lib + 1 + 7, and
 counted 30 tests in `rtn.rs`.
+
+## 2026-08-05 — CONTROLLER — `crates/q-gpu/src/lib.rs` is a third shared mutable file and is missing from the forbidden-concurrency table
+
+**Discovered during:** readiness recomputation after `QM-0120` reached `Complete`.
+**Defect:** `.plan/EXECUTION_ORDER.md` §6 lists the sequences that may not run
+concurrently, and names two shared mutable files as the reason:
+`crates/q-catalog/src/lib.rs` (the `QM-0012` → `QM-0020` → `QM-0032` chain) and the
+`QM-0120` → `QM-0125` output chain. **It does not name `crates/q-gpu/src/lib.rs`.**
+
+That file is declared by at least four v1 tasks:
+
+| Task | Declares `crates/q-gpu/src/lib.rs` as |
+| --- | --- |
+| `QM-0121` paired block reduction | "the trait, the types, the CPU implementation" |
+| `QM-0031` CPU statistics pass | "pass driver" |
+| `QM-0032` wire the cache | listed first in its change set |
+| `QM-0037` backend selection | the selection seam (rewired to `QM-0126`) |
+
+`QM-0031`'s v1 unblock condition (`QM-0030` and `QM-0020` both `Complete`) is now
+satisfied, so a controller scheduling purely from the dependency graph and the §6
+table **would have started it concurrently with `QM-0121`** and produced two agents
+editing the same file in different worktrees — precisely the class of conflict §6
+exists to prevent, and one that would surface only at merge as a conflict in the
+most safety-critical file in the engine.
+
+**Correction:** `QM-0031` is **held** behind `QM-0121`'s merge. §6's table should
+gain `crates/q-gpu/src/lib.rs` with the sequence
+`QM-0121` → `QM-0031` → `QM-0032` (and `QM-0037` when the Metal lane opens),
+mirroring the `q-catalog` row it already carries.
+
+**Why this was catchable only by checking declared scope, not the graph.** There is
+no dependency edge between `QM-0121` and `QM-0031` — they are genuinely independent
+in the plan's own ordering. The collision is purely a file-scope one, which is why
+§14 requires comparing a candidate task's declared files against every *active*
+task's files as a separate check from the dependency test. The dependency graph
+alone would have said "go".
+
+**Files changed:** none — recorded as a finding. The §6 edit belongs to whichever
+task owns `EXECUTION_ORDER.md`; the controller did not edit it inline because the
+owner has been amending `.plan/` during this run.
+**Dependency impact:** `QM-0031` queued behind `QM-0121`; no edge added.
+**Evidence:** the four tasks' `## Files Expected to Change` sections;
+`.plan/EXECUTION_ORDER.md` §6's table as it stands.
