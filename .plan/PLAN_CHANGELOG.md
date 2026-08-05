@@ -595,3 +595,75 @@ tests" (`:15`), and "101 tests today" (`:69`) — three places, all stale; the f
 count is also 12 against 13 on disk. `Tasks affected` (`:89`) lists seven tasks;
 `QM-0050`–`QM-0053` and `QM-0080` are `Deferred`, `QM-0082` and `QM-0085` are
 `Blocked` behind `QM-0152`.
+
+## 2026-08-04 — QM-0167 — precedence rank 1 is an ADR carrying `Departs from:`, not `ARCHITECTURE.md` unqualified
+
+**Discovered during:** `QM-0167` implementation; confirmed and its premises
+re-checked by `review-agent-5`, which returned `CHANGES_REQUESTED` **solely**
+because the deviation had not been recorded through this mechanism.
+**Defect:** `QM-0167`'s acceptance criterion 4 reads *"rank 1 is restored to
+`ARCHITECTURE.md`"*. Implemented literally, that would assert `ARCHITECTURE.md`
+§5 outranks `ADR-003`, §16 outranks `ADR-007`, and §8.2 outranks `ADR-009` —
+contradicting **three Accepted ADRs**, and contradicting `ARCHITECTURE.md` §2.1's
+own instruction:
+
+> "**The implementation departs from this.** The catalog is SQLite …
+> **Do not "fix" the code to match this paragraph.**" — `ARCHITECTURE.md:73-77`
+
+**Correction:** The precedence table places **Accepted ADRs carrying a
+`Departs from:` line at rank 1** and **`ARCHITECTURE.md` at rank 2**, matching
+`.plan/README.md`'s authoritative-documents table and this controller's §0.1. The
+criterion's *intent* — that `ARCHITECTURE.md` outrank the strategy document and
+all of `.plan/` — is met; the strategy document is no longer a rank at all, only
+the recorded source of the decision. The criterion text itself is amended by the
+task so a later reader does not see a criterion that was silently not followed.
+
+**A false premise found by the reviewer, recorded because it was load-bearing.**
+The implementer's evidence record claimed **four** ADRs carry a `Departs from:`
+line (ADR-001/003/007/009). `grep -rn "Departs from" docs/decisions/` returns
+exactly **three** — ADR-003 (`§2.1 and §5`), ADR-007 (`§16`), ADR-009 (`§8.2`).
+**ADR-001 has no such line**: it is Accepted and is a genuine departure, but it is
+recorded *inline* in `ARCHITECTURE.md` §16 rather than through the line. The
+conclusion survives the miscount — three ADRs are sufficient — but the premise was
+wrong and is corrected rather than left standing.
+
+**Files changed:** `.plan/tasks/QM-0167-root-document-amendment/TASK.md`,
+`.plan/evidence/QM-0167.md` (by the implementer); this changelog (controller).
+**Dependency impact:** none.
+**Evidence:** `ARCHITECTURE.md:73-77`, `:259-263`, `:1027-1037` (three inline
+departure notes, quoted by the reviewer); `grep -rn "Departs from"
+docs/decisions/` → 3 hits; reviewer's SHA-256 byte-identity table showing
+§1–§16, §19 and §20 unchanged between `793e122` and `22260e7`.
+
+## 2026-08-04 — CONTROLLER — six root/docs files still present deferred Phase 0 as the active track, and no task owns them
+
+**Discovered during:** `QM-0167` implementation and its independent review.
+**Defect:** `QM-0167` corrected the six documents in its declared scope, but
+**six further files still describe the deferred Phase 0 tiling spike as the active
+track, and no task in the plan declares any of them**:
+
+`docs/PRODUCT_ARCHITECTURE_v1.md:15` · `docs/requirements/PREREQUISITES.md:41,65`
+· `docs/TESTING.md:12` · `docs/agent/CHARTER.md` ·
+`.plan/STRATEGY_ALIGNMENT.md` §4 and §6 · `docs/requirements/VIZ_MVP.md`
+(whose `TILE-11` also restates `ARCHITECTURE.md` §8.2, which `ADR-009` departs
+from — correctly left alone rather than re-litigated, since the file is deferred
+wholesale and `TILE-11` is an unchecked row).
+
+**Why this is more than a stale-docs nit.** `docs/requirements/PREREQUISITES.md`
+tells an autonomous agent that it **may start Phase 0** — and `AGENTS.md` rule 1
+points at that file as the gate checklist. Phases 04–07 are `Deferred` wholesale
+for v1. The precedence table resolves the contradiction on paper, but an agent
+reading `PREREQUISITES.md` first would never reach the table. **This is a live
+hazard for exactly the kind of unattended run that produced this entry**, not a
+cosmetic inconsistency.
+
+**Correction:** recorded here and requiring a **new task** — no existing task
+declares these files, so routing them to `QM-0002` or `QM-0090` would exceed those
+tasks' declared scope. Not created in this run: the run is inside its final hour
+and creating a task it cannot also execute, review and merge would leave a new
+`Undefined` entry with no evidence behind it. The next run should create it and
+schedule it early, because it protects every later agent.
+**Files changed:** none. This is a recorded finding, not a repair.
+**Dependency impact:** none mechanical; a correctness hazard for future agent runs.
+**Evidence:** the file/line citations above, from `QM-0167`'s `## Not performed`
+items 1, 5 and 8 and independently confirmed by `review-agent-5`.
