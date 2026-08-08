@@ -1,0 +1,549 @@
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>distilgpt2 — every layer, every head, real weights</title>
+  <style>
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('../../assets/fonts/KaTeX_Main-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('../../assets/fonts/KaTeX_Main-Bold.woff2') format('woff2');
+      font-weight: bold;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('../../assets/fonts/KaTeX_Main-Italic.woff2') format('woff2');
+      font-weight: normal;
+      font-style: italic;
+      font-display: swap;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      background: #000;
+      color: #eee;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      flex: 0 0 auto;
+      background: #f0f0f0;
+      color: #111;
+      padding: 6px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      font-size: 13px;
+    }
+
+    #header label {
+      font-style: italic;
+      margin-right: 2px;
+    }
+
+    #header select, #header input {
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    #prompt { width: 260px; }
+    #view { min-width: 150px; }
+    #anim { min-width: 140px; }
+
+    #status {
+      flex: 0 0 auto;
+      background: #1a1a1a;
+      padding: 5px 12px;
+      font-size: 12px;
+      line-height: 18px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      align-items: baseline;
+    }
+
+    #status .expr { color: #9cf; font-style: italic; }
+    #status .exact { color: #7d7; }
+    #status .sampled { color: #fc6; }
+    #status .err { color: #f77; }
+    #status .dim { color: #888; }
+
+    .tok {
+      display: inline-block;
+      background: #303030;
+      border-radius: 3px;
+      padding: 0 4px;
+      margin-right: 3px;
+      white-space: pre;
+      color: #ddd;
+    }
+
+    #mm {
+      flex: 1 1 auto;
+      width: 100%;
+      border: none;
+      min-height: 0;
+    }
+
+    #tensors {
+      display: none;
+      flex: 0 0 40%;
+      overflow: auto;
+      background: #0d0d0d;
+      border-top: 1px solid #333;
+      font-size: 12px;
+    }
+
+    #tensors table { border-collapse: collapse; width: 100%; }
+    #tensors td { padding: 1px 10px; border-bottom: 1px solid #1c1c1c; white-space: nowrap; }
+    #tensors td.n { color: #9cf; }
+    #tensors td.r { text-align: right; color: #999; }
+
+    a { color: #9cf; }
+  </style>
+</head>
+
+<body>
+  <div id="header">
+    <label for="prompt">Prompt</label>
+    <input type="text" id="prompt" value="The capital of France is Paris, and the capital of Italy is Rome. Distilled models keep the same shape as their teacher, only fewer layers." />
+    <label for="view">View</label>
+    <select id="view"></select>
+    <label for="layer">Layer</label>
+    <select id="layer"></select>
+    <label for="head">Head</label>
+    <select id="head"></select>
+    <label for="seq">Tokens</label>
+    <select id="seq"></select>
+    <label for="stride">Stride</label>
+    <select id="stride"></select>
+    <label for="anim">Animate</label>
+    <select id="anim">
+      <option value="none">none</option>
+      <option value="vmprod">vmprod</option>
+      <option value="mvprod">mvprod</option>
+      <option value="vvprod">vvprod</option>
+      <option value="dotprod (row major)">dotprod (row major)</option>
+    </select>
+    <a href="javascript:toggleTensors()">tensors</a>
+    <a href="javascript:popout()">open&#x2197;</a>
+  </div>
+
+  <div id="status">loading…</div>
+  <iframe id="mm" src="about:blank"></iframe>
+  <div id="tensors"></div>
+
+  <script>
+    //
+    // Drives ../../index.html (the mm viewer) from a real GPT-2 checkpoint.
+    //
+    // tools/gpt2_server.py serves both this page and the matrix data, so the
+    // CSV URLs mm loads are same-origin. Every leaf's h/w comes from that
+    // server's /gpt2/specs.json — never hand-written here — because mm's
+    // tryURLInit wraps out-of-range indices (`data[i % data.length]`) and would
+    // silently tile a mis-shaped matrix instead of failing.
+    //
+
+    const abs = u => new URL(u, location.href).href
+    const $ = id => document.getElementById(id)
+
+    //
+    // views
+    //
+    // mm's expression grammar is matmul-only (viz.js parseExpr maps '@' and
+    // nothing else), so GPT-2's two residual additions cannot be drawn as part
+    // of the graph. They live in the data instead: the server runs the real
+    // forward pass and each `input` leaf below is the actual residual-stream
+    // state at that point, for the prompt you type. Every layer and every head
+    // is reachable; what you cannot get is all 6 blocks fused into one scene.
+    //
+    // `kinds` entries are `kind[:flags]` — t=transpose, r/c = apply stride to
+    // rows/cols. Stride is only ever applied to an axis that is NOT contracted
+    // by the matmul it feeds, so a rendered product is never a partial sum.
+    //
+    // `bias` names the term GPT-2 adds that mm cannot draw (no '+' in EPILOGS).
+    // The leaf data is the checkpoint's, but the drawn *product* is bias-free,
+    // which is not a rounding detail: on layer 2 the qkv product lands 24% off
+    // the model's. The status bar says so rather than letting "exact" stand for
+    // the whole picture.
+    //
+
+    const VIEWS = {
+      'attention head': {
+        kinds: ['ln_1', 'ln_1:t', 'wq', 'wk_t', 'wv', 'wo'],
+        stride: 1, head: true,
+        bias: 'c_attn.bias on Q/K/V, and attn.c_proj.bias on out',
+        note: s => `layer ${s.layer} head ${s.head} of ${s.dims.n_head} · head_dim ${s.dims.head_dim}`,
+        build: (m, s) => ({
+          name: 'out',
+          epilog: 'none',
+          left: {
+            name: 'attn @ V', matmul: true, epilog: 'none',
+            left: {
+              name: 'attn', matmul: true, epilog: 'softmax(tril(x/sqrt(k)))',
+              left: node('Q', m['ln_1'], m['wq'], 'none', L('positive', 'left', 'bottom', 'back')),
+              right: node('K_t', m['wk_t'], m['ln_1:t'], 'none', L('positive', 'right', 'top', 'back')),
+              anim: A(), block: B(), layout: L('negative', 'left', 'top', 'front'),
+            },
+            right: node('V', m['ln_1'], m['wv'], 'none', L('negative', 'right', 'top', 'back')),
+            anim: A(), block: B(), layout: L('positive', 'left', 'bottom', 'back'),
+          },
+          right: leaf('wO', m['wo']),
+        }),
+      },
+
+      'qkv projection': {
+        kinds: ['ln_1', 'c_attn:c'],
+        stride: 2, head: false,
+        bias: 'c_attn.bias',
+        note: s => `layer ${s.layer} · all ${s.dims.n_head} heads at once — columns are [Q | K | V], ${s.dims.n_embd} each`,
+        build: (m, s) => pair('qkv', leaf('ln_1(x)', m['ln_1']), leaf('c_attn', m['c_attn:c']), 'none'),
+      },
+
+      'attention output': {
+        kinds: ['attn_out', 'attn_c_proj:c'],
+        stride: 1, head: false,
+        bias: 'attn.c_proj.bias',
+        note: s => `layer ${s.layer} · concatenated head outputs through c_proj`,
+        build: (m, s) => pair('attn_y', leaf('heads', m['attn_out']), leaf('c_proj', m['attn_c_proj:c']), 'none'),
+      },
+
+      'mlp up (gelu)': {
+        kinds: ['ln_2', 'c_fc:c'],
+        stride: 4, head: false,
+        bias: 'mlp.c_fc.bias — and because GELU is nonlinear, the h drawn here is not the h that the mlp down view consumes',
+        note: s => `layer ${s.layer} · ${s.dims.n_embd} → ${4 * s.dims.n_embd} then GELU`,
+        build: (m, s) => pair('h', leaf('ln_2(x)', m['ln_2']), leaf('c_fc', m['c_fc:c']), 'gelu'),
+      },
+
+      'mlp down': {
+        kinds: ['mlp_h', 'mlp_c_proj:c'],
+        stride: 4, head: false,
+        bias: 'mlp.c_proj.bias',
+        note: s => `layer ${s.layer} · ${4 * s.dims.n_embd} → ${s.dims.n_embd}`,
+        build: (m, s) => pair('mlp_y', leaf('gelu(h)', m['mlp_h']), leaf('c_proj', m['mlp_c_proj:c']), 'none'),
+      },
+
+      'logits (tied wte)': {
+        kinds: ['final', 'wte_t:r'],
+        stride: 64, head: false,
+        bias: null,   // GPT-2's LM head is the tied wte with no bias
+        note: s => `ln_f(x) against the tied embedding — ${s.dims.vocab_size} vocabulary rows`,
+        build: (m, s) => pair('logits', leaf('ln_f(x)', m['final']), leaf('wte_t', m['wte_t:r']), 'none'),
+      },
+    }
+
+    // params helpers -------------------------------------------------------
+
+    const L = (pol, left, right, res) => ({
+      'polarity': pol, 'left placement': left,
+      'right placement': right, 'result placement': res,
+    })
+    const A = alg => ({ alg: alg || 'none' })
+    const B = () => ({ 'j blocks': 1 })
+
+    const leaf = (name, spec) => ({
+      name, matmul: false, h: spec.h, w: spec.w,
+      init: 'url', url: abs(spec.url), min: -1, max: 1, dropout: 0,
+    })
+
+    const node = (name, lspec, rspec, epilog, layout) => ({
+      name, matmul: true, epilog: epilog || 'none',
+      left: leaf(lname(name, 0), lspec),
+      right: leaf(lname(name, 1), rspec),
+      anim: A(), block: B(), layout,
+    })
+
+    // leaf names inside the attention-head tree, kept close to the paper
+    const NAMES = { Q: ['input', 'wQ'], K_t: ['wK_t', 'input_t'], V: ['input', 'wV'] }
+    const lname = (parent, i) => (NAMES[parent] || ['left', 'right'])[i]
+
+    // root node: anim/block/layout/deco/viz/cam are supplied by BASE()
+    const pair = (name, l, r, epilog) => ({
+      name, epilog: epilog || 'none', left: l, right: r,
+    })
+
+    const BASE = () => ({
+      folder: 'closed',
+      anim: { alg: 'none', speed: 16, fuse: 'sync', 'hide inputs': false, spin: 0 },
+      block: { 'i blocks': 1, 'k blocks': 1, 'j blocks': 1 },
+      layout: {
+        scheme: 'blocks', gap: 24, scatter: 0, molecule: 1, blast: 0,
+        polarity: 'negative', 'left placement': 'left',
+        'right placement': 'top', 'result placement': 'front',
+      },
+      deco: {
+        legends: 6, shape: true, spotlight: 4, 'row guides': 0.1, 'flow guides': 0,
+        'lens size': 0.5, magnification: 12, 'interior spotlight': false, axes: false,
+      },
+      viz: {
+        sensitivity: 'local', 'min size': 0.05, 'min light': 0.2, 'max light': 0.9,
+        'elem scale': 2, 'zero hue': 0.75, 'hue gap': 0.75, 'hue spread': 0.03,
+      },
+      cam: { x: -400, y: 400, z: 400 },
+    })
+
+    //
+    // state + wiring
+    //
+
+    let META = null
+    let current_view = null
+    let mm_ready = false
+
+    const state = () => ({
+      prompt: $('prompt').value,
+      view: $('view').value,
+      layer: +$('layer').value,
+      head: +$('head').value,
+      stride: +$('stride').value,
+      seq: +$('seq').value,
+      anim: $('anim').value,
+      dims: META.dims,
+    })
+
+    function option(elem, value, text) {
+      const o = document.createElement('option')
+      o.value = value
+      o.text = text === undefined ? value : text
+      elem.add(o)
+      return o
+    }
+
+    function fillRange(elem, n) {
+      elem.options.length = 0
+      for (let i = 0; i < n; i++) option(elem, i)
+    }
+
+    function status(html) { $('status').innerHTML = html }
+
+    async function getJSON(url) {
+      const r = await fetch(abs(url))
+      const body = await r.json().catch(() => ({ error: `HTTP ${r.status}` }))
+      if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`)
+      return body
+    }
+
+    //
+    // build + push
+    //
+
+    async function refresh(reload) {
+      const s = state()
+      const view = VIEWS[s.view]
+
+      // stride only reaches matrices whose flags asked for it
+      const q = new URLSearchParams({
+        layer: s.layer, head: s.head, stride: s.stride,
+        text: s.prompt, seq: s.seq, kinds: view.kinds.join(','),
+      })
+
+      let specs, n_tokens, toks
+      try {
+        const [sp, tk] = await Promise.all([
+          getJSON('/gpt2/specs.json?' + q),
+          getJSON('/gpt2/tokens.json?seq=' + s.seq + '&text=' + encodeURIComponent(s.prompt)),
+        ])
+        specs = sp.specs; n_tokens = sp.n_tokens; toks = tk.tokens
+      } catch (e) {
+        status(`<span class="err">${e.message}</span>`)
+        return
+      }
+
+      // refuse up front rather than let mm coerce a 501 body into NaN
+      const missing = Object.entries(specs).filter(([, v]) => v.available === false)
+      if (missing.length) {
+        status(`<span class="err">${missing[0][1].reason}</span>`)
+        return
+      }
+
+      const params = Object.assign(BASE(), view.build(specs, s))
+      params.anim.alg = s.anim
+
+      // pull the camera back to fit this view — a 6-token attention head and a
+      // 3072-row MLP need very different distances
+      const extent = Math.max(...Object.values(specs).flatMap(v => [v.h, v.w]))
+      const d = Math.round(extent * 1.1)
+      params.cam = { x: -d, y: d, z: d }
+
+      history.replaceState({}, '', '?' + new URLSearchParams({
+        view: s.view, layer: s.layer, head: s.head,
+        stride: s.stride, seq: s.seq, anim: s.anim, prompt: s.prompt,
+      }))
+
+      // a different view is a different tree shape, so merging props onto the
+      // old one would leave stale nodes behind — reload the viewer instead
+      if (reload || s.view !== current_view || !mm_ready) {
+        current_view = s.view
+        mm_ready = false
+        $('mm').src = '../../index.html?params=' + encodeURIComponent(JSON.stringify(params))
+      } else {
+        const { cam, ...rest } = params            // keep the user's camera
+        $('mm').contentWindow.postMessage({ setParams: { props: rest, reset: false } }, '*')
+      }
+
+      showStatus(s, view, specs, toks, n_tokens, params)
+    }
+
+    // every rendered matrix, intermediates included — a leaf-only sum badly
+    // understates the attention-head view, where `attn` alone is n×n
+    function countPoints(p) {
+      if (!p.left) return { h: p.h, w: p.w, n: p.h * p.w }
+      const l = countPoints(p.left), r = countPoints(p.right)
+      return { h: l.h, w: r.w, n: l.n + r.n + l.h * r.w }
+    }
+
+    function showStatus(s, view, specs, toks, n_tokens, params) {
+      const entries = Object.entries(specs)
+      const sampled = entries.filter(([, v]) => v.fidelity == 'sampled')
+      const points = countPoints(params).n
+
+      const shapes = entries
+        .map(([k, v]) => `<span class="dim">${k.replace(':', '·')}</span> ${v.h}×${v.w}`)
+        .join('   ')
+
+      // two separate claims: what the leaf data is, and what the product is
+      const data = sampled.length
+        ? `<span class="sampled">sampled</span> <span class="dim">— every ${s.stride}${ord(s.stride)} ` +
+          `${sampled.map(([k]) => k.split(':')[0]).join(', ')} ` +
+          `${sampled.every(([k]) => k.endsWith(':r')) ? 'row' : 'column'}, no interpolation; ` +
+          `contracted axes are never decimated</span>`
+        : `<span class="exact">exact</span> <span class="dim">— every element is the checkpoint's own</span>`
+
+      const product = view.bias
+        ? `<span class="sampled">omits ${esc(view.bias)}</span> ` +
+          `<span class="dim">— mm has no '+', so what is drawn is the bias-free matmul, ` +
+          `not the value GPT-2 computes here</span>`
+        : `<span class="exact">complete</span> <span class="dim">— this step has no bias term to omit</span>`
+
+      status(
+        `<div style="flex-basis:100%">` +
+          toks.map(t => `<span class="tok">${esc(t)}</span>`).join('') +
+          `<span class="dim">${n_tokens} tokens</span></div>` +
+        `<div style="flex-basis:100%"><span class="expr">${view.note(s)}</span></div>` +
+        `<div>${shapes}</div>` +
+        `<div class="dim">${points.toLocaleString()} points</div>` +
+        `<div style="flex-basis:100%"><span class="dim">data:</span> ${data}</div>` +
+        `<div style="flex-basis:100%"><span class="dim">product:</span> ${product}</div>`
+      )
+    }
+
+    const ord = n => n % 10 == 1 && n % 100 != 11 ? 'st' : n % 10 == 2 && n % 100 != 12 ? 'nd'
+      : n % 10 == 3 && n % 100 != 13 ? 'rd' : 'th'
+
+    const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+
+    //
+    // tensor map — the whole checkpoint, enumerated
+    //
+
+    function toggleTensors() {
+      const el = $('tensors')
+      const open = el.style.display == 'flex'
+      el.style.display = open ? 'none' : 'flex'
+      if (!open && !el.dataset.filled) {
+        const rows = META.tensors.map(t =>
+          `<tr><td class="n">${t.name}</td><td>${t.dtype}</td>` +
+          `<td>${t.shape.join('×')}</td><td class="r">${t.bytes.toLocaleString()} B</td></tr>`).join('')
+        el.innerHTML =
+          `<table><tr><td colspan="4" class="r">${META.tensors.length} tensors, ` +
+          `${META.checkpoint_bytes.toLocaleString()} bytes on disk — read by byte range, never loaded whole. ` +
+          `LayerNorm gains and all biases are vectors, so they have no matmul view.</td></tr>${rows}</table>`
+        el.dataset.filled = '1'
+      }
+    }
+
+    function popout() {
+      const w = window.open('', '_blank')
+      const r = e => {
+        if (e.data && e.data.url_info) {
+          w.location = e.data.url_info.url
+          window.removeEventListener('message', r)
+        }
+      }
+      window.addEventListener('message', r)
+      $('mm').contentWindow.postMessage({ getUrlInfo: undefined }, '*')
+    }
+
+    //
+    // init
+    //
+
+    async function init() {
+      try {
+        META = await getJSON('/gpt2/meta.json')
+      } catch (e) {
+        status(`<span class="err">cannot reach the model server (${e.message}).` +
+          ` Start it with <code>../.venv/bin/python tools/gpt2_server.py</code>` +
+          ` from the <code>mm/</code> directory, then open` +
+          ` <code>http://127.0.0.1:8000/examples/gpt2/</code>.</span>`)
+        return
+      }
+
+      Object.keys(VIEWS).forEach(k => option($('view'), k))
+      fillRange($('layer'), META.dims.n_layer)
+      fillRange($('head'), META.dims.n_head)
+      ;[1, 2, 4, 8, 16, 32, 64].forEach(n => option($('stride'), n, n == 1 ? '1 (exact)' : n))
+      ;[16, 32, 64, 128, 256].forEach(n => option($('seq'), n))
+      $('seq').value = 64   // caps attn at 64x64; n_ctx is 1024 and would be 1M points
+
+      if (!META.deep_layers) {
+        $('layer').options.length = 1   // only layer 0 is honest without numpy
+      }
+
+      $('mm').addEventListener('load', () => { mm_ready = $('mm').src != 'about:blank' })
+
+      const applyViewDefaults = () => {
+        const v = VIEWS[$('view').value]
+        const strideable = v.kinds.some(k => /:[rc]/.test(k))
+        $('stride').value = v.stride
+        $('head').disabled = !v.head
+        $('head').style.opacity = v.head ? 1 : 0.4
+        $('stride').disabled = !strideable
+        $('stride').style.opacity = strideable ? 1 : 0.4
+      }
+
+      $('view').addEventListener('change', () => { applyViewDefaults(); refresh(true) })
+      $('prompt').addEventListener('change', () => refresh(false))
+      ;['layer', 'head', 'stride', 'seq', 'anim'].forEach(id =>
+        $(id).addEventListener('change', () => refresh(false)))
+
+      applyViewDefaults()
+
+      // deep link: ?view=mlp+down&layer=3&head=7&stride=4&prompt=…
+      const qp = new URLSearchParams(location.search)
+      if (qp.has('prompt')) $('prompt').value = qp.get('prompt')
+      if (VIEWS[qp.get('view')]) { $('view').value = qp.get('view'); applyViewDefaults() }
+      for (const id of ['layer', 'head', 'stride', 'seq', 'anim']) {
+        if (qp.has(id) && [...$(id).options].some(o => o.value == qp.get(id))) {
+          $(id).value = qp.get(id)
+        }
+      }
+
+      refresh(true)
+    }
+
+    init()
+  </script>
+</body>
+
+</html>
