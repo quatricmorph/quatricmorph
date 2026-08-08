@@ -1,28 +1,89 @@
-### Attention head explorer
+### Attention head explorer — conventional form
 
-Trained weights and input samples taken from [Karpathy's NanoGPT](https://github.com/karpathy/nanoGPT) (('gpt2' config)](https://github.com/karpathy/nanoGPT/blob/master/model.py#L217)).
-
-Sequence length has been reduced to 256 for ease of visualization, but weights retain their original dimensions.
-
-* d_seq=256, d_emb=768, d_head=64
-* 10 sample inputs
-* 12 layers
-* 12 attention heads
-
-Visualizes the operation of a single attention head. 
+One attention head of `mm/models/distilgpt2`, drawn in the usual factoring:
 
 ```
-input[d_seq, d_emb]
-wQ[d_emb, d_head]
-wK[d_emb, d_head]
-wV[d_emb, d_head]
-wO[d_head, d_emb]
+input = ln_1(x)              [n_tokens, n_embd]   the model's own residual stream
+wQ, wV                       [n_embd, head_dim]   columns of c_attn.weight
+wK_t                         [head_dim, n_embd]
+wO                           [head_dim, n_embd]   rows of attn.c_proj.weight
 
-Q = input @ wQ
-K_t = wK.T @ input.T
-attn = softmax(tril(Q @ K_t / sqrt(d_head)))
-V = input @ wV
-head_out = (attn @ V) @ wO
+Q      = input @ wQ
+K_t    = wK_t @ input_t
+attn   = softmax(tril(Q @ K_t / sqrt(head_dim)))
+V      = input @ wV
+out    = (attn @ V) @ wO
 ```
 
-[Try it here](https://bhosmer.github.io/mm/examples/attngpt2/index.html)
+The premultiplied QK/OV factoring of the same head is [`../attnqkov`](../attnqkov/).
+Both are the same function; they differ in which intermediate you get to look at.
+
+## Run
+
+Data comes from `tools/gpt2_server.py`, which reads the checkpoint by byte
+range. The page itself is a Vite entry, so it needs Vite (or a built tree):
+
+```bash
+cd mm
+../.venv/bin/python tools/gpt2_server.py &   # numpy present -> all 6 layers
+npm run dev                                  # proxies /gpt2 to the above
+```
+
+Then open the URL Vite prints, at `/examples/attngpt2/`. Without node:
+
+```bash
+npm run build
+../.venv/bin/python tools/gpt2_server.py --root dist
+```
+
+## What changed from the original
+
+This example previously loaded fixed 256×768 CSVs of Karpathy
+[NanoGPT](https://github.com/karpathy/nanoGPT) `gpt2` weights from a public
+bucket, with 12 layers, 12 heads and 10 canned sample inputs.
+
+It now reads a local checkpoint instead, which changes four things:
+
+* **6 layers, not 12** — distilgpt2 is the distilled model. `n_head` is 12 in
+  both, and `head_dim` is 64 in both, but the layer count comes from
+  `/gpt2/meta.json` rather than a literal.
+* **The prompt is yours.** `input` is the real residual stream after `ln_1` for
+  the text you type, computed by a real forward pass, not one of ten samples.
+* **Shapes come from `/gpt2/specs.json`.** Nothing here writes an `h` or a `w`.
+  mm's `tryURLInit` wraps out-of-range indices (`data[i % data.length]`), so a
+  hand-written shape that disagrees with the data is silently *tiled* into a
+  plausible, wrong picture. The server refuses to emit a matrix that disagrees
+  with the spec it published.
+* **Nothing touches the network.**
+
+## What the picture leaves out
+
+GPT-2 computes `x @ W + b`; mm's `EPILOGS` has no `+`, so the *product* drawn
+here is the bias-free one — it omits `c_attn.bias` on Q/K/V and
+`attn.c_proj.bias` on `out`. Every *input* matrix is exact. The status bar
+states the two claims separately, `data:` and `product:`.
+
+`softmax(tril(x/sqrt(k)))` is the correct scale in this factoring: `attn` is
+`Q @ K_t`, which contracts over `head_dim`, and mm binds `k` in an epilog to the
+contracted dimension of the matmul it sits on. This is *not* true of the
+premultiplied form — see [`../attnqkov`](../attnqkov/).
+
+## Controls
+
+`Layer`, `Head`, `Tokens` and `Prompt` are all reflected in the page URL, so a
+particular head is a shareable link:
+
+```
+?layer=3&head=5&seq=32&anim=Q+%40+K+%40+V+%40+wO
+```
+
+`Animate` walks the product outward from the innermost matmul: `attn @ V @ wO`
+animates the last two, `Q @ K @ V @ wO` adds the attention scores,
+`input @ wQ @ K @ V @ wO` adds the projections. `tensors` lists all 82 tensors
+in the checkpoint with shapes and byte sizes.
+
+## Provenance
+
+`mm/` is Meta's matrix-multiplication visualizer, MIT licensed — see
+`mm/LICENSE`. This page drives the unmodified viewer through its existing
+`?params=` and `postMessage({setParams})` interfaces.

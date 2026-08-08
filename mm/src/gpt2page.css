@@ -1,0 +1,177 @@
+/*
+   Shared chrome for the three checkpoint-driven example pages
+   (examples/gpt2, examples/attngpt2, examples/attnqkov).
+
+   The embedded viewer keeps KaTeX_Main for its 3D labels, loaded as a Three.js
+   typeface from ../assets/katex_main_regular.typeface.js (MIT, Khan Academy —
+   see ../assets/fonts/LICENSE-KaTeX.txt). These declarations are the web-font
+   half of the same family, for the HTML chrome around it.
+*/
+
+@font-face {
+  font-family: 'KaTeX_Main';
+  src: url('../assets/fonts/KaTeX_Main-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'KaTeX_Main';
+  src: url('../assets/fonts/KaTeX_Main-Bold.woff2') format('woff2');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'KaTeX_Main';
+  src: url('../assets/fonts/KaTeX_Main-Italic.woff2') format('woff2');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+  background: #000;
+  color: #eee;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#header {
+  flex: 0 0 auto;
+  background: #f0f0f0;
+  color: #111;
+  padding: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+
+#header label {
+  font-style: italic;
+  margin-right: 2px;
+}
+
+#header select,
+#header input {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+#header .hidden {
+  display: none;
+}
+
+#prompt {
+  width: 260px;
+  flex: 1 1 260px;
+  min-width: 160px;
+}
+
+#view {
+  min-width: 150px;
+}
+
+#anim {
+  min-width: 140px;
+}
+
+#status {
+  flex: 0 0 auto;
+  background: #1a1a1a;
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 18px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+
+#status .expr {
+  color: #9cf;
+  font-style: italic;
+}
+
+#status .exact {
+  color: #7d7;
+}
+
+#status .sampled {
+  color: #fc6;
+}
+
+#status .err {
+  color: #f77;
+}
+
+#status .dim {
+  color: #888;
+}
+
+.tok {
+  display: inline-block;
+  background: #303030;
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 3px;
+  white-space: pre;
+  color: #ddd;
+}
+
+#mm {
+  flex: 1 1 auto;
+  width: 100%;
+  border: none;
+  min-height: 0;
+}
+
+#tensors {
+  display: none;
+  flex: 0 0 40%;
+  overflow: auto;
+  background: #0d0d0d;
+  border-top: 1px solid #333;
+  font-size: 12px;
+}
+
+#tensors table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#tensors td {
+  padding: 1px 10px;
+  border-bottom: 1px solid #1c1c1c;
+  white-space: nowrap;
+}
+
+#tensors td.n {
+  color: #9cf;
+}
+
+#tensors td.r {
+  text-align: right;
+  color: #999;
+}
+
+a {
+  color: #9cf;
+}
+
+#header a {
+  color: #0645ad;
+}

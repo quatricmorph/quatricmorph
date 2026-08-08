@@ -9,15 +9,32 @@ the model's own residual stream for the prompt you type.
 
 ```bash
 cd mm
-../.venv/bin/python tools/gpt2_server.py     # numpy present -> all 6 layers
+../.venv/bin/python tools/gpt2_server.py &   # numpy present -> all 6 layers
 # or:  python3 tools/gpt2_server.py          # stdlib only  -> layer 0 only
+npm run dev                                  # proxies /gpt2 to the above
 ```
 
-Then open <http://127.0.0.1:8000/examples/gpt2/>.
+Then open the URL Vite prints, at `/examples/gpt2/`.
 
-The server serves `mm/` as well as the data, so the CSV URLs the viewer loads
-are same-origin. Nothing here touches the network, and the checkpoint is opened
-read-only.
+This page is a Vite entry — it imports `../../src/gpt2page.js` and that module's
+stylesheet — so the static half has to come from Vite or from a built tree. To
+run without node, build once and point the python server at the result:
+
+```bash
+npm run build
+../.venv/bin/python tools/gpt2_server.py --root dist
+# then http://127.0.0.1:8000/examples/gpt2/
+```
+
+Either way the CSV URLs the viewer loads are same-origin: under `npm run dev`
+`vite.config.js` proxies `/gpt2` to the python server, and under `--root dist`
+one process serves both halves. Nothing here touches the network, and the
+checkpoint is opened read-only.
+
+Two sibling pages share the same driver and the same server:
+[`../attngpt2`](../attngpt2/) (one attention head, conventional factoring, with
+progressive animation) and [`../attnqkov`](../attnqkov/) (the same head with the
+QK and OV circuits premultiplied).
 
 If `numpy` is missing, install it into the repo venv:
 
@@ -127,7 +144,7 @@ a time (~28 MB), plus the per-prompt activations it caches.
 ## Provenance
 
 `mm/` is Meta's matrix-multiplication visualizer, MIT licensed — see
-`mm/LICENSE`. These two files (`tools/gpt2_server.py`, `examples/gpt2/`) are
-additions that drive the unmodified viewer through its existing `?params=` and
-`postMessage({setParams})` interfaces; `index.html`, `viz.js`, `util.js` and
-`gui.js` are untouched by this example.
+`mm/LICENSE`. `tools/gpt2_server.py`, `src/gpt2page.{js,css}` and the three
+`examples/` pages are additions that drive the viewer through its existing
+`?params=` and `postMessage({setParams})` interfaces; `index.html`, `viz.js`,
+`util.js` and `gui.js` are untouched by this example.

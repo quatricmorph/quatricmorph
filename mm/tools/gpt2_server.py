@@ -13,7 +13,16 @@ wire for `models/distilgpt2`:
     fused GPT-2 Conv1D tensors;
   * it runs a real forward pass so the `input` leaf is the model's own residual
     stream for a prompt you type, not noise;
-  * it serves `mm/` itself, so the viewer and the data are same-origin.
+  * it serves static files itself, so the viewer and the data are same-origin.
+
+The example pages are Vite entries (they `import` a shared driver module and its
+stylesheet), so the static half has two modes:
+
+  * `npm run dev` serves the *source* tree and proxies `/gpt2` back here — see
+    `vite.config.js`.  Open the URL Vite prints, not this one.
+  * `--root dist` serves a built tree, so this process alone is enough.  The
+    default root still serves `mm/`, which is right for everything except the
+    unbuilt example pages.
 
 Fidelity labelling (this repo never presents a sampled figure as exact):
 
@@ -32,7 +41,8 @@ Nothing here writes to the checkpoint, and nothing here needs the network.
     python3 tools/gpt2_server.py                 # stdlib only: layer 0 activations
     ../.venv/bin/python tools/gpt2_server.py     # with numpy: all layers
 
-then open http://127.0.0.1:8000/examples/gpt2/
+then either `npm run dev` (source pages, /gpt2 proxied here), or
+`npm run build` once and restart this with `--root dist`.
 """
 
 from __future__ import annotations
@@ -543,9 +553,10 @@ class Model:
 
 class Handler(SimpleHTTPRequestHandler):
     model: Model = None  # set in main()
+    root: Path = MM_ROOT  # static file root; --root dist serves a built tree
 
     def __init__(self, *a, **kw):
-        super().__init__(*a, directory=str(MM_ROOT), **kw)
+        super().__init__(*a, directory=str(self.root), **kw)
 
     def log_message(self, fmt, *args):
         sys.stderr.write("  %s\n" % (fmt % args))
@@ -710,6 +721,11 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--model", default=str(DEFAULT_MODEL), help="model directory")
+    ap.add_argument(
+        "--root",
+        default=str(MM_ROOT),
+        help="static file root (use 'dist' to serve the built example pages)",
+    )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     args = ap.parse_args()
@@ -722,7 +738,12 @@ def main():
             "models/ holds large local-only files; see CLAUDE.md 'Gotchas'."
         )
 
+    static_root = Path(args.root).resolve()
+    if not static_root.is_dir():
+        sys.exit(f"no static root at {static_root}")
+
     Handler.model = Model(model_dir)
+    Handler.root = static_root
     dims = Handler.model.cfg
     print(f"model    {model_dir}")
     print(f"         {len(Handler.model.store.meta)} tensors, "
@@ -730,7 +751,19 @@ def main():
     print(f"         n_layer={dims['n_layer']} n_head={dims['n_head']} "
           f"n_embd={dims['n_embd']} head_dim={dims['head_dim']}")
     print(f"activations  {'exact, all layers (numpy)' if np else 'layer 0 only (no numpy)'}")
-    print(f"\n  http://{args.host}:{args.port}/examples/gpt2/\n")
+    print(f"static   {static_root}")
+
+    # The example pages are Vite entries; unbuilt sources import a module and a
+    # stylesheet this server cannot resolve. Say which URL is actually live
+    # rather than printing one that renders a blank page.
+    built = (static_root / "examples" / "gpt2" / "index.html").exists() \
+        and (static_root / "assets").is_dir() and static_root.name == "dist"
+    if built:
+        print(f"\n  http://{args.host}:{args.port}/examples/gpt2/\n")
+    else:
+        print(f"\n  data only: http://{args.host}:{args.port}/gpt2/meta.json")
+        print("  pages:     run `npm run dev` (it proxies /gpt2 here),")
+        print(f"             or `npm run build` and restart with --root dist\n")
 
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 

@@ -3,9 +3,18 @@ import { fileURLToPath } from 'node:url'
 
 const entry = p => fileURLToPath(new URL(p, import.meta.url))
 
+const GPT2_PROXY = {
+  '/gpt2': {
+    target: 'http://localhost:8000',
+    changeOrigin: false,
+  },
+}
+
 // Multi-page build. Every HTML file that Vite processes has to be named here --
 // Rollup will not discover a page just because another page iframes it, and the
-// three example pages under examples/ do exactly that (`src="../../index.html"`).
+// three example pages under examples/ do exactly that. They now set the iframe's
+// src from JS (`'../../index.html?params=' + ...` in src/gpt2page.js), which is
+// even further outside anything the bundler could follow.
 //
 // The pages NOT listed are deliberate: ref.html and intro/index.html live in
 // public/ instead. They embed zero-md's `<script type="text/markdown">` blocks,
@@ -39,17 +48,17 @@ export default defineConfig({
     },
   },
 
-  server: {
-    // tools/gpt2_server.py serves the checkpoint-derived matrices under /gpt2/
-    // and, when run standalone, mm's static files too. Under `vite dev` the
-    // static half comes from Vite, so the data has to be proxied back onto this
-    // origin -- examples/gpt2 loads the matrices as same-origin CSV URLs and a
-    // cross-origin fetch to :8000 would be blocked.
-    proxy: {
-      '/gpt2': {
-        target: 'http://localhost:8000',
-        changeOrigin: false,
-      },
-    },
-  },
+  // tools/gpt2_server.py serves the checkpoint-derived matrices under /gpt2/
+  // and, when run standalone, mm's static files too. Under `vite dev` the
+  // static half comes from Vite, so the data has to be proxied back onto this
+  // origin -- the example pages load the matrices as same-origin CSV URLs and a
+  // cross-origin fetch to :8000 would be blocked.
+  //
+  // `preview` needs the identical proxy: it serves dist/, which has no /gpt2 of
+  // its own, so without this the built pages come up with "cannot reach the
+  // model server" while the dev pages work. (Serving dist/ from the python
+  // server instead -- `gpt2_server.py --root dist` -- needs no proxy at all,
+  // because then one origin has both halves.)
+  server: { proxy: GPT2_PROXY },
+  preview: { proxy: GPT2_PROXY },
 })
