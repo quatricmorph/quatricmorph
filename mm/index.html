@@ -6,12 +6,37 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
   <style>
+    /* KaTeX_Main (MIT, Khan Academy) — see assets/fonts/LICENSE-KaTeX.txt.
+       Same face the 3D labels use, via assets/katex_main_regular.typeface.js. */
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('./assets/fonts/KaTeX_Main-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('./assets/fonts/KaTeX_Main-Bold.woff2') format('woff2');
+      font-weight: bold;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'KaTeX_Main';
+      src: url('./assets/fonts/KaTeX_Main-Italic.woff2') format('woff2');
+      font-weight: normal;
+      font-style: italic;
+      font-display: swap;
+    }
+
     body {
       margin: 0;
       background-color: #000;
       color: #fff;
-      /* font-family: Monospace; */
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
       font-size: 13px;
       line-height: 24px;
       overscroll-behavior: none;
@@ -47,6 +72,8 @@
     .lil-gui {
       --folder-indent: 12px;
       --title-background-color: #555;
+      --font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      --font-family-mono: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
     }
 
     .lil-gui.autoPlace {
@@ -109,7 +136,7 @@
 
     .control-btn {
       position: absolute;
-      font-family: Monospaced;
+      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
       color: #fff;
       top: 4px;
       left: 25px;
@@ -253,26 +280,212 @@
     //
 
     const params = {
-      expr: 'L @ R',
-      name: 'L @ R',
-      epilog: viz.default_epilog,
-      left: viz.defaultLeft(),
-      right: viz.defaultRight(),
+      expr: 'out = ((attn = (Q = input @ wQ) @ (K_t = wK_t @ input_t)) @ (V = input @ wV)) @ wO',
+      name: 'out',
+      epilog: 'x/sqrt(k)',
+      left: {
+        epilog: 'none',
+        anim: {
+          alg: 'inherit',
+        },
+        block: {
+          'i blocks': 1,
+          'k blocks': 1,
+          'j blocks': 1,
+        },
+        layout: {
+          polarity: 'positive',
+          'left placement': 'left',
+          'right placement': 'bottom',
+          'result placement': 'back',
+        },
+        left: {
+          epilog: 'none',
+          anim: {
+            alg: 'inherit',
+          },
+          block: {
+            'i blocks': 1,
+            'k blocks': 1,
+            'j blocks': 1,
+          },
+          layout: {
+            polarity: 'negative',
+            'left placement': 'left',
+            'right placement': 'top',
+            'result placement': 'front',
+          },
+          left: {
+            epilog: 'none',
+            anim: {
+              alg: 'inherit',
+            },
+            block: {
+              'i blocks': 1,
+              'k blocks': 1,
+              'j blocks': 1,
+            },
+            layout: {
+              polarity: 'positive',
+              'left placement': 'left',
+              'right placement': 'bottom',
+              'result placement': 'back',
+            },
+            left: {
+              name: 'input',
+              matmul: false,
+              h: 32,
+              w: 32,
+              init: 'row major',
+              url: '',
+              min: -1,
+              max: 1,
+              dropout: 0,
+              expr: '',
+            },
+            right: {
+              name: 'wQ',
+              matmul: false,
+              h: 32,
+              w: 32,
+              init: 'col major',
+              url: '',
+              min: -1,
+              max: 1,
+              dropout: 0,
+              expr: '',
+            },
+            name: 'Q',
+            matmul: true,
+          },
+          right: {
+            epilog: 'none',
+            anim: {
+              alg: 'inherit',
+            },
+            block: {
+              'i blocks': 1,
+              'k blocks': 1,
+              'j blocks': 1,
+            },
+            layout: {
+              polarity: 'positive',
+              'left placement': 'right',
+              'right placement': 'top',
+              'result placement': 'back',
+            },
+            left: {
+              name: 'wK_t',
+              matmul: false,
+              h: 32,
+              w: 32,
+              init: 'row major',
+              url: '',
+              min: -1,
+              max: 1,
+              dropout: 0,
+              expr: '',
+            },
+            right: {
+              name: 'input_t',
+              matmul: false,
+              h: 32,
+              w: 32,
+              init: 'col major',
+              url: '',
+              min: -1,
+              max: 1,
+              dropout: 0,
+              expr: '',
+            },
+            name: 'K_t',
+            matmul: true,
+          },
+          name: 'attn',
+          matmul: true,
+        },
+        right: {
+          epilog: 'none',
+          anim: {
+            alg: 'inherit',
+          },
+          block: {
+            'i blocks': 1,
+            'k blocks': 1,
+            'j blocks': 1,
+          },
+          layout: {
+            polarity: 'negative',
+            'left placement': 'right',
+            'right placement': 'top',
+            'result placement': 'back',
+          },
+          left: {
+            name: 'input',
+            matmul: false,
+            h: 32,
+            w: 32,
+            init: 'row major',
+            url: '',
+            min: -1,
+            max: 1,
+            dropout: 0,
+            expr: '',
+          },
+          right: {
+            name: 'wV',
+            matmul: false,
+            h: 32,
+            w: 32,
+            init: 'col major',
+            url: '',
+            min: -1,
+            max: 1,
+            dropout: 0,
+            expr: '',
+          },
+          name: 'V',
+          matmul: true,
+        },
+        name: 'attn @ V',
+        matmul: true,
+      },
+      right: {
+        name: 'wO',
+        matmul: false,
+        h: 32,
+        w: 32,
+        init: 'col major',
+        url: '',
+        min: -1,
+        max: 1,
+        dropout: 0,
+        expr: '',
+      },
       anim: {
         fuse: 'none',
-        speed: 20,
-        'hide inputs': false,
-        alg: 'none',
+        speed: 97,
+        'hide inputs': true,
+        alg: 'dotprod (col major)',
         spin: 0,
+        folder: 'open',
       },
-      block: viz.defaultBlock(),
+      block: {
+        'i blocks': 1,
+        'k blocks': 1,
+        'j blocks': 1,
+      },
       layout: {
         scheme: 'blocks',
         gap: 4,
         scatter: 0,
         molecule: 1,
         blast: 0,
-        ...viz.defaultLayout(),
+        polarity: 'negative',
+        'left placement': 'left',
+        'right placement': 'top',
+        'result placement': 'front',
+        folder: 'closed',
       },
       deco: {
         legends: 6,
@@ -281,24 +494,38 @@
         'row guides': 0.6,
         'flow guides': 0.5,
         'lens size': 0.5,
-        'magnification': 7,
+        magnification: 7,
         'interior spotlight': false,
         axes: false,
+        folder: 'closed',
       },
       viz: {
         sensitivity: 'global',
-        'min size': 0.2,
-        'min light': 0.4,
-        'max light': 0.7,
-        'elem scale': 1.25,
-        'zero hue': 0.77,
-        'hue gap': 0.74,
+        'min size': 0.8,
+        'min light': 0.5,
+        'max light': 0.8,
+        'elem scale': 1.5,
+        'zero hue': 0.356,
+        'hue gap': 0.7,
         'hue spread': 0.04,
+        folder: 'open',
       },
       diag: {
         url: '',
+        folder: 'open',
       },
-      cam: viz.defaultCam()
+      cam: {
+        x: 23.8601394508366,
+        y: 13.55251706132545,
+        z: 109.01416137057434,
+        target: {
+          x: 37.171002653209314,
+          y: 3.7070451463575647,
+          z: 38.467207145211944,
+        },
+      },
+      folder: 'open',
+      compress: true,
     }
 
     // we use this when resetting via message passing
