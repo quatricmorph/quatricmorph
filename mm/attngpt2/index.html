@@ -64,12 +64,22 @@
 
     const VIEWS = {
       'attention head': {
-        kinds: ['ln_1', 'ln_1:t', 'wq', 'wk_t', 'wv', 'wo'],
+        kinds: ['ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'wo'],
         stride: 1, head: true, anims: ANIMS,
 
-        // mm's EPILOGS has no '+', so the drawn product is the bias-free
-        // matmul, not the value GPT-2 computes. The status bar says so.
-        bias: 'c_attn.bias on Q/K/V, and attn.c_proj.bias on out',
+        // mm's EPILOGS has no '+', so the bias is drawn the only way a
+        // matmul-only grammar can draw one: augmented. `[input | 1] @ [wQ ; bq]`
+        // is `input @ wQ + bq` exactly, with the bias as one more k index — see
+        // ../gpt2/index.html for the full note on the `w` and `h` flags.
+        bias: 'c_attn.bias on Q, K and V',
+
+        // attn.c_proj.bias is not a term of this matmul: GPT-2 adds it once to
+        // the sum over all heads. Drawing it on one head's wO slice would give
+        // a matrix that is neither the head's contribution nor the layer's
+        // output, so gpt2_server.py refuses `wo:h`.
+        gap: 'attn.c_proj.bias on out — GPT-2 adds it once to the sum over all '
+          + 'heads, so it is not a term of this matmul; ../gpt2 "attention '
+          + 'output" draws it where it does belong',
 
         note: s => `layer ${s.layer} of ${s.dims.n_layer}, head ${s.head} of ${s.dims.n_head}`
           + ` · head_dim ${s.dims.head_dim} · conventional form —`
@@ -78,12 +88,15 @@
         build: (m, s) => root('out',
           inner('attn @ V',
             inner('attn',
-              node('Q', 'input', m['ln_1'], 'wQ', m['wq'],
+              node('Q', 'input|1', m['ln_1:w'], 'wQ;bq', m['wq:h'],
                 'none', L('positive', 'left', 'bottom', 'back')),
-              node('K_t', 'wK_t', m['wk_t'], 'input_t', m['ln_1:t'],
+              node('K_t', 'wK_t|bk', m['wk_t:w'], 'input_t;1', m['ln_1:th'],
                 'none', L('positive', 'right', 'top', 'back')),
+              // the augmentation is inside Q and K_t, which contract over
+              // n_embd+1; attn still contracts over the head_dim columns they
+              // produce, so sqrt(k) is still sqrt(head_dim)
               'softmax(tril(x/sqrt(k)))', L('negative', 'left', 'top', 'front')),
-            node('V', 'input', m['ln_1'], 'wV', m['wv'],
+            node('V', 'input|1', m['ln_1:w'], 'wV;bv', m['wv:h'],
               'none', L('negative', 'right', 'top', 'back')),
             'none', L('positive', 'left', 'bottom', 'back')),
           leaf('wO', m['wo'])),

@@ -67,19 +67,42 @@ for anything else, so the page checks `head_dim` against 64 on load and
 **refuses with the reason** if a checkpoint ever disagrees, rather than drawing
 it. distilgpt2 is `n_embd` 768 / `n_head` 12 = 64, so it draws.
 
-## What the picture leaves out
+## The biases, and what carries them
 
-The QK/OV factoring is exact — it is a reassociation of the same matmuls — but
-it is a reassociation of the *bias-free* ones. mm has no `+`, so `c_attn.bias`
-on Q/K/V and `attn.c_proj.bias` on `out` are omitted from the drawn product, as
-in the conventional view. Every input matrix is the checkpoint's own. The status
-bar separates the two claims.
+The QK/OV factoring is exact — it is a reassociation of the same matmuls — and
+it reassociates the biased ones. mm has no `+`, so the operands are augmented
+instead, and premultiplication absorbs `c_attn.bias` without a special case:
+
+```
+QK  =  [wQ ; bq] @ [wK_t | bk]              769×769
+       [input | 1] @ QK @ [input_t ; 1]  ==  (x wQ + bq)(x wK + bk)ᵀ
+```
+
+which is the same score matrix the conventional form draws. `bv` rides the same
+ones column: `attn @ [input | 1] @ [[wV ; bv] @ wO]` is `attn @ V @ wO`.
+
+Two things the picture does not give you, both in the status bar:
+
+* **`attn.c_proj.bias` is not drawn.** GPT-2 adds it once to the sum over all
+  heads, so it is not a term of a per-head matmul — the same call as in
+  [`../attngpt2`](../attngpt2/), for the same reason.
+* **`bv` arrives through `attn`'s row sums**, which softmax makes 1. That is
+  exact in arithmetic, but `viz.ts` deliberately yields a row of zeros rather
+  than NaN when a softmax row underflows, and such a row would carry 0 there and
+  drop `bv` instead of adding it. The conventional factoring in
+  [`../attngpt2`](../attngpt2/) does not depend on this: it forms `V` as a leaf
+  matmul before `attn` ever touches it.
+
+Every input matrix is the checkpoint's own, apart from the appended all-ones
+column that carries the bias. The status bar separates the claims.
 
 ## Cost
 
-`QK` and `OV` are 768×768 each, which is ~1.18 M of the ~1.4 M points on screen
-no matter what `Tokens` is set to — the token count only affects `input`,
-`attn` and the output. Both 768 axes are contracted by the matmuls they feed, so
+`QK` is 769×769 and `OV` is 769×768 once augmented, which is ~1.18 M of the
+~1.4 M points on screen no matter what `Tokens` is set to — the token count only
+affects `input`, `attn` and the output. (The bias costs one index on a 768 axis:
+0.3 % more points, for the difference between the model's product and a
+bias-free stand-in.) Both long axes are contracted by the matmuls they feed, so
 `Stride` cannot decimate them without turning the rendered product into a
 partial sum; the control is disabled here for that reason. Expect this page to
 be the slowest of the three, and pick a small `Tokens` value.

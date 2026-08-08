@@ -13,7 +13,30 @@ wire for `models/distilgpt2`:
     fused GPT-2 Conv1D tensors;
   * it runs a real forward pass so the `input` leaf is the model's own residual
     stream for a prompt you type, not noise;
+  * it **augments** a matmul's operands so the bias is drawn (see below);
   * it serves static files itself, so the viewer and the data are same-origin.
+
+Bias, without a `+` operator:
+
+    `mm` renders matmuls and nothing else -- its expression grammar has no
+    addition -- so a GPT-2 step `X @ W + b` used to be drawn bias-free, which is
+    not a rounding detail (on layer 2 the qkv product lands 24 % off the model's).
+    The fix is the standard augmentation:
+
+        X @ W + b  ==  [X | 1] @ [W ; b]
+
+    one more index along the *contraction* axis, carrying a constant 1 on one
+    operand and the checkpoint's own bias vector on the other.  It is exact, and
+    because the bias becomes an ordinary k index every one of mm's animation
+    algorithms, block sizes and partial sums stays correct with no change to
+    `viz.ts` at all.
+
+    Request it with a flag on the matrix kind: `w` appends a column (this matrix
+    is the matmul's *left* operand, so its contraction axis runs along columns),
+    `h` appends a row (a *right* operand).  Activations get the constant 1;
+    weights get their own bias, sliced to the same head and strided with the
+    same output axis.  A weight whose bias does not belong to the matmul being
+    drawn is refused rather than approximated -- see `NO_BIAS`.
 
 The example pages are Vite entries (they `import` a shared driver module and its
 stylesheet), so the static half has two modes:
@@ -177,6 +200,22 @@ def transpose(flat, h, w):
         for j in range(w):
             out[j * h + i] = flat[base + j]
     return out, w, h
+
+
+def append_col(flat, h, w, vec):
+    """[M | v] -- v becomes column w, so the width grows by one."""
+    out = array(flat.typecode)
+    for i in range(h):
+        out.extend(flat[i * w : (i + 1) * w])
+        out.append(vec[i])
+    return out, h, w + 1
+
+
+def append_row(flat, h, w, vec):
+    """[M ; v] -- v becomes row h, so the height grows by one."""
+    out = array(flat.typecode, flat)
+    out.extend(array(flat.typecode, vec))
+    return out, h + 1, w
 
 
 def to_csv(flat, h, w, fmt="%.6g"):
@@ -435,6 +474,39 @@ WEIGHT_KINDS = {
 # activation kind -> width in units of n_embd (mlp_h is the 4x GELU hidden state)
 ACT_KINDS = {"resid": 1, "ln_1": 1, "ln_2": 1, "attn_out": 1, "mlp_h": 4, "final": 1}
 
+# weight kind -> the bias GPT-2 adds to that weight's product.  A Conv1D bias is
+# indexed by the weight's *output* axis, which is its column axis as stored, so
+# the slice and the stride are exactly the (c0, c1, cstride) `weight_extent`
+# already computes -- a per-head wq takes the matching per-head slice of the
+# fused c_attn.bias, and a column-decimated c_fc takes every n-th bias entry.
+BIAS_KINDS = {
+    "wq": "transformer.h.{l}.attn.c_attn.bias",
+    "wk": "transformer.h.{l}.attn.c_attn.bias",
+    "wk_t": "transformer.h.{l}.attn.c_attn.bias",
+    "wv": "transformer.h.{l}.attn.c_attn.bias",
+    "c_attn": "transformer.h.{l}.attn.c_attn.bias",
+    "attn_c_proj": "transformer.h.{l}.attn.c_proj.bias",
+    "c_fc": "transformer.h.{l}.mlp.c_fc.bias",
+    "mlp_c_proj": "transformer.h.{l}.mlp.c_proj.bias",
+}
+
+# Weight kinds that will not be augmented, and why.  `wo` is the interesting
+# one: attn.c_proj.bias exists in the checkpoint, but it is not a term of the
+# matmul a per-head view draws, so adding it there would be *less* correct than
+# leaving it out.  Refusing says so instead of drawing a plausible wrong number.
+NO_BIAS = {
+    "wo": (
+        "attn.c_proj.bias is added once to the sum over all n_head head outputs, "
+        "not to any single head's Wo row slice. Augmenting a per-head wo would "
+        "draw a matrix that is neither that head's contribution nor the layer's "
+        "output. The 'attention output' view concatenates every head, and there "
+        "the bias does belong to the matmul drawn -- augment attn_c_proj there."
+    ),
+    "wte": "GPT-2 ties its LM head to the embedding and gives it no bias.",
+    "wte_t": "GPT-2 ties its LM head to the embedding and gives it no bias.",
+    "wpe": "the position embedding is a lookup, not an affine map; it has no bias.",
+}
+
 
 class Model:
     def __init__(self, model_dir: Path):
@@ -478,6 +550,68 @@ class Model:
             flat, h, w = transpose(flat, h, w)
         return flat, h, w
 
+    # -- augmentation --------------------------------------------------------
+
+    def augment_plan(self, kind, layer, head, cstride, want_t, aug):
+        """Validate an augmentation flag and describe what it appends.
+
+        `X @ W + b` is drawn as `[X | 1] @ [W ; b]`, so the flag names which
+        axis of *this* matrix grows: `w` for a left operand (its contraction
+        axis runs along columns), `h` for a right operand (along rows).
+
+        A weight's bias runs along its output axis, and which axis that is
+        depends on whether the emitted matrix is flipped -- `wk_t` is served
+        transposed, so its bias is a column where `wq`'s is a row.  Getting that
+        backwards would append n_embd numbers to a head_dim axis, so the wrong
+        flag is an error here rather than a shape disagreement two functions
+        later.
+        """
+        if not aug:
+            return None
+        if aug not in ("w", "h"):
+            raise ValueError(
+                f"unknown augmentation flag '{aug}': 'w' appends a column "
+                "(left operand), 'h' appends a row (right operand)"
+            )
+        if kind in ACT_KINDS:
+            # The constant the bias multiplies. Synthetic, and labelled as such:
+            # it is the one part of a leaf that is not checkpoint data.
+            return {"axis": "col" if aug == "w" else "row",
+                    "vector": "ones", "tensor": None}
+        if kind in NO_BIAS:
+            raise ValueError(f"'{kind}' will not be augmented: {NO_BIAS[kind]}")
+        if kind not in BIAS_KINDS:
+            raise ValueError(f"no bias is known for matrix kind '{kind}'")
+        _, (_, _, c0, c1), builtin_t = self.weight_extent(kind, layer, head)
+        flipped = builtin_t != want_t
+        want = "w" if flipped else "h"
+        if aug != want:
+            raise ValueError(
+                f"'{kind}' is emitted {'transposed' if flipped else 'as stored'} "
+                f"here, so its bias is appended as a "
+                f"{'column' if flipped else 'row'} -- use ':{want}', not ':{aug}'"
+            )
+        return {"axis": "col" if flipped else "row", "vector": "bias",
+                "tensor": BIAS_KINDS[kind].format(l=layer),
+                "slice": [c0, c1, cstride]}
+
+    def augment_vector(self, plan, kind, layer, head, cstride, n):
+        """The vector `plan` appends, of exactly `n` entries or not at all."""
+        if plan["vector"] == "ones":
+            return array("f", [1.0] * n)
+        name, c0, c1 = plan["tensor"], *plan["slice"][:2]
+        vec, _, _ = self.store.block(name, 0, 1, c0, c1, 1, cstride)
+        if len(vec) != n:
+            # Reachable only through a bug in the slicing above, and silent if
+            # unchecked: mm tiles a short vector with `data[i % data.length]`,
+            # so a mis-strided bias would be drawn as a plausible wrong one.
+            raise RuntimeError(
+                f"bias for {kind} yielded {len(vec)} entries but the emitted "
+                f"matrix needs {n} -- the bias must be strided with the "
+                "output axis it indexes"
+            )
+        return vec
+
     # -- activations ---------------------------------------------------------
 
     def token_ids(self, text, seq):
@@ -516,12 +650,14 @@ class Model:
             "tools/gpt2_server.py); without it only layer 0 resid and ln_1 exist."
         )
 
-    def spec(self, kind, layer, head, rstride, cstride, want_t, ids):
+    def spec(self, kind, layer, head, rstride, cstride, want_t, ids, aug=""):
         """Shape + fidelity of a logical matrix, without reading its data.
 
         `route_matrix` asserts the data it emits matches this, so a shape
         disagreement fails loudly instead of being silently tiled by mm's
-        `tryURLInit` (which wraps with `i % data.length`).
+        `tryURLInit` (which wraps with `i % data.length`).  That assertion is
+        what makes augmentation safe to declare here: the +1 below is checked
+        against a real appended vector before any CSV goes out.
         """
         available, reason = True, None
         if kind in ACT_KINDS:
@@ -537,10 +673,20 @@ class Model:
             h, w = w, h
         if want_t:
             h, w = w, h
+        plan = self.augment_plan(kind, layer, head, cstride, want_t, aug)
+        if plan:
+            if plan["axis"] == "col":
+                w += 1
+            else:
+                h += 1
         return {
             "h": h,
             "w": w,
+            # about sampling only. An augmented matrix carries one synthetic
+            # all-ones column or row, which is neither exact nor sampled
+            # checkpoint data -- `augment` is where that is stated.
             "fidelity": "exact" if rstride == 1 and cstride == 1 else "sampled",
+            "augment": plan,
             "available": available,
             "reason": reason,
         }
@@ -654,7 +800,9 @@ class Handler(SimpleHTTPRequestHandler):
         The driver page builds its mm params tree from exactly these numbers, so
         a leaf's declared `h`/`w` always come from the same code that will emit
         the CSV.  Request items are `kind[:flags]`; flags are `t` (transpose),
-        `r` (apply the stride to rows), `c` (apply it to columns).
+        `r` (apply the stride to rows), `c` (apply it to columns), `w` (augment:
+        append a column, for a left operand) and `h` (augment: append a row, for
+        a right operand).  See the module docstring for what augmenting means.
         """
         m = self.model
         layer = self._q(qs, "layer", 0, int)
@@ -673,9 +821,14 @@ class Handler(SimpleHTTPRequestHandler):
             want_t = "t" in flags
             rs = stride if "r" in flags else 1
             cs = stride if "c" in flags else 1
-            spec = m.spec(kind, layer, head, rs, cs, want_t, ids)
+            aug = "".join(f for f in "wh" if f in flags)
+            if len(aug) > 1:
+                return self._json({"error": (
+                    f"'{item}' asks to augment both axes; a matmul contracts "
+                    "over one, so exactly one of 'w' or 'h' applies")}, 400)
+            spec = m.spec(kind, layer, head, rs, cs, want_t, ids, aug)
             params = {"kind": kind, "layer": layer, "head": head,
-                      "rs": rs, "cs": cs, "t": 1 if want_t else 0}
+                      "rs": rs, "cs": cs, "t": 1 if want_t else 0, "aug": aug}
             if kind in ACT_KINDS:
                 params.update({"text": text, "seq": seq})
             spec["url"] = "/api/matrix.csv?" + urllib.parse.urlencode(params)
@@ -691,6 +844,7 @@ class Handler(SimpleHTTPRequestHandler):
         rs = max(1, self._q(qs, "rs", 1, int))
         cs = max(1, self._q(qs, "cs", 1, int))
         want_t = self._q(qs, "t", 0, int) == 1
+        aug = self._q(qs, "aug", "") or ""
 
         if kind in ACT_KINDS:
             ids = self._ids(qs)
@@ -703,7 +857,17 @@ class Handler(SimpleHTTPRequestHandler):
         if want_t:
             flat, h, w = transpose(flat, h, w)
 
-        expected = m.spec(kind, layer, head, rs, cs, want_t, ids)
+        # last, in the emitted orientation: the augmenting vector runs along the
+        # contraction axis of the matmul this matrix is an operand of, which is
+        # only identified once every transpose has been applied
+        plan = m.augment_plan(kind, layer, head, cs, want_t, aug)
+        if plan:
+            n = h if plan["axis"] == "col" else w
+            vec = m.augment_vector(plan, kind, layer, head, cs, n)
+            flat, h, w = (append_col if plan["axis"] == "col" else append_row)(
+                flat, h, w, vec)
+
+        expected = m.spec(kind, layer, head, rs, cs, want_t, ids, aug)
         if (h, w) != (expected["h"], expected["w"]):
             raise RuntimeError(
                 f"shape disagreement for {kind}: emitted {h}x{w}, "

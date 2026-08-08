@@ -31,6 +31,16 @@ Either way the CSV URLs the viewer loads are same-origin: under `npm run dev`
 one process serves both halves. Nothing here touches the network, and the
 checkpoint is opened read-only.
 
+With the server up, this checks that what the page draws is what GPT-2 computes:
+
+```bash
+../.venv/bin/python tools/check_bias.py     # --port to match the server
+```
+
+`npm run check` cannot: `models/` is local-only, so the test suite runs on
+synthetic specs and never sees the checkpoint. Anything that changes a served
+matrix, a `kinds` entry or an augmentation flag needs this too.
+
 Two sibling pages share the same driver and the same server:
 [`../attngpt2`](../attngpt2/) (one attention head, conventional factoring, with
 progressive animation) and [`../attnqkov`](../attnqkov/) (the same head with the
@@ -74,25 +84,60 @@ the real forward pass, and each `input` leaf is the actual activation at that
 point in the network. Every layer and every head is reachable; what you give up
 is seeing all six blocks at once.
 
-## The drawn products omit biases
+## The biases are drawn, by augmenting
 
-The same missing `+` has a second consequence, and it is not cosmetic. GPT-2
-computes `x @ W + b`; `mm` can only draw `x @ W`. So while every *input* matrix
-is exact, the *product* rendered in four of the six views is the bias-free one:
+GPT-2 computes `x @ W + b`; mm draws matmuls and only matmuls. Leaving the `+`
+out was not cosmetic. Measured on layer 2 of distilgpt2 with this page's default
+prompt, the bias-free products sat this far from the model's own, as a fraction
+of each product's own range:
 
-| View | Omitted term | Effect on layer 2 |
+| qkv projection | attention output | mlp up (pre-GELU) | mlp down |
+| --- | --- | --- | --- |
+| 19.2 % | 9.3 % | 12.0 % | 1.9 % |
+
+Those are outputs, not claims — `tools/check_bias.py --layer 2` prints them, and
+they move with the prompt and the layer. Rather than draw that, the operands are
+augmented:
+
+```
+x @ W + b  ==  [x | 1] @ [W ; b]
+```
+
+The bias becomes one more index along the contraction axis. `tools/gpt2_server.py`
+appends it: a column of the constant 1 on the activation, a row of the
+checkpoint's own bias vector on the weight, sliced to the same head and strided
+with the same output axis. Nothing in `viz.ts` changed, and nothing needed to —
+because the bias is an ordinary `k` index, every animation algorithm, block size
+and partial sum stays correct by construction.
+
+| View | Bias drawn | Product |
 | --- | --- | --- |
-| attention head | `c_attn.bias` on Q/K/V, `attn.c_proj.bias` on out | inherited from `attngpt2/`, which has the same gap |
-| qkv projection | `c_attn.bias` | rendered product is **24 %** off the model's |
-| attention output | `attn.c_proj.bias` | bias up to 0.63 absolute |
-| mlp up (gelu) | `mlp.c_fc.bias` | **14 %**; and since GELU is nonlinear, the `h` drawn here is *not* the `h` that `mlp down` consumes |
-| mlp down | `mlp.c_proj.bias` | |
-| logits (tied wte) | none — GPT-2's LM head is the tied embedding with no bias | product is the model's |
+| attention head | `c_attn.bias` on Q, K and V | the model's, less `attn.c_proj.bias` — see below |
+| qkv projection | `c_attn.bias` | the model's |
+| attention output | `attn.c_proj.bias` | the model's |
+| mlp up (gelu) | `mlp.c_fc.bias` | the model's affine map; mm's GELU is the erf form where GPT-2 trained the tanh form, ~1e-5 relative |
+| mlp down | `mlp.c_proj.bias` | the model's |
+| logits (tied wte) | none — GPT-2's LM head is the tied embedding, which has no bias | the model's |
 
-The status bar states this per view, and separates the two claims: `data:` is
-about the leaf matrices, `product:` is about what the multiplication shows. The
-`input` activations are unaffected — the forward pass includes every bias, so a
-layer-4 `ln_2` really is the model's layer-4 `ln_2`.
+Two things this does **not** do, both stated in the status bar rather than
+quietly absorbed:
+
+* **`attn.c_proj.bias` is not drawn on a single head.** GPT-2 adds it once to
+  the sum over all twelve head outputs, so it is not a term of the matmul a
+  per-head view draws; adding it there would give a matrix that is neither the
+  head's contribution nor the layer's output. The server refuses `wo:h` outright
+  for that reason. The *attention output* view concatenates every head, and
+  there the bias does belong to the matmul drawn — so that is where it appears.
+* **The ones column is synthetic.** It is the only number in an augmented leaf
+  the checkpoint did not supply, and the `data:` line says so; "exact" is never
+  left standing over it unqualified.
+
+Because `mlp up`'s bias is now inside the matmul and in front of the GELU, the
+`h` drawn there **is** the `h` that `mlp down` consumes — which was not true
+while the bias was missing, GELU being nonlinear.
+
+`tools/check_bias.py` checks all of this end to end against an independent
+numpy + `safetensors` forward pass, over the same CSVs the page fetches.
 
 ## Fidelity
 

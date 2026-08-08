@@ -15,10 +15,16 @@ import { describe, it, expect } from 'vitest'
 import {
   abs, esc, L, A, B, leaf, inner, node, root, BASE,
   countPoints, bbox, height, width, merge, mount,
+  dataClaim, productClaim, checkShapes,
 } from '../src/gpt2page.js'
 
 // Stand-ins for /api/specs.json entries.
 const spec = (h, w, url = '/api/m.csv') => ({ h, w, url })
+
+// …and for the fuller entries the status bar reads. `augment` is the server's
+// descriptor of the row or column it appended to draw the bias.
+const sp = (h, w, extra = {}) => ({ h, w, fidelity: 'exact', augment: null, ...extra })
+const aug = (vector, axis, tensor = null) => ({ vector, axis, tensor })
 
 describe('abs', () => {
   it('makes a root-relative server URL absolute on the page origin', () => {
@@ -67,6 +73,13 @@ describe('leaf', () => {
     expect(l.matmul).toBe(false)
     expect(l.init).toBe('url')
     expect(l.url).toBe(abs('/api/m.csv?kind=wq'))
+  })
+
+  it('refuses a missing spec rather than emitting an undefined shape', () => {
+    // The flags are part of the key. A view whose kinds say 'ln_1:w' but whose
+    // build says m['ln_1'] gets undefined, and a leaf with h: undefined draws
+    // as an empty matrix with nothing reported.
+    expect(() => leaf('input|1', undefined)).toThrow(/is not in this view's kinds list/)
   })
 
   it('spans the full [-1, 1] range with no dropout', () => {
@@ -235,6 +248,125 @@ describe('merge', () => {
     a.anim.alg = 'mutated'
     expect(b.anim.alg).toBe('vmprod')
     expect(preset.anim.alg).toBe('vmprod')
+  })
+})
+
+describe('checkShapes', () => {
+  it('accepts a tree whose every matmul contracts over a shared extent', () => {
+    expect(checkShapes(TREE())).toEqual({ h: 2, w: 5 })
+  })
+
+  it('rejects a left operand wider than its right operand is tall', () => {
+    // The augmentation mistake this exists for: `[X | 1] @ W` instead of
+    // `[X | 1] @ [W ; b]`. mm tiles the 768-row weight up to 769 with
+    // `data[i % data.length]` and draws a picture nobody can tell is wrong.
+    const t = root('qkv', leaf('ln_1|1', spec(6, 769)), leaf('c_attn', spec(768, 2304)))
+    expect(() => checkShapes(t)).toThrow(/769 ≠ 768/)
+  })
+
+  it('names the node and both operands so the bad flag is findable', () => {
+    const t = root('qkv', leaf('ln_1', spec(6, 768)), leaf('c_attn;b', spec(769, 2304)))
+    expect(() => checkShapes(t)).toThrow(/'qkv'.*'ln_1' 6×768.*'c_attn;b' 769×2304/)
+  })
+
+  it('checks interior matmuls, not only the root', () => {
+    const bad = inner('L', leaf('A', spec(2, 3)), leaf('B', spec(4, 5)))
+    expect(() => checkShapes(root('R', bad, leaf('C', spec(5, 6))))).toThrow(/root\.left/)
+  })
+})
+
+//
+// The status bar makes two claims, and both of them are the sort that stays
+// technically true while becoming misleading. These pin the ways they must not
+// drift: "exact" standing alone over a synthetic column, or "complete" printed
+// next to a known omission.
+//
+describe('dataClaim', () => {
+  it('says exact when nothing is sampled and nothing is synthetic', () => {
+    const c = dataClaim({ 'ln_1': sp(6, 768), 'wo': sp(64, 768) }, 1)
+    expect(c).toContain('exact')
+    expect(c).toContain("every element is the checkpoint's own")
+    expect(c).not.toContain('synthetic')
+  })
+
+  it('never lets "exact" stand alone over a synthetic ones column', () => {
+    // The ones column is the one number in an augmented leaf the model did not
+    // supply. It is what carries the bias, so it belongs — but unqualified
+    // "exact" over it is the claim this repo does not make.
+    const c = dataClaim({ 'ln_1:w': sp(6, 769, { augment: aug('ones', 'col') }) }, 1)
+    expect(c).toContain('exact')
+    expect(c).toContain('synthetic all-ones column on ln_1')
+    expect(c).toContain('the constant 1 the bias multiplies')
+  })
+
+  it('groups a matrix augmented both ways by axis', () => {
+    // The attention head takes ln_1 as a left operand and its transpose as a
+    // right one, so one kind carries a ones column *and* a ones row. Reading
+    // the axis off the first entry would report both as whichever came first.
+    const c = dataClaim({
+      'ln_1:w': sp(6, 769, { augment: aug('ones', 'col') }),
+      'ln_1:th': sp(769, 6, { augment: aug('ones', 'row') }),
+    }, 1)
+    expect(c).toContain('all-ones column on ln_1 and all-ones row on ln_1')
+  })
+
+  it('names the tensor the appended bias row actually holds', () => {
+    const c = dataClaim({
+      'wq:h': sp(769, 64, {
+        augment: aug('bias', 'row', 'transformer.h.1.attn.c_attn.bias'),
+      }),
+    }, 1)
+    expect(c).toContain('bias row on wq')
+    expect(c).toContain('transformer.h.1.attn.c_attn.bias')
+  })
+
+  it('reads the strided axis off the flags, not the kind name', () => {
+    // 'mlp_c_proj' contains an 'r'. Only the flags after the colon say which
+    // axis was decimated, and calling a column-strided matrix row-strided would
+    // describe the wrong half of the picture.
+    const c = dataClaim({
+      'mlp_c_proj:ch': sp(3073, 192, {
+        fidelity: 'sampled',
+        augment: aug('bias', 'row', 'transformer.h.0.mlp.c_proj.bias'),
+      }),
+    }, 4)
+    expect(c).toContain('every 4th mlp_c_proj column')
+    expect(c).toContain('contracted axes are never decimated')
+    expect(c).toContain('strided with the output axis it indexes')
+  })
+})
+
+describe('productClaim', () => {
+  it('names the bias drawn and the augmentation that drew it', () => {
+    const c = productClaim({ bias: 'c_attn.bias', gap: null })
+    expect(c).toContain('includes c_attn.bias')
+    expect(c).toContain('[X | 1] @ [W ; b]')
+  })
+
+  it('claims complete when there is no gap, whether or not there was a bias', () => {
+    expect(productClaim({ bias: 'mlp.c_proj.bias', gap: null })).toContain('complete')
+    // the logits view: GPT-2's tied LM head has no bias to draw
+    const none = productClaim({ bias: null, gap: null })
+    expect(none).toContain('this step has no bias term')
+    expect(none).toContain('complete')
+  })
+
+  it('never claims complete beside a gap', () => {
+    // The per-head views: c_attn.bias is drawn, attn.c_proj.bias cannot be —
+    // GPT-2 adds it once to the sum over heads, so it is not a term of the
+    // matmul drawn. Both facts have to survive into the same line.
+    const c = productClaim({
+      bias: 'c_attn.bias on Q, K and V',
+      gap: 'attn.c_proj.bias on out — added once to the sum over all heads',
+    })
+    expect(c).toContain('includes c_attn.bias on Q, K and V')
+    expect(c).toContain('attn.c_proj.bias on out')
+    expect(c).not.toContain('complete')
+  })
+
+  it('escapes a gap that contains markup', () => {
+    expect(productClaim({ bias: null, gap: '<b>x</b>' }))
+      .toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 })
 

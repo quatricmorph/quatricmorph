@@ -34,71 +34,108 @@
     // rows/cols. Stride is only ever applied to an axis that is NOT contracted
     // by the matmul it feeds, so a rendered product is never a partial sum.
     //
-    // `bias` names the term GPT-2 adds that mm cannot draw (no '+' in EPILOGS).
-    // The leaf data is the checkpoint's, but the drawn *product* is bias-free,
-    // which is not a rounding detail: on layer 2 the qkv product lands 24% off
-    // the model's. The status bar says so rather than letting "exact" stand for
-    // the whole picture.
+    // The `w` and `h` flags augment. mm's grammar is matmul-only, with no '+',
+    // so `X @ W + b` is drawn the way it is written when you refuse to leave
+    // the language:
+    //
+    //     X @ W + b  ==  [X | 1] @ [W ; b]
+    //
+    // The bias becomes one more index along the contraction axis. `w` appends a
+    // column (this matrix is a left operand), `h` appends a row (a right one);
+    // the server fills the column with the constant 1 and the row with the
+    // checkpoint's own bias, sliced to this head and strided with the same
+    // output axis. Because the bias is now an ordinary k index, every animation
+    // algorithm, block size and partial sum stays correct with no change to
+    // viz.ts — and the drawn product is the model's. That was never a rounding
+    // detail: bias-free, the layer-2 qkv product sat ~19% of its own range away
+    // from the model's. `tools/check_bias.py --layer 2` prints the figure.
+    //
+    // Two fields say what the picture is, and the status bar prints both:
+    //   `bias`  the term now drawn inside the matmul
+    //   `gap`   what the drawn product still is not, or null if there is nothing
     //
 
     const VIEWS = {
       'attention head': {
-        kinds: ['ln_1', 'ln_1:t', 'wq', 'wk_t', 'wv', 'wo'],
+        kinds: ['ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'wo'],
         stride: 1, head: true,
-        bias: 'c_attn.bias on Q/K/V, and attn.c_proj.bias on out',
+        bias: 'c_attn.bias on Q, K and V',
+        // The bias GPT-2 adds after c_proj belongs to the sum over all heads,
+        // not to this head's wO slice: adding it here would draw a matrix that
+        // is neither the head's contribution nor the layer's output. The server
+        // refuses `wo:h` outright rather than let a page ask. See the
+        // 'attention output' view, where every head is concatenated and the
+        // bias genuinely is a term of the matmul drawn.
+        gap: 'attn.c_proj.bias on out — GPT-2 adds it once to the sum over all '
+          + 'heads, so it is not a term of this matmul; the "attention output" '
+          + 'view draws it where it does belong',
         note: s => `layer ${s.layer} head ${s.head} of ${s.dims.n_head} · head_dim ${s.dims.head_dim}`,
         build: (m, s) => root('out',
           inner('attn @ V',
             inner('attn',
-              node('Q', 'input', m['ln_1'], 'wQ', m['wq'],
+              node('Q', 'input|1', m['ln_1:w'], 'wQ;bq', m['wq:h'],
                 'none', L('positive', 'left', 'bottom', 'back')),
-              node('K_t', 'wK_t', m['wk_t'], 'input_t', m['ln_1:t'],
+              node('K_t', 'wK_t|bk', m['wk_t:w'], 'input_t;1', m['ln_1:th'],
                 'none', L('positive', 'right', 'top', 'back')),
               // attn contracts over head_dim here, so mm's sqrt(k) is the
-              // right scale — see ../attnqkov, where it is not
+              // right scale — see ../attnqkov, where it is not. Augmenting
+              // does not disturb that: the extra index lives inside Q and K_t,
+              // whose own contraction is n_embd+1, while attn still contracts
+              // over the head_dim columns those two produce.
               'softmax(tril(x/sqrt(k)))', L('negative', 'left', 'top', 'front')),
-            node('V', 'input', m['ln_1'], 'wV', m['wv'],
+            node('V', 'input|1', m['ln_1:w'], 'wV;bv', m['wv:h'],
               'none', L('negative', 'right', 'top', 'back')),
             'none', L('positive', 'left', 'bottom', 'back')),
           leaf('wO', m['wo'])),
       },
 
       'qkv projection': {
-        kinds: ['ln_1', 'c_attn:c'],
+        kinds: ['ln_1:w', 'c_attn:ch'],
         stride: 2, head: false,
         bias: 'c_attn.bias',
+        gap: null,
         note: s => `layer ${s.layer} · all ${s.dims.n_head} heads at once — columns are [Q | K | V], ${s.dims.n_embd} each`,
-        build: (m, s) => root('qkv', leaf('ln_1(x)', m['ln_1']), leaf('c_attn', m['c_attn:c'])),
+        build: (m, s) => root('qkv', leaf('ln_1(x)|1', m['ln_1:w']), leaf('c_attn;b', m['c_attn:ch'])),
       },
 
       'attention output': {
-        kinds: ['attn_out', 'attn_c_proj:c'],
+        kinds: ['attn_out:w', 'attn_c_proj:ch'],
         stride: 1, head: false,
+        // every head is concatenated here, so this is the one matmul
+        // attn.c_proj.bias is genuinely a term of
         bias: 'attn.c_proj.bias',
+        gap: null,
         note: s => `layer ${s.layer} · concatenated head outputs through c_proj`,
-        build: (m, s) => root('attn_y', leaf('heads', m['attn_out']), leaf('c_proj', m['attn_c_proj:c'])),
+        build: (m, s) => root('attn_y', leaf('heads|1', m['attn_out:w']), leaf('c_proj;b', m['attn_c_proj:ch'])),
       },
 
       'mlp up (gelu)': {
-        kinds: ['ln_2', 'c_fc:c'],
+        kinds: ['ln_2:w', 'c_fc:ch'],
         stride: 4, head: false,
-        bias: 'mlp.c_fc.bias — and because GELU is nonlinear, the h drawn here is not the h that the mlp down view consumes',
+        // with the bias inside the matmul, the h drawn here *is* the h the
+        // 'mlp down' view consumes. GELU is nonlinear, so that only became
+        // true once the bias moved in front of it.
+        bias: 'mlp.c_fc.bias',
+        gap: 'the affine map is exact, but mm draws GELU in its erf form where '
+          + 'GPT-2 trained the tanh form — ~1e-5 relative on the h drawn here',
         note: s => `layer ${s.layer} · ${s.dims.n_embd} → ${4 * s.dims.n_embd} then GELU`,
-        build: (m, s) => root('h', leaf('ln_2(x)', m['ln_2']), leaf('c_fc', m['c_fc:c']), 'gelu'),
+        build: (m, s) => root('h', leaf('ln_2(x)|1', m['ln_2:w']), leaf('c_fc;b', m['c_fc:ch']), 'gelu'),
       },
 
       'mlp down': {
-        kinds: ['mlp_h', 'mlp_c_proj:c'],
+        kinds: ['mlp_h:w', 'mlp_c_proj:ch'],
         stride: 4, head: false,
         bias: 'mlp.c_proj.bias',
+        gap: null,
         note: s => `layer ${s.layer} · ${4 * s.dims.n_embd} → ${s.dims.n_embd}`,
-        build: (m, s) => root('mlp_y', leaf('gelu(h)', m['mlp_h']), leaf('c_proj', m['mlp_c_proj:c'])),
+        build: (m, s) => root('mlp_y', leaf('gelu(h)|1', m['mlp_h:w']), leaf('c_proj;b', m['mlp_c_proj:ch'])),
       },
 
       'logits (tied wte)': {
         kinds: ['final', 'wte_t:r'],
         stride: 64, head: false,
         bias: null,   // GPT-2's LM head is the tied wte with no bias
+        gap: null,
         note: s => `ln_f(x) against the tied embedding — ${s.dims.vocab_size} vocabulary rows`,
         build: (m, s) => root('logits', leaf('ln_f(x)', m['final']), leaf('wte_t', m['wte_t:r'])),
       },

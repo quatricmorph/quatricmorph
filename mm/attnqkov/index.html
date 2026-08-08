@@ -41,7 +41,9 @@
     // In the conventional factoring that contraction is over head_dim, so
     // sqrt(k) is the attention scale. Premultiplied, `attn` is
     // `inputQK @ input_t` and contracts over n_embd instead — sqrt(k) would be
-    // sqrt(768) ≈ 27.7 where the model divides by sqrt(64) = 8.
+    // sqrt(768) ≈ 27.7 where the model divides by sqrt(64) = 8. (Augmented for
+    // the bias it is sqrt(769), which is no closer; the literal is what saves
+    // this view either way, and it is unaffected by the extra index.)
     //
     // mm's EPILOGS is a fixed list, and the only other scaled softmax in it is
     // the literal `x/8`. That is exactly right for head_dim 64 and wrong for
@@ -79,17 +81,30 @@
 
     const VIEWS = {
       'attention head (QK/OV)': {
-        kinds: ['ln_1', 'ln_1:t', 'wq', 'wk_t', 'wv', 'wo'],
+        kinds: ['ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'wo'],
         stride: 1, head: true, anims: ANIMS,
 
-        // Same omission as the conventional form: mm has no '+'. The QK/OV
-        // factoring itself is exact — it is only a reassociation of the same
-        // matmuls — but it is a reassociation of the *bias-free* ones.
-        bias: 'c_attn.bias on Q/K/V, and attn.c_proj.bias on out',
+        // The QK/OV factoring absorbs the qkv biases exactly, and does it
+        // without a special case: augmenting wQ and wK_t makes the premultiplied
+        // circuit [wQ;bq] @ [wK_t|bk], and putting [input | 1] on both sides of
+        // it gives (x wQ + bq)(x wK + bk)^T — the same scores the conventional
+        // form draws. bv rides the same ones column through OV.
+        bias: 'c_attn.bias on Q, K and V',
+
+        // Two things this form does not draw. The first is the same as the
+        // conventional form's. The second is peculiar to premultiplication and
+        // worth stating rather than hiding: `attn @ [input | 1]` reaches bv
+        // through attn's row sums, which softmax makes 1 — except that viz.ts
+        // deliberately yields a row of zeros rather than NaN when a row
+        // underflows, and such a row would drop bv instead of adding it.
+        gap: 'attn.c_proj.bias on out, which GPT-2 adds once to the sum over all '
+          + 'heads · and bv reaches out through attn\'s row sums, which are 1 by '
+          + 'softmax — an underflowed row would carry 0 there and lose it',
 
         note: s => `layer ${s.layer} of ${s.dims.n_layer}, head ${s.head} of ${s.dims.n_head}`
-          + ` · QK and OV are ${s.dims.n_embd}×${s.dims.n_embd} each and dominate the point count,`
-          + ` so Tokens barely changes it · scaled by the literal`
+          + ` · QK and OV are ${s.dims.n_embd + 1}×${s.dims.n_embd + 1} and`
+          + ` ${s.dims.n_embd + 1}×${s.dims.n_embd} once augmented, and dominate the`
+          + ` point count, so Tokens barely changes it · scaled by the literal`
           + ` ${SCALED_SOFTMAX_LITERAL} = sqrt(head_dim ${s.dims.head_dim}),`
           + ` because premultiplied attn contracts over n_embd, not head_dim`,
 
@@ -97,22 +112,22 @@
           inner('attn_out',
             inner('attn',
               inner('inputQK',
-                leaf('input', m['ln_1']),
-                node('QK', 'wQ', m['wq'], 'wK_t', m['wk_t'],
+                leaf('input|1', m['ln_1:w']),
+                node('QK', 'wQ;bq', m['wq:h'], 'wK_t|bk', m['wk_t:w'],
                   'none', L('negative', 'right', 'top', 'back')),
                 'none', L('positive', 'left', 'bottom', 'back')),
-              leaf('input_t', m['ln_1:t']),
+              leaf('input_t;1', m['ln_1:th']),
               `softmax(tril(x/${SCALED_SOFTMAX_LITERAL}))`, L('negative', 'left', 'top', 'front')),
-            leaf('input', m['ln_1']),
+            leaf('input|1', m['ln_1:w']),
             'none', L('positive', 'left', 'bottom', 'back')),
-          node('OV', 'wV', m['wv'], 'wO', m['wo'],
+          node('OV', 'wV;bv', m['wv:h'], 'wO', m['wo'],
             'none', L('positive', 'right', 'top', 'back'))),
       },
     }
 
     mount({
       views: VIEWS,
-      // QK and OV are 768×768 whatever this is; keep the rest small
+      // QK and OV are ~768×768 whatever this is; keep the rest small
       seq: 32,
       seqs: [8, 16, 32, 64, 128],
       prompt: 'The capital of France is Paris, and the capital of Italy is Rome.',
@@ -122,8 +137,9 @@
       require: meta => meta.dims.head_dim === SCALED_SOFTMAX_LITERAL ** 2 ? null
         : `this view needs head_dim ${SCALED_SOFTMAX_LITERAL ** 2}; this checkpoint's is `
         + `${meta.dims.head_dim}. Premultiplied, attn contracts over n_embd `
-        + `(${meta.dims.n_embd}), so mm's softmax(tril(x/sqrt(k))) would divide by `
-        + `sqrt(${meta.dims.n_embd}) instead of sqrt(${meta.dims.head_dim}), and the only `
+        + `(${meta.dims.n_embd}, plus one for the bias), so mm's `
+        + `softmax(tril(x/sqrt(k))) would divide by `
+        + `sqrt(${meta.dims.n_embd + 1}) instead of sqrt(${meta.dims.head_dim}), and the only `
         + `other scaled softmax in mm's EPILOGS is the literal x/${SCALED_SOFTMAX_LITERAL}. `
         + `Refusing rather than drawing an attention pattern at the wrong temperature — `
         + `use ../attngpt2, whose factoring contracts over head_dim and can use sqrt(k).`,

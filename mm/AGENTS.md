@@ -21,6 +21,20 @@ animation loop and the camera are not covered by anything automated. A change
 that touches them has to be looked at in a browser: `npm run dev`, open `/`, and
 for the checkpoint pages start `tools/gpt2_server.py` first.
 
+Nor does any of the three see the checkpoint — `models/` is local-only, so the
+suite runs entirely on synthetic specs. A change to the served matrices or to
+what the pages ask for needs the numeric check, which does see it:
+
+```bash
+../.venv/bin/python tools/gpt2_server.py --port 8123 &
+../.venv/bin/python tools/check_bias.py --port 8123
+```
+
+It fetches the CSVs the pages fetch, reassembles the products mm will draw, and
+compares them against its own numpy + `safetensors` forward pass — a reference
+that owes nothing to `gpt2_server.py`'s arithmetic. Tolerance is set by the wire
+(`to_csv` writes `%.6g`), not by the maths.
+
 ## What the tests actually pin
 
 `test/` has one suite per `src/` module. They were written against the
@@ -37,8 +51,11 @@ They are deliberately weighted toward properties over line coverage:
 * `viz` — the numerics, against hand-computed values: softmax, causal (tril)
   softmax, layernorm, the initializers, `Array2D`. A wrong softmax still draws a
   smooth colour ramp, so only arithmetic catches it.
-* `gpt2page` — the params-tree builders, `countPoints`, `bbox`, and `merge`'s
-  refusal to address a node the tree does not have.
+* `gpt2page` — the params-tree builders, `countPoints`, `bbox`, `merge`'s
+  refusal to address a node the tree does not have, `checkShapes`' refusal of a
+  tree mm would tile, and the two status-bar claims: that "exact" never stands
+  alone over the synthetic ones vector, and that "complete" never prints beside
+  a gap.
 * `points` — the contract with `viz`/`main`: attribute names, and that
   `raycast` returns the *element* index so `index / W` and `index % W` recover
   row and column.
@@ -108,12 +125,22 @@ and Vite's HTML pipeline would rewrite script tags in an entry.
 
 * Every leaf's `h`/`w` comes from `/api/specs.json`, never a literal. mm wraps
   out-of-range indices (`data[i % data.length]`), so a wrong shape is *tiled*
-  into a plausible, wrong picture with no error anywhere.
+  into a plausible, wrong picture with no error anywhere. `checkShapes` and the
+  throw in `leaf()` catch the two ways that happens; neither is decoration.
 * The **root** params node must not carry `matmul: true` — `ensureChildCounts`
   recognises the root by `matmul === undefined`.
-* `q-`style honesty applies to the status bar: it states separately what the
-  *data* is (exact vs sampled) and what the *product* is (which bias terms mm
-  cannot draw). Do not let a sampled figure be presented as exact.
+* Biases are drawn by **augmenting**, not by an epilog: `X @ W + b` is served as
+  `[X | 1] @ [W ; b]`, one more index along the contraction axis. That is why
+  `viz.ts` needs no `+` and why the animation algorithms did not have to change
+  — a bias added in `applyPointwiseEpilog` would be added once per accumulated
+  chunk, since it is affine and the partial sums are not. If you are tempted to
+  put one there, that is the reason not to.
+* `q-`style honesty applies to the status bar, and it now makes three claims,
+  not two: what the *data* is (exact vs sampled), which part of it is
+  *synthetic* (the all-ones vector — the only number in an augmented leaf the
+  checkpoint did not supply), and what the *product* is (`bias` drawn, `gap`
+  remaining). Do not let a sampled figure be presented as exact, and do not let
+  "complete" print beside a known gap — `productClaim` enforces the second.
 
 ## Known, deliberately not changed
 

@@ -56,12 +56,26 @@ It now reads a local checkpoint instead, which changes four things:
   with the spec it published.
 * **Nothing touches the network.**
 
-## What the picture leaves out
+## The biases, and the one that is left out
 
-GPT-2 computes `x @ W + b`; mm's `EPILOGS` has no `+`, so the *product* drawn
-here is the bias-free one — it omits `c_attn.bias` on Q/K/V and
-`attn.c_proj.bias` on `out`. Every *input* matrix is exact. The status bar
-states the two claims separately, `data:` and `product:`.
+GPT-2 computes `x @ W + b` and mm's `EPILOGS` has no `+`, so `c_attn.bias` is
+drawn the only way a matmul-only grammar can draw a bias — by augmenting the
+operands, `[input | 1] @ [wQ ; bq]`. That is `input @ wQ + bq` exactly, with the
+bias as one more index along the contraction axis, so `Q`, `K_t` and `V` are the
+model's own. The extra index lives *inside* those three; `attn` still contracts
+over `head_dim`, so the scale below is unaffected.
+
+`attn.c_proj.bias` is **not** drawn, and that is the honest choice rather than a
+missing feature: GPT-2 adds it once to the sum over all twelve heads, so it is
+not a term of this matmul at all. Putting it on one head's `wO` slice would
+produce a matrix that is neither the head's contribution nor the layer's output.
+`gpt2_server.py` refuses `wo:h` for that reason; [`../gpt2`](../gpt2/)'s
+*attention output* view concatenates every head and draws it there, where it
+does belong.
+
+Every *input* matrix is the checkpoint's own, apart from the appended all-ones
+column that carries the bias. The status bar states all of this separately,
+`data:` and `product:`.
 
 `softmax(tril(x/sqrt(k)))` is the correct scale in this factoring: `attn` is
 `Q @ K_t`, which contracts over `head_dim`, and mm binds `k` in an epilog to the

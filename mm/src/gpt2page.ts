@@ -51,10 +51,23 @@ export const A = (alg = undefined) => ({ alg: alg || 'none' })
 export const B = () => ({ 'j blocks': 1 })
 
 // The only place a leaf's h/w is written. `spec` is a specs.json entry.
-export const leaf = (name, spec) => ({
-  name, matmul: false, h: spec.h, w: spec.w,
-  init: 'url', url: abs(spec.url), min: -1, max: 1, dropout: 0,
-})
+//
+// The throw is for the other half of the same mistake `checkShapes` catches:
+// a view that asks for `ln_1:w` in its `kinds` but looks the spec up as
+// `m['ln_1']` gets `undefined`, and without this a leaf would go out with
+// `h: undefined` — which mm renders as an empty matrix, not an error.
+export const leaf = (name, spec) => {
+  if (!spec) {
+    throw new Error(
+      `leaf '${name}' was given no spec: the key it was looked up by is not in ` +
+      `this view's kinds list (flags are part of the key — 'ln_1' and 'ln_1:w' ` +
+      `are different entries)`)
+  }
+  return {
+    name, matmul: false, h: spec.h, w: spec.w,
+    init: 'url', url: abs(spec.url), min: -1, max: 1, dropout: 0,
+  }
+}
 
 // An interior matmul over two already-built subtrees. `matmul: true` is what
 // tells viz.js this node has children; note that the *root* must not carry it —
@@ -160,6 +173,107 @@ export function bbox(p) {
   return { h: height(p.left), w: width(p.right), d: width(p.left) + child }
 }
 
+// ---------------------------------------------------------------------------
+// what the picture is — the two claims the status bar makes
+// ---------------------------------------------------------------------------
+//
+// These are separate on purpose, and both are separate from "it drew". A leaf
+// can be exact checkpoint data while the product is not the model's, and since
+// augmentation arrived the reverse is possible too: the product can be exactly
+// GPT-2's while one column of one leaf is a synthetic constant. Saying only
+// "exact" would be false in the second case and misleading in the first.
+//
+// Pure functions of the server's own spec entries, so they can be tested
+// without a server, a browser or a frame.
+//
+
+const list = xs => xs.length < 2 ? xs.join('')
+  : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]
+
+const kindOf = k => k.split(':')[0]
+
+// the flags only — `mlp_c_proj:ch` strides columns, and looking for 'r' in the
+// whole item would find the one in the kind's own name
+const flagsOf = k => k.split(':')[1] || ''
+
+const uniq = xs => [...new Set(xs)]
+
+// A view can augment a matrix both ways — the attention head takes ln_1 as a
+// left operand (ones column) and its transpose as a right one (ones row) — so
+// this groups by axis rather than assuming one.
+function augPhrase(items, what) {
+  const on = axis => uniq(items.filter(([, v]) => v.augment.axis == axis).map(([k]) => kindOf(k)))
+  const [cols, rows] = [on('col'), on('row')]
+  return list([
+    ...(cols.length ? [`${what} column on ${list(cols)}`] : []),
+    ...(rows.length ? [`${what} row on ${list(rows)}`] : []),
+  ])
+}
+
+// `data:` — what the numbers in the leaves are.
+export function dataClaim(specs: Record<string, any>, stride: number) {
+  const entries = Object.entries(specs)
+  const sampled = entries.filter(([, v]) => v.fidelity == 'sampled')
+  const aug = k => entries.filter(([, v]) => v.augment && v.augment.vector == k)
+  const [ones, biases] = [aug('ones'), aug('bias')]
+
+  const parts = [sampled.length
+    ? `<span class="sampled">sampled</span> <span class="dim">— every ${stride}${ord(stride)} ` +
+      `${list(uniq(sampled.map(([k]) => kindOf(k))))} ` +
+      `${sampled.every(([k]) => flagsOf(k).includes('r')) ? 'row' : 'column'}, no interpolation; ` +
+      `contracted axes are never decimated</span>`
+    : `<span class="exact">exact</span> <span class="dim">— every element is the checkpoint's own</span>`]
+
+  // Named, never glossed: the ones vector is the one part of a leaf the model
+  // did not supply. It is also what makes the product right, so it earns its
+  // place — but "exact" must not be left standing over it unqualified.
+  if (ones.length) {
+    parts.push(`<span class="dim">plus a synthetic ${augPhrase(ones, 'all-ones')}` +
+      ` — the constant 1 the bias multiplies</span>`)
+  }
+  if (biases.length) {
+    parts.push(`<span class="dim">the appended ${augPhrase(biases, 'bias')}: ` +
+      `${list(uniq(biases.map(([, v]) => esc(v.augment.tensor))))}` +
+      `${sampled.length ? ', strided with the output axis it indexes' : ''}</span>`)
+  }
+  return parts.join('<span class="dim"> · </span>')
+}
+
+// `product:` — what the drawn matmul computes, against what GPT-2 computes.
+//
+// "complete" is a claim in its own right, so it is only ever printed when
+// `gap` is empty. Saying "includes c_attn.bias" and "complete" in the same
+// breath as a known omission is exactly the elision this bar exists to avoid.
+export function productClaim(view: any) {
+  const drawn = view.bias
+    ? `<span class="exact">includes ${esc(view.bias)}</span> ` +
+      `<span class="dim">— augmented into the matmul as [X | 1] @ [W ; b]</span>`
+    : `<span class="dim">this step has no bias term</span>`
+  return drawn + `<span class="dim"> · </span>` + (view.gap
+    ? `<span class="sampled">gap</span> <span class="dim">— ${esc(view.gap)}</span>`
+    : `<span class="exact">complete</span> ` +
+      `<span class="dim">— what is drawn is the value GPT-2 computes here</span>`)
+}
+
+// Every matmul in the tree must contract over a shared extent. mm does not
+// check: `tryURLInit` wraps out-of-range indices, so a left operand 769 wide
+// against a right operand 768 tall is *tiled* into a plausible, wrong picture
+// with nothing reported anywhere. Augmentation makes that a live risk — the
+// two sides of a matmul now grow together, and augmenting one and not the
+// other is a one-character mistake — so the tree is checked before it is sent.
+export function checkShapes(p, path = 'root') {
+  if (!p.left) return { h: p.h, w: p.w }
+  const l = checkShapes(p.left, path + '.left')
+  const r = checkShapes(p.right, path + '.right')
+  if (l.w !== r.h) {
+    throw new Error(
+      `${path} ('${p.name}') contracts '${p.left.name}' ${l.h}×${l.w} with ` +
+      `'${p.right.name}' ${r.h}×${r.w}: ${l.w} ≠ ${r.h}. mm would tile the ` +
+      `shorter one rather than fail — check the w/h augmentation flags on both.`)
+  }
+  return { h: l.h, w: r.w }
+}
+
 async function getJSON(url): Promise<any> {
   const r = await fetch(abs(url))
   const body = await r.json().catch(() => ({ error: `HTTP ${r.status}` }))
@@ -226,11 +340,13 @@ const status = html => { $('status').innerHTML = html }
 //   viewerUrl  page-relative URL of the mm viewer ('../index.html')
 //
 // view:
-//   kinds   ['ln_1', 'wq', …]  — `kind[:flags]`, t=transpose, r/c=stride axis
+//   kinds   ['ln_1:w', 'wq:h', …] — `kind[:flags]`; t=transpose, r/c=stride
+//           axis, w/h=augment with a bias column/row (see gpt2/index.html)
 //   stride  default stride for this view
 //   seq     default token count for this view (optional)
 //   head    whether the head selector applies
-//   bias    the GPT-2 term mm cannot draw, or null if there is none
+//   bias    the GPT-2 bias now drawn inside the matmul, or null if there is none
+//   gap     what the drawn product still is not, or null if it is the model's
 //   note    (state) => one-line description
 //   build   (specs, state) => root node (name/epilog/left/right)
 //   anims   optional label -> params patch, replacing the page default
@@ -302,6 +418,15 @@ export async function mount(config: any) {
     }
 
     const params = Object.assign(BASE(), view.build(specs, s))
+
+    // refuse a tree mm would tile rather than reject
+    try {
+      checkShapes(params)
+    } catch (e) {
+      status(`<span class="err">${esc(e.message)}</span>`)
+      return
+    }
+
     merge(params, copy(anims()[s.anim] || { anim: { alg: 'none' } }))
 
     // pull the camera back to fit this view — a 6-token attention head and a
@@ -339,7 +464,6 @@ export async function mount(config: any) {
 
   function showStatus(s, view, specs: Record<string, any>, toks, n_tokens, params) {
     const entries = Object.entries(specs)
-    const sampled = entries.filter(([, v]) => v.fidelity == 'sampled')
     const points = countPoints(params).n
 
     const shapes = entries
@@ -347,18 +471,8 @@ export async function mount(config: any) {
       .join('   ')
 
     // two separate claims: what the leaf data is, and what the product is
-    const data = sampled.length
-      ? `<span class="sampled">sampled</span> <span class="dim">— every ${s.stride}${ord(s.stride)} ` +
-        `${sampled.map(([k]) => k.split(':')[0]).join(', ')} ` +
-        `${sampled.every(([k]) => k.endsWith(':r')) ? 'row' : 'column'}, no interpolation; ` +
-        `contracted axes are never decimated</span>`
-      : `<span class="exact">exact</span> <span class="dim">— every element is the checkpoint's own</span>`
-
-    const product = view.bias
-      ? `<span class="sampled">omits ${esc(view.bias)}</span> ` +
-        `<span class="dim">— mm has no '+', so what is drawn is the bias-free matmul, ` +
-        `not the value GPT-2 computes here</span>`
-      : `<span class="exact">complete</span> <span class="dim">— this step has no bias term to omit</span>`
+    const data = dataClaim(specs, s.stride)
+    const product = productClaim(view)
 
     status(
       `<div style="flex-basis:100%">` +
@@ -385,7 +499,9 @@ export async function mount(config: any) {
       el.innerHTML =
         `<table><tr><td colspan="4" class="r">${META.tensors.length} tensors, ` +
         `${META.checkpoint_bytes.toLocaleString()} bytes on disk — read by byte range, never loaded whole. ` +
-        `LayerNorm gains and all biases are vectors, so they have no matmul view.</td></tr>${rows}</table>`
+        `A bias is a vector, so it has no matmul view of its own; it is drawn as ` +
+        `the extra row or column of the weight it belongs to. LayerNorm gains and ` +
+        `shifts are folded into the activations by the forward pass.</td></tr>${rows}</table>`
       el.dataset.filled = '1'
     }
   }
