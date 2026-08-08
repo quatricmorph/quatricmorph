@@ -6,13 +6,14 @@ import * as util from './util.js'
 //
 // shader
 //
-
-const TEXTURE = new THREE.TextureLoader().load('./assets/ball.png')
+// Elements are GL points shaded as sphere impostors: the fragment shader
+// rebuilds a unit normal from gl_PointCoord and lights it, in place of the
+// pre-baked ./assets/ball.png sprite this used to sample.
+//
 
 export const MATERIAL = new THREE.ShaderMaterial({
   uniforms: {
     color: { value: new THREE.Color(0xffffff) },
-    pointTexture: { value: TEXTURE },
     mag: { value: 1.0 },
   },
 
@@ -32,13 +33,62 @@ export const MATERIAL = new THREE.ShaderMaterial({
 
   fragmentShader: `
   uniform vec3 color;
-  uniform sampler2D pointTexture;
   varying vec4 vColor;
 
+  // Footprint of the ball in the retired sprite: its alpha mask covered 55 of
+  // ball.png's 64 texels, so the impostor is scaled to match and elements keep
+  // the apparent size every layout gap was tuned against.
+  const float BALL_R = 0.86;
+
+  // Brightness floor. Shading multiplies vColor, and vColor *is* the data -- the
+  // value -> hue/lightness mapping driven by params.viz. Every element is shaded
+  // by the same normal field under the same lights, so the multiplier at a given
+  // point of the sprite is identical across elements and their relative lightness
+  // still reads; the floor keeps low-value elements from shading away entirely.
+  const float AMBIENT = 0.6;
+
   void main() {
-    vec4 outColor = texture2D( pointTexture, gl_PointCoord );
-    if ( outColor.a < 0.5 ) discard;
-    gl_FragColor = outColor * vec4( color * vColor.xyz, 1.0 );
+    // gl_PointCoord's origin is the sprite's top-left with y pointing down, so y
+    // is negated to get a view-space normal with +y up.
+    vec2 p = (gl_PointCoord * 2.0 - 1.0) / BALL_R;
+    float r2 = dot(p, p);
+    if (r2 > 1.0) discard;   // hard silhouette -- the point cloud is dense and
+                             // unsorted, so it cannot afford alpha blending
+    vec3 n = vec3(p.x, -p.y, sqrt(1.0 - r2));
+
+    // Lights live in view space: points are billboards, so there is no
+    // per-fragment world normal to light against, and a fixed view-space key
+    // keeps the highlight on the same side of the screen as the camera orbits.
+    vec3 v = vec3(0.0, 0.0, 1.0);
+    vec3 key = normalize(vec3(-0.45, 0.62, 0.64));   // above and to the left
+    vec3 fill = normalize(vec3(0.62, -0.30, 0.45));  // dim bounce, below right
+    vec3 h = normalize(key + v);
+
+    // Wrapped diffuse, so the terminator falls off gradually enough to read as
+    // roundness even when an element is only a few pixels across.
+    float wrap = 0.35;
+    float diffuse = clamp((dot(n, key) + wrap) / (1.0 + wrap) * 0.82 +
+                          max(dot(n, fill), 0.0) * 0.26, 0.0, 1.0);
+    vec3 base = color * vColor.xyz * (AMBIENT + (1.0 - AMBIENT) * diffuse);
+
+    // Gloss: a tight specular lobe plus a broad sheen, both hue-neutral so they
+    // read as a surface property rather than as a shift in the encoded value.
+    float nh = max(dot(n, h), 0.0);
+    float gloss = pow(nh, 42.0) * 0.6 + pow(nh, 5.0) * 0.1;
+
+    // Reflection: a two-tone environment -- cool from above, warm bounce from
+    // below -- weighted by Fresnel, so it shows only at grazing angles.
+    float fresnel = pow(1.0 - max(n.z, 0.0), 3.0);
+    vec3 reflection = mix(vec3(0.42, 0.34, 0.28), vec3(0.62, 0.72, 0.95),
+                          n.y * 0.5 + 0.5) * fresnel * 0.3;
+
+    // Screen rather than add: highlights brighten monotonically, so two elements
+    // holding different values never clip to the same white.
+    vec3 lit = 1.0 - (1.0 - base) * (1.0 - clamp(gloss + reflection, 0.0, 1.0));
+
+    // The discard above leaves a hard edge; fading the outermost 2% is the only
+    // antialiasing available without turning blending on.
+    gl_FragColor = vec4(lit * (1.0 - smoothstep(0.98, 1.0, sqrt(r2))), 1.0);
   }`,
 })
 
