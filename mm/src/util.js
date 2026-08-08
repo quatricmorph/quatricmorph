@@ -348,7 +348,7 @@ export function disposeAndClear(obj) {
 
 // text rendering
 
-import * as typeface from './assets/katex_main_regular.typeface.js'
+import * as typeface from '../assets/katex_main_regular.typeface.js'
 import { FontLoader } from 'three/addons/loaders/FontLoader.js'
 
 const font = new FontLoader().parse(typeface.data)

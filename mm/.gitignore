@@ -1,1 +1,3 @@
 .safetensor
+node_modules
+dist
