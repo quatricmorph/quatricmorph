@@ -5,36 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>mm ref</title>
   <style>
-    /* KaTeX_Main (MIT, Khan Academy) — see assets/fonts/LICENSE-KaTeX.txt.
-       Matches the face the embedded viewer uses for its 3D labels. */
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Regular.woff2') format('woff2');
-      font-weight: normal;
-      font-style: normal;
-      font-display: swap;
-    }
-
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Bold.woff2') format('woff2');
-      font-weight: bold;
-      font-style: normal;
-      font-display: swap;
-    }
-
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Italic.woff2') format('woff2');
-      font-weight: normal;
-      font-style: italic;
-      font-display: swap;
-    }
+    /* The embedded viewer keeps KaTeX_Main for its 3D labels, loaded as a
+       Three.js typeface from assets/katex_main_regular.typeface.js (MIT, Khan
+       Academy — see assets/fonts/LICENSE-KaTeX.txt). This page uses a system sans. */
 
     body,
     html {
       touch-action: none;
-      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
       font-size: 16px;
       line-height: 1.5;
       margin: 0px;

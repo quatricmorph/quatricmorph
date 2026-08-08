@@ -6,37 +6,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
   <style>
-    /* KaTeX_Main (MIT, Khan Academy) — see assets/fonts/LICENSE-KaTeX.txt.
-       Same face the 3D labels use, via assets/katex_main_regular.typeface.js. */
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Regular.woff2') format('woff2');
-      font-weight: normal;
-      font-style: normal;
-      font-display: swap;
-    }
-
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Bold.woff2') format('woff2');
-      font-weight: bold;
-      font-style: normal;
-      font-display: swap;
-    }
-
-    @font-face {
-      font-family: 'KaTeX_Main';
-      src: url('./assets/fonts/KaTeX_Main-Italic.woff2') format('woff2');
-      font-weight: normal;
-      font-style: italic;
-      font-display: swap;
-    }
+    /* The 3D matrix labels keep KaTeX_Main, loaded as a Three.js typeface from
+       assets/katex_main_regular.typeface.js (MIT, Khan Academy — see
+       assets/fonts/LICENSE-KaTeX.txt). The HTML UI below uses a system sans. */
 
     body {
       margin: 0;
       background-color: #000;
       color: #fff;
-      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
       font-size: 13px;
       line-height: 24px;
       overscroll-behavior: none;
@@ -72,8 +50,7 @@
     .lil-gui {
       --folder-indent: 12px;
       --title-background-color: #555;
-      --font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
-      --font-family-mono: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      --font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
     }
 
     .lil-gui.autoPlace {
@@ -136,7 +113,7 @@
 
     .control-btn {
       position: absolute;
-      font-family: 'KaTeX_Main', 'Latin Modern Roman', 'Computer Modern', Georgia, serif;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
       color: #fff;
       top: 4px;
       left: 25px;
