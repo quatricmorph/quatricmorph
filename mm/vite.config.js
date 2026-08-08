@@ -15,6 +15,19 @@ const entry = p => fileURLToPath(new URL(p, import.meta.url))
 export default defineConfig({
   appType: 'mpa',
 
+  resolve: {
+    // The app needs WebGPURenderer, which only the three/webgpu build exports,
+    // but the addons (OrbitControls, FontLoader) import bare 'three' inside
+    // themselves. Without this the bundle carries two copies of the core, every
+    // instanceof across the boundary fails, and the renderer draws nothing --
+    // silently, with no error.
+    //
+    // The regex form matters: a plain string 'three' prefix-matches, so it
+    // would rewrite 'three/addons/...' to 'three/webgpu/addons/...' and break
+    // every addon import instead.
+    alias: [{ find: /^three$/, replacement: 'three/webgpu' }],
+  },
+
   build: {
     rollupOptions: {
       input: {

@@ -1,34 +1,39 @@
 "use strict"
 import * as THREE from 'three'
+import { attribute, varying, colorSpaceToWorking } from 'three/tsl'
 
-// https://threejs.org/examples/#webgl_buffergeometry_rawshader
-const MMGUIDE_MATERIAL = new THREE.RawShaderMaterial({
-  vertexShader: `
-  precision mediump float;
-  precision mediump int;
-  uniform mat4 modelViewMatrix; // optional
-  uniform mat4 projectionMatrix; // optional
-  attribute vec3 position;
-  attribute vec4 color;
-  varying vec3 vPosition;
-  varying vec4 vColor;
-  void main()	{
-    vPosition = position;
-    vColor = color;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-  }`,
-  fragmentShader: `
-  precision mediump float;
-  precision mediump int;
-  varying vec3 vPosition;
-  varying vec4 vColor;
-  void main()	{
-    vec4 color = vec4( vColor );
-    gl_FragColor = color;
-  }`,
-  side: THREE.DoubleSide,
-  transparent: true
-});
+// The matmul guides: flat triangles carrying their colour, alpha included, in a
+// normalized Uint8 `color` attribute (see LEFT_ARROW_COLOR below, whose alpha
+// flowGuide animates).
+//
+// This was a RawShaderMaterial that assigned the attribute straight to
+// gl_FragColor. WebGPU cannot run GLSL, so it is a NodeMaterial now -- but
+// still a raw pass-through rather than MeshBasicMaterial + vertexColors,
+// because a stock material would apply the output colour-space conversion that
+// the raw shader bypassed and shift every guide lighter than it was.
+const guideColor = varying(attribute('color', 'vec4'), 'vGuideColor')
+
+const MMGUIDE_MATERIAL = new THREE.NodeMaterial()
+// rgb pre-decoded so WebGPU's frame-wide output conversion round-trips to the
+// attribute's own value, as the raw shader's did. ColorSpaceNode converts rgb
+// and passes alpha through, which is what the animated guide alpha needs (see
+// the longer note in points.js).
+//
+// These arrows are semi-transparent, which makes them sensitive to *where* the
+// blend happens, not just to what this shader returns. They match WebGL only
+// while the frame renders straight to the canvas, so that blending lands on
+// colour-space-encoded values the way WebGL's did -- measured 226,133,133 for
+// an arrow over black at alpha 0.886, WebGL's value exactly.
+//
+// Anything that pushes the frame onto three.js's linear intermediate-target
+// path moves the blend into linear space and lightens them to 242,142,142
+// (which is sRGB(linear(src) * alpha)). scene.backgroundNode does that, which
+// is why main.js clears the magnifier's rect with a drawn quad instead.
+MMGUIDE_MATERIAL.fragmentNode = colorSpaceToWorking(guideColor, THREE.SRGBColorSpace)
+MMGUIDE_MATERIAL.side = THREE.DoubleSide
+MMGUIDE_MATERIAL.transparent = true
+MMGUIDE_MATERIAL.fog = false
+MMGUIDE_MATERIAL.toneMapped = false
 
 //
 // reading/writing params

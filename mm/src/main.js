@@ -362,10 +362,41 @@ raycaster.setFromCamera(pointer, camera)
 
 const scene = new THREE.Scene()
 
-const renderer = new THREE.WebGLRenderer({ antialias: true })
+// A black screen-filling quad, used to clear the magnifier's scissor rect.
+//
+// WebGPU's colour clear is a render-pass loadOp over the whole attachment and
+// ignores the scissor, so the lens pass has to keep the colour buffer to
+// preserve the frame around it -- which also leaves the lens rect holding the
+// previous pass's pixels, visible through the gaps between magnified elements.
+// Drawing black is an ordinary draw, so the scissor clips it to exactly the
+// rect WebGL's scissored clear used to cover.
+//
+// Setting scene.backgroundNode would clear the rect too, and with less code,
+// but it moves the whole frame onto three.js's linear intermediate-target
+// path. That changes where the semi-transparent flow guides blend -- linear
+// instead of encoded -- and shifts their colour away from what WebGL produced.
+// Measured: an arrow over black lands 242,142,142 that way against WebGL's
+// 226,133,133, where this keeps it at 226,133,133 exactly.
+//
+// The 2x2 plane and the unit orthographic camera are three.js's own
+// full-screen-quad pairing (see FullScreenQuad): together they cover exactly
+// the viewport, whatever its size. A bare Camera cannot stand in -- the
+// renderer calls updateProjectionMatrix() on whatever it is handed.
+const lens_clear_scene = new THREE.Scene()
+const lens_clear_camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+lens_clear_scene.add(new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 2),
+  new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false, depthWrite: false })))
+
+// WebGPU, falling back to this renderer's own WebGL2 backend where WebGPU is
+// unavailable -- one code path, no second set of materials. The device request
+// is async; init() is awaited before the first frame so nothing renders against
+// a half-built backend.
+const renderer = new THREE.WebGPURenderer({ antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
 renderer.setSize(window.innerWidth, window.innerHeight)
 document.getElementById('container').appendChild(renderer.domElement)
+await renderer.init()
 
 // diag info updated on render
 const render_info = renderer.info.memory
@@ -728,7 +759,12 @@ function animate() {
     const m = params.deco.magnification
     const size = window.innerHeight * params.deco['lens size']
     const x = clientX - size / 2
-    const y = window.innerHeight - clientY
+    // Top-left origin. WebGPURenderer takes setViewport/setScissor that way on
+    // both of its backends -- the WebGL fallback flips y itself in
+    // WebGLBackend.updateViewport -- whereas the legacy WebGLRenderer took
+    // GL's bottom-left origin, which is what `innerHeight - clientY` gave.
+    // Passing the old value put the lens a lens-height too low.
+    const y = clientY - size
     const offsetX = clientX - size / 2 / m
     const offsetY = clientY - size / m
 
@@ -746,10 +782,29 @@ function animate() {
     renderer.setScissorTest(true)
     renderer.setScissor(x, y, size, size)
 
+    // The lens is a second pass over the same scene, drawn into a scissored
+    // corner of the frame the pass above just produced. Under WebGL the colour
+    // clear honoured the scissor, so the rest of the frame survived by itself.
+    // WebGPU clears through the render pass's loadOp, which applies to the
+    // whole attachment and ignores the scissor rect -- leaving autoClearColor
+    // on here would wipe the frame and leave nothing but the lens. Loading the
+    // colour instead preserves it, and the scissor confines what the lens
+    // draws. Depth still clears, which the lens needs: it renders from a
+    // different camera, and testing against the previous pass's depth would
+    // punch holes in it.
+    // keep the colour written above, clear depth, and paint the lens rect black
+    renderer.autoClearColor = false
+    renderer.render(lens_clear_scene, lens_clear_camera)
+
+    // now keep both: the black backing just drawn, and the depth it left clear
+    renderer.autoClear = false
+
     viz.MATERIAL.uniforms.mag.value = m
     renderer.render(scene, mag_camera)
     viz.MATERIAL.uniforms.mag.value = 1.0
 
+    renderer.autoClear = true
+    renderer.autoClearColor = true
     renderer.setScissorTest(false)
   }
 
@@ -758,7 +813,12 @@ function animate() {
 
 // instructions hover
 
-window.onload = () => {
+// Registered rather than assigned to window.onload, and run directly if the
+// document has already loaded. Awaiting the WebGPU device above makes the rest
+// of this module a microtask, which can land after the load event has already
+// fired -- an assignment then installs a handler nothing will ever call, and
+// the panel stays at its stylesheet `display: none` forever.
+const initInstructions = () => {
   const instr = document.getElementById('instructions')
   const instr_content = document.getElementById('instructions-content')
   const min_content = document.getElementById('minimized')
@@ -785,6 +845,12 @@ window.onload = () => {
 
   instr.style.display = "block"
   show()
+}
+
+if (document.readyState === 'complete') {
+  initInstructions()
+} else {
+  window.addEventListener('load', initInstructions)
 }
 
 //

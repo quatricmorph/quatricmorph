@@ -11,8 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lil-gui": "0.18.1",
-    "three": "0.152.2"
+    "lil-gui": "^0.21.0",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "vite": "^8.2.1"
