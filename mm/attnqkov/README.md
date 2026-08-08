@@ -32,7 +32,7 @@ cd mm
 npm run dev                                  # proxies /gpt2 to the above
 ```
 
-Then open the URL Vite prints, at `/examples/attnqkov/`. Without node:
+Then open the URL Vite prints, at `/attnqkov/`. Without node:
 
 ```bash
 npm run build
@@ -45,7 +45,7 @@ This example previously loaded fixed 256×768 CSVs of Karpathy
 [NanoGPT](https://github.com/karpathy/nanoGPT) `gpt2` weights from a public
 bucket. It now reads a local checkpoint: 6 layers rather than 12, `input` is the
 real residual stream after `ln_1` for the prompt you type, and every leaf's
-shape comes from `/gpt2/specs.json` rather than a literal — mm's `tryURLInit`
+shape comes from `/api/specs.json` rather than a literal — mm's `tryURLInit`
 wraps out-of-range indices (`data[i % data.length]`), so a hand-written shape
 that disagrees with the data tiles silently instead of failing.
 

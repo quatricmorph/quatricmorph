@@ -9,16 +9,16 @@
 <body>
   <script type="module">
     //
-    // Drives ../../index.html (the mm viewer) from a real GPT-2 checkpoint.
+    // Drives ../index.html (the mm viewer) from a real GPT-2 checkpoint.
     //
-    // Everything except the trees below lives in ../../src/gpt2page.js: the
+    // Everything except the trees below lives in ../src/gpt2page.ts: the
     // specs.json fetch, the status bar, the deep link, the tensor inventory.
     // In particular every leaf's h/w comes from that server's /gpt2/specs.json
     // — never hand-written here — because mm's tryURLInit wraps out-of-range
     // indices (`data[i % data.length]`) and would silently tile a mis-shaped
     // matrix instead of failing.
     //
-    import { mount, root, inner, node, leaf, L } from '../../src/gpt2page.js'
+    import { mount, root, inner, node, leaf, L } from '../src/gpt2page.ts'
 
     //
     // views
@@ -55,7 +55,7 @@
               node('K_t', 'wK_t', m['wk_t'], 'input_t', m['ln_1:t'],
                 'none', L('positive', 'right', 'top', 'back')),
               // attn contracts over head_dim here, so mm's sqrt(k) is the
-              // right scale — see examples/attnqkov, where it is not
+              // right scale — see ../attnqkov, where it is not
               'softmax(tril(x/sqrt(k)))', L('negative', 'left', 'top', 'front')),
             node('V', 'input', m['ln_1'], 'wV', m['wv'],
               'none', L('negative', 'right', 'top', 'back')),

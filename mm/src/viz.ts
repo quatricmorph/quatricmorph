@@ -29,12 +29,12 @@ function gaussianRandom(mean = 0, stdev = 1) {
   return z * stdev + mean
 }
 
+// Removed: sampleSphere(), which called `sm.randn` / `sm.sum` against a shumai
+// import that was never present in this file. It would have thrown
+// ReferenceError on the first call. Its only caller is the `sphere` entry in
+// INIT_FUNCS below, which has been commented out for as long as the file has
+// existed. The typecheck is what surfaced it.
 // https://github.com/facebookresearch/shumai/blob/main/test/gradient.test.ts#L5
-function sampleSphere(args) {
-  const u = sm.randn(args)
-  const d = sm.sum(u.mul(u)).sqrt()
-  return u.div(d)
-}
 
 export const INIT_FUNCS = {
   rows: (i, j, h) => h > 1 ? i / (h - 1) : 0,
@@ -71,9 +71,15 @@ function tryLoadData(data_url) {
     const req = new XMLHttpRequest()
     req.open("GET", url, false)
     req.send(null)
-    DATA_CACHE[url] = req.responseText.split(/\r?\n|\r/).map(l => l.split(',').map(s => +s))
+    // Keyed by `data_url`, the same string the lookup at the top of this
+    // function uses. It used to be keyed by the URL *object*, which stringifies
+    // to the normalised href -- so any caller whose URL was not already in
+    // normal form wrote a key the reader could never hit and re-fetched the CSV
+    // synchronously on every re-init. Found by the typecheck (`Type 'URL'
+    // cannot be used as an index type`).
+    DATA_CACHE[data_url] = req.responseText.split(/\r?\n|\r/).map(l => l.split(',').map(s => +s))
     console.log(`done loading data from ${data_url}`)
-    return DATA_CACHE[url]
+    return DATA_CACHE[data_url]
   } catch (e) {
     console.log(`error loading data from URL '${data_url}' message '${e.message}`)
   }
@@ -263,6 +269,13 @@ function initArrayData_(data, h, w, init, epi = undefined, r = undefined, c = un
 }
 
 export class Array2D {
+  // Fields, declared for the typechecker. Most are assigned in init()
+  // rather than the constructor, so TS cannot infer them; without these,
+  // every read is an error and a genuine typo would hide among them.
+  data: any
+  h: any
+  w: any
+
 
   static fromInit(h, w, init, epi = undefined) {
     const data = new Float32Array(h * w)
@@ -328,6 +341,11 @@ export class Array2D {
   }
 
   map(f) {
+    // `n` was never declared here, so this threw ReferenceError on every call.
+    // Nothing in the app reaches it -- which is why it survived -- but leaving
+    // it would have been a hard typecheck error, and a dead method that crashes
+    // is a trap for the next person who finds it. Declared as map2 does.
+    const n = this.h * this.w
     const data = new Float32Array(n)
     for (let ptr = 0; ptr < n; ptr++) {
       data[ptr] = f(this.data[ptr])
@@ -357,7 +375,7 @@ export class Array2D {
 //
 
 function grid(info, dims, f) {
-  const infos = Array.from(dims).map(d => info[d])
+  const infos = Array.from(dims as Iterable<string>).map(d => info[d])
   const loop = (args, infos, f) => infos.length == 0 ?
     f(...args) :
     [...Array(infos[0].n).keys()].map(index => {
@@ -414,6 +432,29 @@ function emptyPoints(h, w, info) {
 }
 
 export class Mat {
+  // Fields, declared for the typechecker. Most are assigned in init()
+  // rather than the constructor, so TS cannot infer them; without these,
+  // every read is an error and a genuine typo would hide among them.
+  H: any
+  W: any
+  _extents: any
+  absmax: any
+  absmin: any
+  context: any
+  data: any
+  group: any
+  hdim_text: any
+  inner_group: any
+  label_cache: any
+  label_group: any
+  legend_state: any
+  n_size_from_data_errors: any
+  name_text: any
+  params: any
+  points: any
+  row_guide_groups: any
+  wdim_text: any
+
 
   constructor(data, params, context, init_viz) {
     this.params = params
@@ -895,6 +936,26 @@ const ensureChildCounts = p => {
 }
 
 export class MatMul {
+  // Fields, declared for the typechecker. Most are assigned in init()
+  // rather than the constructor, so TS cannot infer them; without these,
+  // every read is an error and a genuine typo would hide among them.
+  D: any
+  H: any
+  W: any
+  _extents: any
+  alg_join: any
+  anim_mats: any
+  bump: any
+  context: any
+  flow_guide_group: any
+  getIndex: any
+  group: any
+  left: any
+  onAnimDone: any
+  params: any
+  result: any
+  right: any
+
 
   constructor(params, context, init_viz = true) {
     this.context = context
@@ -1049,7 +1110,7 @@ export class MatMul {
       return 0
     }
 
-    return this.applyPointwiseEpilog(x, this.params.epilog)
+    return this.applyPointwiseEpilog(x)   // reads params.epilog itself
   }
 
   getDataArray() {
@@ -1172,7 +1233,7 @@ export class MatMul {
   }
 
   getLayoutInfo() {
-    const info = this.getPlacementInfo()
+    const info: any = this.getPlacementInfo()
     Object.entries(info).forEach(([k, v]) => info[k] = v ? 1 : -1)
     info.gap = this.params.layout.gap
     info.left_scatter = this.getLeftScatter()
@@ -1271,7 +1332,7 @@ export class MatMul {
     }
   }
 
-  setRowGuides(light) {
+  setRowGuides(light = undefined) {
     light = util.syncProp(this.params.deco, 'row guides', light)
     this.left.setRowGuides(light)
     this.right.setRowGuides(light)
@@ -1464,7 +1525,7 @@ export class MatMul {
     const { gap, polarity } = this.getLayoutInfo()
     const results = this.getAnimResultMats()
 
-    const vmps = {}
+    const vmps: Record<string, any> = {}   // keyed by [i,k,j], coerced to 'i,k,j'
     this.grid('ikj', (
       { start: i, index: ii },
       { start: k, extent: kx, index: ki },
@@ -1477,7 +1538,7 @@ export class MatMul {
       const z = polarity < 0 ? this.getExtent().z - k - (gap * ki) : k + (gap * ki)
       util.updateProps(vmp.group.position, { x: j + ji, y: gap + i + ii, z })
       vmp.group.rotation.x = polarity * Math.PI / 2
-      vmps[[i, k, j]] = vmp
+      vmps[String([i, k, j])] = vmp
       this.anim_mats.push(vmp)
       this.group.add(vmp.group)
     })
@@ -1532,7 +1593,7 @@ export class MatMul {
         { start: k },
         { start: j, extent: jx, index: ji }
       ) => {
-        const vmp = vmps[[i, k, j]]
+        const vmp = vmps[String([i, k, j])]
         if (curi < ix && curj < jx) {
           util.updateProps(vmp.group.position, { x: j + (ji * gap) + curj, y: gap + i + (ii * gap) + curi })
           vmp.reinit((ki, ji) => this.ikjmul(i + curi, k + ki, j + curj + ji))
@@ -1553,7 +1614,7 @@ export class MatMul {
     const { gap, polarity } = this.getLayoutInfo()
     const results = this.getAnimResultMats()
 
-    const mvps = {}
+    const mvps: Record<string, any> = {}   // keyed by [i,k,j], coerced to 'i,k,j'
     this.grid('ikj', (
       { start: i, extent: ix, index: ii },
       { start: k, extent: kx, index: ki },
@@ -1566,7 +1627,7 @@ export class MatMul {
       const z = polarity < 0 ? this.getExtent().z - k - (gap * ki) : k + (gap * ki)
       util.updateProps(mvp.group.position, { x: gap + j + ji, y: i + ii, z })
       mvp.group.rotation.y = polarity * -Math.PI / 2
-      mvps[[i, k, j]] = mvp
+      mvps[String([i, k, j])] = mvp
       this.anim_mats.push(mvp)
       this.group.add(mvp.group)
     })
@@ -1621,7 +1682,7 @@ export class MatMul {
         { start: k },
         { start: j, extent: jx, index: ji }
       ) => {
-        const mvp = mvps[[i, k, j]]
+        const mvp = mvps[String([i, k, j])]
         if (curi < ix && curj < jx) {
           util.updateProps(mvp.group.position, { x: gap + j + (ji * gap) + curj, y: i + (ii * gap) + curi })
           mvp.reinit((ii, ki) => this.ikjmul(i + curi + ii, k + ki, j + curj))
@@ -1647,7 +1708,7 @@ export class MatMul {
     // pre-epilog shadow for result accum
     const pre_epilog = Array2D.fromInit(this.H, this.W, () => 0)
 
-    const vvps = {}
+    const vvps: Record<string, any> = {}   // keyed by [i,k,j], coerced to 'i,k,j'
     this.grid('ikj', (
       { start: i, extent: ix, index: ii },
       { start: k, index: ki },
@@ -1659,7 +1720,7 @@ export class MatMul {
       vvp.hide()
       const z = polarity > 0 ? gap + k + ki : extz - gap - k - ki
       util.updateProps(vvp.group.position, { x: j + ji * gap, y: i + ii * gap, z })
-      vvps[[i, k, j]] = vvp
+      vvps[String([i, k, j])] = vvp
       this.anim_mats.push(vvp)
       this.group.add(vvp.group)
     })
@@ -1725,7 +1786,7 @@ export class MatMul {
         { start: k, extent: kx, index: ki },
         { start: j, extent: jx, index: ji }
       ) => {
-        const vvp = vvps[[i, k, j]]
+        const vvp = vvps[String([i, k, j])]
         if (curk < kx && curj < jx) {
           const z = polarity > 0 ? gap + k + (ki * gap) + curk : extz - gap - k - (ki * gap) - curk
           util.updateProps(vvp.group.position, { x: j + ji * gap + curj, z })
@@ -1805,7 +1866,7 @@ export const LAYOUT_RULES = {
 export const childLayout = (parent_layout, rule, left_child) =>
   boolToLayout(rule(left_child, layoutToBool(parent_layout)))
 
-export function setLayoutScheme(params, scheme_name) {
+export function setLayoutScheme(params, scheme_name = undefined) {
   scheme_name = util.syncProp(params.layout, 'scheme', scheme_name)
   const rule = LAYOUT_RULES[scheme_name]
   function f(p) {

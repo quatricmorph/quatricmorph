@@ -113,15 +113,22 @@ export function initGui(params, callbacks, info) {
       const is_left = p === pp.left
       const depth = is_left ? width(pp.right) : height(pp.left)
       const rule = viz.LAYOUT_RULES[params.layout.scheme]
+      // NOTE: called below as layoutProto(pp) -- `left_child` receives the
+      // *parent params object*, which is always truthy, so childLayout always
+      // sees a left child here. That looks like a bug, but it is the behaviour
+      // this path has always had and nothing covers it, so it is preserved
+      // verbatim rather than quietly changed during a type migration.
+      // The two arguments removed from these calls (childLayout's 4th and
+      // layoutProto's 2nd) were dropped by the callees already.
       const layoutProto = left_child => rule ?
-        viz.childLayout(pp.layout, rule, left_child, p === pp.left) :
+        viz.childLayout(pp.layout, rule, left_child) :
         util.copyTree(pp.layout)
       util.updateProps(p, {
         epilog: pp.epilog,
         left: childMat(p, depth, true, p === pp.left),
         right: childMat(p, depth, false, p === pp.left),
         anim: viz.defaultAnim(),
-        layout: layoutProto(pp, is_left),
+        layout: layoutProto(pp),
       })
       util.deleteProps(p, ['h', 'w', 'init', 'url', 'expr', 'min', 'max', 'dropout'])
       addMatmulParams(g, path, ancestors)

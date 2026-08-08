@@ -1,0 +1,68 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+
+    // Vite resolves imports, not tsc: `bundler` is what lets a .ts file write
+    // `import './util.js'` (the specifier the emitted code would use) and have
+    // it point at util.ts, and what makes package `exports` maps work.
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+
+    // tsc never emits here -- vite does. This is a checker, run via
+    // `npm run typecheck`.
+    "noEmit": true,
+    "isolatedModules": true,
+
+    // Load-bearing, and it cost a broken build to learn why.
+    //
+    // At ES2022 this defaults to true, which turns a bare `foo: any` field
+    // declaration into a real `foo = undefined` definition running right after
+    // super(). On a class that extends something, declaring an inherited member
+    // for the typechecker then *shadows* it with undefined at runtime --
+    // `this.setIndex(...)` in PointCloudGeometry died with "not a function".
+    // With this off, an uninitialised declaration is type-only and emits
+    // nothing, which is what a JS-to-TS migration needs.
+    "useDefineForClassFields": false,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // The alias vite.config.js sets at build time, restated for the checker.
+    //
+    // Without this, `import * as THREE from 'three'` is checked against the
+    // stock three build, which has no WebGPURenderer and no NodeMaterial, and
+    // every TSL import fails to resolve. The errors would all be phantoms:
+    // at runtime vite rewrites the same specifier to three/webgpu. The two
+    // must agree or the typecheck is checking a program that never runs.
+    "paths": {
+      "three": ["./node_modules/@types/three/build/three.webgpu.d.ts"],
+      "three/tsl": ["./node_modules/@types/three/build/three.tsl.d.ts"]
+    },
+
+    // Migration setting, deliberately not `strict`.
+    //
+    // This is a port of ~4,600 lines of untyped JS whose central data structure
+    // is a heterogeneous params tree addressed by string paths. Turning on
+    // strict here would produce hundreds of errors at once, and a typecheck
+    // script that is permanently red is a typecheck script everyone learns to
+    // ignore -- which is worse than none, especially for an agent that is
+    // supposed to treat it as a gate.
+    //
+    // So: green from day one, with the checks that catch real mistakes
+    // (undeclared variables, bad property access, wrong arity, unreachable
+    // imports) on, and the ones that need annotation everywhere off. Ratchet
+    // by turning one of the flags below on and fixing what it finds.
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+
+    "types": ["vite/client", "vitest/globals", "node"]
+  },
+  "include": ["src", "test", "vite.config.ts", "types"]
+}

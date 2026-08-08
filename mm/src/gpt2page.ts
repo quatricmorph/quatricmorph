@@ -1,15 +1,15 @@
 //
 // Shared driver for the checkpoint-backed example pages.
 //
-// `examples/gpt2`, `examples/attngpt2` and `examples/attnqkov` all do the same
-// thing: ask `tools/gpt2_server.py` for the shape and URL of every matrix in a
+// `gpt2/`, `attngpt2/` and `attnqkov/` all do the same
+// thing: ask `tools/gpt2_server.py` (under /api/) for the shape and URL of every matrix in a
 // tree, hand that tree to the unmodified mm viewer in an iframe, and say in the
 // status bar exactly what the picture is and is not. Only the *tree* differs
 // between them, so only the tree lives in the page; everything else is here.
 //
 // The rule this module exists to state once instead of three times:
 //
-//   **Every leaf's h/w comes from /gpt2/specs.json — never a literal.**
+//   **Every leaf's h/w comes from /api/specs.json — never a literal.**
 //
 // mm's `tryURLInit` wraps out-of-range indices (`data[i % data.length]`), so a
 // leaf whose declared shape disagrees with its CSV is silently *tiled* rather
@@ -26,10 +26,15 @@
 
 import './gpt2page.css'
 
-const $ = id => document.getElementById(id)
+// Typed `any` deliberately. Everything this module looks up is an <input>, a
+// <select> or the <iframe>, and it reads .value / .options / .disabled / .src
+// off them -- but getElementById is only ever HTMLElement, so the alternative
+// is a cast at all ~30 call sites. The chrome these ids belong to is injected
+// by this same file (see CHROME), so the shapes are not in question.
+const $ = (id: string): any => document.getElementById(id)
 
 // Absolute, same-origin. The CSV URLs specs.json hands back are root-relative
-// (`/gpt2/matrix.csv?…`), which works both under `vite dev` — vite.config.js
+// (`/api/matrix.csv?…`), which works both under `vite dev` — vite.config.ts
 // proxies /gpt2 to the python server — and under gpt2_server.py serving mm/
 // directly. A cross-origin :8000 fetch from a :5173 page would be blocked.
 export const abs = u => new URL(u, location.href).href
@@ -42,7 +47,7 @@ export const L = (pol, left, right, res) => ({
   'polarity': pol, 'left placement': left,
   'right placement': right, 'result placement': res,
 })
-export const A = alg => ({ alg: alg || 'none' })
+export const A = (alg = undefined) => ({ alg: alg || 'none' })
 export const B = () => ({ 'j blocks': 1 })
 
 // The only place a leaf's h/w is written. `spec` is a specs.json entry.
@@ -56,18 +61,18 @@ export const leaf = (name, spec) => ({
 // `ensureChildCounts` uses `matmul === undefined` to recognise the root and
 // propagate `total`, so a root with `matmul: true` leaves `total` unset
 // throughout the tree.
-export const inner = (name, l, r, epilog, layout) => ({
+export const inner = (name, l, r, epilog = undefined, layout = undefined) => ({
   name, matmul: true, epilog: epilog || 'none',
   left: l, right: r,
   anim: A(), block: B(), layout,
 })
 
 // An interior matmul over two leaves.
-export const node = (name, lname, lspec, rname, rspec, epilog, layout) =>
+export const node = (name, lname, lspec, rname, rspec, epilog = undefined, layout = undefined) =>
   inner(name, leaf(lname, lspec), leaf(rname, rspec), epilog, layout)
 
 // The root node. No `matmul` key — see `inner` above.
-export const root = (name, l, r, epilog) => ({
+export const root = (name, l, r, epilog = undefined) => ({
   name, epilog: epilog || 'none', left: l, right: r,
 })
 
@@ -114,7 +119,7 @@ const copy = o => JSON.parse(JSON.stringify(o))
 // against is real: the original attnqkov page carried attngpt2's presets, whose
 // `left.left.left` is `Q` in that tree and `inputQK` in this one.) Creating a
 // leaf value is fine; creating a subtree is a bug in the preset.
-function merge(dst, src, path = '') {
+export function merge(dst: any, src: any, path = '') {
   for (const [k, v] of Object.entries(src)) {
     const nested = v && typeof v == 'object' && !Array.isArray(v)
     if (nested && (dst[k] === undefined || dst[k] === null)) {
@@ -138,7 +143,24 @@ export function countPoints(p) {
   return { h: l.h, w: r.w, n: l.n + r.n + l.h * r.w }
 }
 
-async function getJSON(url) {
+// Approximate the drawn scene's bounding box. A matmul occupies H×W×D — the
+// same H, D, W viz.js derives in its constructor — and each nested matmul is
+// drawn as its own box hanging off that one, so nesting accumulates depth.
+//
+// These three are module scope rather than locals of `mount` because they are
+// the rule that decides the camera distance, and a wrong camera is the failure
+// nobody notices: the scene still draws, just framed uselessly. At module scope
+// they can be asserted against a hand-computed tree.
+export const height = p => p.left ? height(p.left) : p.h
+export const width = p => p.left ? width(p.right) : p.w
+
+export function bbox(p) {
+  if (!p.left) return { h: p.h, w: p.w, d: 0 }
+  const child = (p.left.left ? bbox(p.left).d : 0) + (p.right.left ? bbox(p.right).d : 0)
+  return { h: height(p.left), w: width(p.right), d: width(p.left) + child }
+}
+
+async function getJSON(url): Promise<any> {
   const r = await fetch(abs(url))
   const body = await r.json().catch(() => ({ error: `HTTP ${r.status}` }))
   if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`)
@@ -173,7 +195,7 @@ const CHROME = `
 <div id="tensors"></div>
 `
 
-function option(elem, value, text) {
+function option(elem, value, text = undefined) {
   const o = document.createElement('option')
   o.value = value
   o.text = text === undefined ? value : text
@@ -183,7 +205,7 @@ function option(elem, value, text) {
 
 function fillRange(elem, n) {
   elem.options.length = 0
-  for (let i = 0; i < n; i++) option(elem, i)
+  for (let i = 0; i < n; i++) option(elem, String(i))
 }
 
 const status = html => { $('status').innerHTML = html }
@@ -201,7 +223,7 @@ const status = html => { $('status').innerHTML = html }
 //   strides    stride choices
 //   anims      default anim menu, label -> params patch (flat algs if omitted)
 //   require    (meta) => message | null — a precondition to refuse on
-//   viewerUrl  page-relative URL of the mm viewer ('../../index.html')
+//   viewerUrl  page-relative URL of the mm viewer ('../index.html')
 //
 // view:
 //   kinds   ['ln_1', 'wq', …]  — `kind[:flags]`, t=transpose, r/c=stride axis
@@ -213,9 +235,9 @@ const status = html => { $('status').innerHTML = html }
 //   build   (specs, state) => root node (name/epilog/left/right)
 //   anims   optional label -> params patch, replacing the page default
 //
-export async function mount(config) {
+export async function mount(config: any) {
   const views = config.views
-  const viewer = config.viewerUrl || '../../index.html'
+  const viewer = config.viewerUrl || '../index.html'
   const seqs = config.seqs || [16, 32, 64, 128, 256]
   const strides = config.strides || [1, 2, 4, 8, 16, 32, 64]
   const default_anims = config.anims || {
@@ -256,15 +278,15 @@ export async function mount(config) {
 
     // stride only reaches matrices whose flags asked for it
     const q = new URLSearchParams({
-      layer: s.layer, head: s.head, stride: s.stride,
-      text: s.prompt, seq: s.seq, kinds: view.kinds.join(','),
+      layer: String(s.layer), head: String(s.head), stride: String(s.stride),
+      text: s.prompt, seq: String(s.seq), kinds: view.kinds.join(','),
     })
 
-    let specs, n_tokens, toks
+    let specs: Record<string, any>, n_tokens: number, toks: string[]
     try {
       const [sp, tk] = await Promise.all([
-        getJSON('/gpt2/specs.json?' + q),
-        getJSON('/gpt2/tokens.json?seq=' + s.seq + '&text=' + encodeURIComponent(s.prompt)),
+        getJSON('/api/specs.json?' + q),
+        getJSON('/api/tokens.json?seq=' + s.seq + '&text=' + encodeURIComponent(s.prompt)),
       ])
       specs = sp.specs; n_tokens = sp.n_tokens; toks = tk.tokens
     } catch (e) {
@@ -297,8 +319,8 @@ export async function mount(config) {
     params.cam = { x: -d, y: d, z: d }
 
     history.replaceState({}, '', '?' + new URLSearchParams({
-      view: s.view, layer: s.layer, head: s.head,
-      stride: s.stride, seq: s.seq, anim: s.anim, prompt: s.prompt,
+      view: s.view, layer: String(s.layer), head: String(s.head),
+      stride: String(s.stride), seq: String(s.seq), anim: s.anim, prompt: s.prompt,
     }))
 
     // a different view is a different tree shape, so merging props onto the
@@ -315,19 +337,7 @@ export async function mount(config) {
     showStatus(s, view, specs, toks, n_tokens, params)
   }
 
-  // Approximate the drawn scene's bounding box. A matmul occupies H×W×D — the
-  // same H, D, W viz.js derives in its constructor — and each nested matmul is
-  // drawn as its own box hanging off that one, so nesting accumulates depth.
-  const height = p => p.left ? height(p.left) : p.h
-  const width = p => p.left ? width(p.right) : p.w
-
-  function bbox(p) {
-    if (!p.left) return { h: p.h, w: p.w, d: 0 }
-    const child = (p.left.left ? bbox(p.left).d : 0) + (p.right.left ? bbox(p.right).d : 0)
-    return { h: height(p.left), w: width(p.right), d: width(p.left) + child }
-  }
-
-  function showStatus(s, view, specs, toks, n_tokens, params) {
+  function showStatus(s, view, specs: Record<string, any>, toks, n_tokens, params) {
     const entries = Object.entries(specs)
     const sampled = entries.filter(([, v]) => v.fidelity == 'sampled')
     const points = countPoints(params).n
@@ -395,7 +405,7 @@ export async function mount(config) {
   // -- init ----------------------------------------------------------------
 
   try {
-    META = await getJSON('/gpt2/meta.json')
+    META = await getJSON('/api/meta.json')
   } catch (e) {
     status(`<span class="err">cannot reach the model server (${esc(e.message)}).` +
       ` Start it with <code>../.venv/bin/python tools/gpt2_server.py</code>` +
@@ -415,9 +425,9 @@ export async function mount(config) {
   Object.keys(views).forEach(k => option($('view'), k))
   fillRange($('layer'), META.dims.n_layer)
   fillRange($('head'), META.dims.n_head)
-  strides.forEach(n => option($('stride'), n, n == 1 ? '1 (exact)' : n))
-  seqs.forEach(n => option($('seq'), n))
-  $('seq').value = config.seq || 64
+  strides.forEach(n => option($('stride'), String(n), n == 1 ? '1 (exact)' : String(n)))
+  seqs.forEach(n => option($('seq'), String(n)))
+  $('seq').value = String(config.seq || 64)
 
   if (!META.deep_layers) {
     $('layer').options.length = 1   // only layer 0 is honest without numpy

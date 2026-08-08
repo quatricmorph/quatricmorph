@@ -10,7 +10,7 @@
   <script type="module">
     //
     // One attention head of a real GPT-2 checkpoint, in the conventional
-    // formulation, driving ../../index.html (the mm viewer).
+    // formulation, driving ../index.html (the mm viewer).
     //
     //   Q     = input @ wQ
     //   K_t   = wK_t @ input_t
@@ -27,9 +27,9 @@
     // c_attn.weight and attn.c_proj.weight. Shapes come from /gpt2/specs.json,
     // never from literals here — mm's tryURLInit wraps out-of-range indices
     // (`data[i % data.length]`), so a wrong h/w tiles silently instead of
-    // failing. See ../../src/gpt2page.js.
+    // failing. See ../src/gpt2page.ts.
     //
-    import { mount, root, inner, node, leaf, L } from '../../src/gpt2page.js'
+    import { mount, root, inner, node, leaf, L } from '../src/gpt2page.ts'
 
     // Progressive animation depth. Each preset is deep-merged into the built
     // tree, so `left` is `attn @ V`, `left.left` is `attn`, `left.left.left` is

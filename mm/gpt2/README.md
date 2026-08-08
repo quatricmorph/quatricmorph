@@ -14,16 +14,16 @@ cd mm
 npm run dev                                  # proxies /gpt2 to the above
 ```
 
-Then open the URL Vite prints, at `/examples/gpt2/`.
+Then open the URL Vite prints, at `/gpt2/`.
 
-This page is a Vite entry — it imports `../../src/gpt2page.js` and that module's
+This page is a Vite entry — it imports `../src/gpt2page.ts` and that module's
 stylesheet — so the static half has to come from Vite or from a built tree. To
 run without node, build once and point the python server at the result:
 
 ```bash
 npm run build
 ../.venv/bin/python tools/gpt2_server.py --root dist
-# then http://127.0.0.1:8000/examples/gpt2/
+# then http://127.0.0.1:8000/gpt2/
 ```
 
 Either way the CSV URLs the viewer loads are same-origin: under `npm run dev`
@@ -82,7 +82,7 @@ is exact, the *product* rendered in four of the six views is the bias-free one:
 
 | View | Omitted term | Effect on layer 2 |
 | --- | --- | --- |
-| attention head | `c_attn.bias` on Q/K/V, `attn.c_proj.bias` on out | inherited from `examples/attngpt2`, which has the same gap |
+| attention head | `c_attn.bias` on Q/K/V, `attn.c_proj.bias` on out | inherited from `attngpt2/`, which has the same gap |
 | qkv projection | `c_attn.bias` | rendered product is **24 %** off the model's |
 | attention output | `attn.c_proj.bias` | bias up to 0.63 absolute |
 | mlp up (gelu) | `mlp.c_fc.bias` | **14 %**; and since GELU is nonlinear, the `h` drawn here is *not* the `h` that `mlp down` consumes |
@@ -121,10 +121,10 @@ reason, never a placeholder.
 
 | Route | Returns |
 | --- | --- |
-| `/gpt2/meta.json` | config, derived dims, tensor inventory, numpy availability |
-| `/gpt2/tokens.json?text=…` | GPT-2 BPE token ids and pieces |
-| `/gpt2/specs.json?kinds=…&layer=…&head=…&stride=…&text=…` | `{h, w, fidelity, url}` per matrix |
-| `/gpt2/matrix.csv?kind=…&layer=…&head=…&rs=…&cs=…&t=…` | the matrix as CSV |
+| `/api/meta.json` | config, derived dims, tensor inventory, numpy availability |
+| `/api/tokens.json?text=…` | GPT-2 BPE token ids and pieces |
+| `/api/specs.json?kinds=…&layer=…&head=…&stride=…&text=…` | `{h, w, fidelity, url}` per matrix |
+| `/api/matrix.csv?kind=…&layer=…&head=…&rs=…&cs=…&t=…` | the matrix as CSV |
 
 `kind` is one of the weight kinds (`wq`, `wk`, `wk_t`, `wv`, `wo`, `c_attn`,
 `attn_c_proj`, `c_fc`, `mlp_c_proj`, `wte`, `wte_t`, `wpe`) or the activation
@@ -144,7 +144,7 @@ a time (~28 MB), plus the per-prompt activations it caches.
 ## Provenance
 
 `mm/` is Meta's matrix-multiplication visualizer, MIT licensed — see
-`mm/LICENSE`. `tools/gpt2_server.py`, `src/gpt2page.{js,css}` and the three
-`examples/` pages are additions that drive the viewer through its existing
+`mm/LICENSE`. `tools/gpt2_server.py`, `src/gpt2page.{ts,css}` and the three
+The checkpoint pages are additions that drive the viewer through its existing
 `?params=` and `postMessage({setParams})` interfaces; `index.html`, `viz.js`,
 `util.js` and `gui.js` are untouched by this example.

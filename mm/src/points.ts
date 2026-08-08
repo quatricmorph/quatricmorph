@@ -60,12 +60,13 @@ class PointCloudGeometry extends THREE.InstancedBufferGeometry {
     this.instanceCount = n
   }
 
-  computeBoundingBox() {
+  override computeBoundingBox() {
     if (this.boundingBox === null) this.boundingBox = new THREE.Box3()
-    this.boundingBox.setFromBufferAttribute(this.attributes.pointCenter)
+    this.boundingBox.setFromBufferAttribute(
+      this.attributes.pointCenter as THREE.BufferAttribute)
   }
 
-  computeBoundingSphere() {
+  override computeBoundingSphere() {
     if (this.boundingSphere === null) this.boundingSphere = new THREE.Sphere()
     this.computeBoundingBox()
     this.boundingBox.getBoundingSphere(this.boundingSphere)
@@ -76,20 +77,29 @@ class PointCloudGeometry extends THREE.InstancedBufferGeometry {
 // material
 //
 
-const magUniform = uniform(1.0)
-const colorUniform = uniform(new THREE.Color(0xffffff))
+const magUniform: any = uniform(1.0)
+const colorUniform: any = uniform(new THREE.Color(0xffffff))
 
-const pointSize = attribute('pointSize', 'float')
-const pointCenter = attribute('pointCenter', 'vec3')
+// `any` for the same reason as the varyings below: the TSL node type is
+// carried by the graph at runtime, not by the TS generic.
+const pointSize: any = attribute('pointSize', 'float')
+const pointCenter: any = attribute('pointCenter', 'vec3')
 
 // carried to the fragment stage: the quad corner gives the impostor its normal,
 // and pointColor *is* the data -- the value -> hue/lightness mapping in viz.js
-const vCorner = varying(positionGeometry.xy, 'vCorner')
-const vColor = varying(attribute('pointColor', 'vec3'), 'vColor')
+//
+// Typed `any` on purpose. varying() is declared as VaryingNode<T> keyed off the
+// *name* argument, so both of these come back as VaryingNode<string> and lose
+// the vec2/vec3-ness the swizzles and .mul() overloads need. The node type is
+// real at runtime -- it is carried by the node graph, not the TS type -- so this
+// annotation describes what the typings can express, and the alternative is a
+// cast on every use downstream.
+const vCorner: any = varying(positionGeometry.xy, 'vCorner')
+const vColor: any = varying(attribute('pointColor', 'vec3'), 'vColor')
 
 const vertexNode = Fn(() => {
-  const mvPosition = modelViewMatrix.mul(vec4(pointCenter, 1.0))
-  const clip = cameraProjectionMatrix.mul(mvPosition)
+  const mvPosition: any = modelViewMatrix.mul(vec4(pointCenter, float(1.0)))
+  const clip: any = cameraProjectionMatrix.mul(mvPosition)
 
   // gl_PointSize, verbatim -- framebuffer pixels, attenuated by view depth
   const sizePx = magUniform.mul(pointSize).div(mvPosition.z.negate())
@@ -102,7 +112,7 @@ const vertexNode = Fn(() => {
   const offset = vCorner.mul(sizePx).mul(2.0).div(viewportSize)
 
   // undo the perspective divide the rasteriser is about to apply
-  return clip.add(vec4(offset.mul(clip.w), 0, 0))
+  return clip.add(vec4(offset.mul(clip.w), float(0), float(0)))
 })()
 
 // Footprint of the ball in the sprite this shading replaced: its alpha mask
@@ -202,7 +212,7 @@ MATERIAL.side = THREE.DoubleSide
 // a ShaderMaterial uniform. A TSL uniform node carries the same `.value`, so
 // exposing it under the old name keeps that call site unchanged. NodeMaterial
 // ignores `.uniforms` itself.
-MATERIAL.uniforms = { mag: magUniform, color: colorUniform }
+;(MATERIAL as any).uniforms = { mag: magUniform, color: colorUniform }
 
 //
 // object
@@ -221,6 +231,9 @@ const _position = new THREE.Vector3()
  */
 export class PointCloud extends THREE.Mesh {
 
+  // Own marker property, not an override: viz.js tests for it.
+  isPointCloud: boolean
+
   constructor(centers, n) {
     super(new PointCloudGeometry(centers, n), MATERIAL)
     this.isPointCloud = true
@@ -236,7 +249,7 @@ export class PointCloud extends THREE.Mesh {
    * hits outside `[raycaster.near, raycaster.far]` -- main.js switches the
    * whole spotlight off by setting `far = 0`.
    */
-  raycast(raycaster, intersects) {
+  override raycast(raycaster, intersects) {
     const geometry = this.geometry
     const matrixWorld = this.matrixWorld
     const threshold = raycaster.params.Points.threshold

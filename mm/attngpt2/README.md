@@ -29,7 +29,7 @@ cd mm
 npm run dev                                  # proxies /gpt2 to the above
 ```
 
-Then open the URL Vite prints, at `/examples/attngpt2/`. Without node:
+Then open the URL Vite prints, at `/attngpt2/`. Without node:
 
 ```bash
 npm run build
@@ -46,10 +46,10 @@ It now reads a local checkpoint instead, which changes four things:
 
 * **6 layers, not 12** — distilgpt2 is the distilled model. `n_head` is 12 in
   both, and `head_dim` is 64 in both, but the layer count comes from
-  `/gpt2/meta.json` rather than a literal.
+  `/api/meta.json` rather than a literal.
 * **The prompt is yours.** `input` is the real residual stream after `ln_1` for
   the text you type, computed by a real forward pass, not one of ten samples.
-* **Shapes come from `/gpt2/specs.json`.** Nothing here writes an `h` or a `w`.
+* **Shapes come from `/api/specs.json`.** Nothing here writes an `h` or a `w`.
   mm's `tryURLInit` wraps out-of-range indices (`data[i % data.length]`), so a
   hand-written shape that disagrees with the data is silently *tiled* into a
   plausible, wrong picture. The server refuses to emit a matrix that disagrees

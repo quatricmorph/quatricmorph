@@ -7,259 +7,18 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import * as viz from './viz.js'
 import * as util from './util.js'
 import * as gui from './gui.js'
+import { defaultParams, type Params } from './params.js'
+
+// The element material's magnifier uniform. points.ts hangs `.uniforms` on the
+// NodeMaterial as a deliberate alias for this one call site -- NodeMaterial
+// neither declares nor reads it, so the cast is the honest description.
+const matUniforms = (viz.MATERIAL as any).uniforms
 
 //
 // params start with single-mm default, get updated from url params
 //
 
-const params = {
-  expr: 'out = ((attn = (Q = input @ wQ) @ (K_t = wK_t @ input_t)) @ (V = input @ wV)) @ wO',
-  name: 'out',
-  epilog: 'x/sqrt(k)',
-  left: {
-    epilog: 'none',
-    anim: {
-      alg: 'inherit',
-    },
-    block: {
-      'i blocks': 1,
-      'k blocks': 1,
-      'j blocks': 1,
-    },
-    layout: {
-      polarity: 'positive',
-      'left placement': 'left',
-      'right placement': 'bottom',
-      'result placement': 'back',
-    },
-    left: {
-      epilog: 'none',
-      anim: {
-        alg: 'inherit',
-      },
-      block: {
-        'i blocks': 1,
-        'k blocks': 1,
-        'j blocks': 1,
-      },
-      layout: {
-        polarity: 'negative',
-        'left placement': 'left',
-        'right placement': 'top',
-        'result placement': 'front',
-      },
-      left: {
-        epilog: 'none',
-        anim: {
-          alg: 'inherit',
-        },
-        block: {
-          'i blocks': 1,
-          'k blocks': 1,
-          'j blocks': 1,
-        },
-        layout: {
-          polarity: 'positive',
-          'left placement': 'left',
-          'right placement': 'bottom',
-          'result placement': 'back',
-        },
-        left: {
-          name: 'input',
-          matmul: false,
-          h: 32,
-          w: 32,
-          init: 'row major',
-          url: '',
-          min: -1,
-          max: 1,
-          dropout: 0,
-          expr: '',
-        },
-        right: {
-          name: 'wQ',
-          matmul: false,
-          h: 32,
-          w: 32,
-          init: 'col major',
-          url: '',
-          min: -1,
-          max: 1,
-          dropout: 0,
-          expr: '',
-        },
-        name: 'Q',
-        matmul: true,
-      },
-      right: {
-        epilog: 'none',
-        anim: {
-          alg: 'inherit',
-        },
-        block: {
-          'i blocks': 1,
-          'k blocks': 1,
-          'j blocks': 1,
-        },
-        layout: {
-          polarity: 'positive',
-          'left placement': 'right',
-          'right placement': 'top',
-          'result placement': 'back',
-        },
-        left: {
-          name: 'wK_t',
-          matmul: false,
-          h: 32,
-          w: 32,
-          init: 'row major',
-          url: '',
-          min: -1,
-          max: 1,
-          dropout: 0,
-          expr: '',
-        },
-        right: {
-          name: 'input_t',
-          matmul: false,
-          h: 32,
-          w: 32,
-          init: 'col major',
-          url: '',
-          min: -1,
-          max: 1,
-          dropout: 0,
-          expr: '',
-        },
-        name: 'K_t',
-        matmul: true,
-      },
-      name: 'attn',
-      matmul: true,
-    },
-    right: {
-      epilog: 'none',
-      anim: {
-        alg: 'inherit',
-      },
-      block: {
-        'i blocks': 1,
-        'k blocks': 1,
-        'j blocks': 1,
-      },
-      layout: {
-        polarity: 'negative',
-        'left placement': 'right',
-        'right placement': 'top',
-        'result placement': 'back',
-      },
-      left: {
-        name: 'input',
-        matmul: false,
-        h: 32,
-        w: 32,
-        init: 'row major',
-        url: '',
-        min: -1,
-        max: 1,
-        dropout: 0,
-        expr: '',
-      },
-      right: {
-        name: 'wV',
-        matmul: false,
-        h: 32,
-        w: 32,
-        init: 'col major',
-        url: '',
-        min: -1,
-        max: 1,
-        dropout: 0,
-        expr: '',
-      },
-      name: 'V',
-      matmul: true,
-    },
-    name: 'attn @ V',
-    matmul: true,
-  },
-  right: {
-    name: 'wO',
-    matmul: false,
-    h: 32,
-    w: 32,
-    init: 'col major',
-    url: '',
-    min: -1,
-    max: 1,
-    dropout: 0,
-    expr: '',
-  },
-  anim: {
-    fuse: 'none',
-    speed: 97,
-    'hide inputs': true,
-    alg: 'dotprod (col major)',
-    spin: 0,
-    folder: 'open',
-  },
-  block: {
-    'i blocks': 1,
-    'k blocks': 1,
-    'j blocks': 1,
-  },
-  layout: {
-    scheme: 'blocks',
-    gap: 4,
-    scatter: 0,
-    molecule: 1,
-    blast: 0,
-    polarity: 'negative',
-    'left placement': 'left',
-    'right placement': 'top',
-    'result placement': 'front',
-    folder: 'closed',
-  },
-  deco: {
-    legends: 6,
-    shape: true,
-    spotlight: 2,
-    'row guides': 0.6,
-    'flow guides': 0.5,
-    'lens size': 0.5,
-    magnification: 7,
-    'interior spotlight': false,
-    axes: false,
-    folder: 'closed',
-  },
-  viz: {
-    sensitivity: 'global',
-    'min size': 0.8,
-    'min light': 0.5,
-    'max light': 0.8,
-    'elem scale': 1.5,
-    'zero hue': 0.356,
-    'hue gap': 0.7,
-    'hue spread': 0.04,
-    folder: 'open',
-  },
-  diag: {
-    url: '',
-    folder: 'open',
-  },
-  cam: {
-    x: 23.8601394508366,
-    y: 13.55251706132545,
-    z: 109.01416137057434,
-    target: {
-      x: 37.171002653209314,
-      y: 3.7070451463575647,
-      z: 38.467207145211944,
-    },
-  },
-  folder: 'open',
-  compress: true,
-}
+const params: Params = defaultParams()
 
 // we use this when resetting via message passing
 const default_params = (() => {
@@ -413,7 +172,7 @@ function getContext() {
 // orbit control
 
 const orbit = new OrbitControls(camera, renderer.domElement)
-orbit.keys = { LEFT: orbit.keys.LEFT, RIGHT: orbit.keys.RIGHT }
+orbit.keys = { LEFT: orbit.keys.LEFT, RIGHT: orbit.keys.RIGHT } as any   // up/down deliberately unbound
 orbit.zoomSpeed = 0.2
 orbit.listenToKeyEvents(window)
 
@@ -435,7 +194,7 @@ orbit.addEventListener('start', () => {
 
 orbit.addEventListener('change', () => {
   params.cam = viewState()
-}, false)
+})
 
 // update object labels from view changes
 // throttle a little
@@ -519,7 +278,7 @@ function initFromParams(save = true) {
 }
 
 function initFromSearchParams() {
-  const searchParams = new URL(window.location).searchParams
+  const searchParams = new URL(window.location.href).searchParams
   if (searchParams.size > 0) {
     util.updateObjectFromSearchParams(params, searchParams)
   } else {
@@ -646,16 +405,19 @@ window.addEventListener('keyup', e => {
 
 // comms w/outside world (we're in an iframe, e.g.)
 
+// Each responder takes (payload, event). The event used to be read off the
+// global `window.event`, which is deprecated and only set while a dispatch is
+// in flight; the listener below already has the real one, so it is passed in.
 const RESPONDERS = {
-  getUrlInfo: () => {
+  getUrlInfo: (_, event) => {
     // console.log(`HEY getUrlInfo called`)
     event.source.postMessage({ url_info }, event.origin)
   },
-  getParams: () => {
+  getParams: (_, event) => {
     // console.log(`HEY getParams called`)
     event.source.postMessage({ params }, event.origin)
   },
-  setParams: ({ props = {}, reset = false }) => {
+  setParams: ({ props = {} as Params, reset = false }) => {
     console.log(`HEY setParams called props ${JSON.stringify(props)} reset ${reset}`)
     reset && resetParams()
 
@@ -676,7 +438,7 @@ const RESPONDERS = {
 window.addEventListener('message', event => {
   Object.entries(event.data).forEach(([k, v]) => {
     const r = RESPONDERS[k]
-    r && r(v)
+    r && r(v, event)
   })
 })
 
@@ -685,7 +447,7 @@ const display_info = { x: 0, y: 0, z: 0, devicePixelRatio: 0 }
 
 function syncVizToRenderer(reinit = false) {
   renderer.setPixelRatio(window.devicePixelRatio)
-  const size = renderer.getSize(new THREE.Vector3())
+  const size = renderer.getSize(new THREE.Vector3() as any)
   viz.setElemSize(size, window.devicePixelRatio)
   util.updateProps(display_info, size)
   display_info.devicePixelRatio = window.devicePixelRatio
@@ -799,9 +561,9 @@ function animate() {
     // now keep both: the black backing just drawn, and the depth it left clear
     renderer.autoClear = false
 
-    viz.MATERIAL.uniforms.mag.value = m
+    matUniforms.mag.value = m
     renderer.render(scene, mag_camera)
-    viz.MATERIAL.uniforms.mag.value = 1.0
+    matUniforms.mag.value = 1.0
 
     renderer.autoClear = true
     renderer.autoClearColor = true

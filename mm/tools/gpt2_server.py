@@ -18,7 +18,7 @@ wire for `models/distilgpt2`:
 The example pages are Vite entries (they `import` a shared driver module and its
 stylesheet), so the static half has two modes:
 
-  * `npm run dev` serves the *source* tree and proxies `/gpt2` back here — see
+  * `npm run dev` serves the *source* tree and proxies `/api` back here — see
     `vite.config.js`.  Open the URL Vite prints, not this one.
   * `--root dist` serves a built tree, so this process alone is enough.  The
     default root still serves `mm/`, which is right for everything except the
@@ -41,7 +41,7 @@ Nothing here writes to the checkpoint, and nothing here needs the network.
     python3 tools/gpt2_server.py                 # stdlib only: layer 0 activations
     ../.venv/bin/python tools/gpt2_server.py     # with numpy: all layers
 
-then either `npm run dev` (source pages, /gpt2 proxied here), or
+then either `npm run dev` (source pages, /api proxied here), or
 `npm run build` once and restart this with `--root dist`.
 """
 
@@ -602,10 +602,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if not parsed.path.startswith("/gpt2/"):
+        if not parsed.path.startswith("/api/"):
             return super().do_GET()
         qs = urllib.parse.parse_qs(parsed.query)
-        route = parsed.path[len("/gpt2/") :]
+        route = parsed.path[len("/api/") :]
         try:
             handler = {
                 "meta.json": self.route_meta,
@@ -678,7 +678,7 @@ class Handler(SimpleHTTPRequestHandler):
                       "rs": rs, "cs": cs, "t": 1 if want_t else 0}
             if kind in ACT_KINDS:
                 params.update({"text": text, "seq": seq})
-            spec["url"] = "/gpt2/matrix.csv?" + urllib.parse.urlencode(params)
+            spec["url"] = "/api/matrix.csv?" + urllib.parse.urlencode(params)
             spec["kind"] = kind
             out[item] = spec
         return self._json({"specs": out, "n_tokens": len(ids)})
@@ -759,9 +759,9 @@ def main():
     built = (static_root / "examples" / "gpt2" / "index.html").exists() \
         and (static_root / "assets").is_dir() and static_root.name == "dist"
     if built:
-        print(f"\n  http://{args.host}:{args.port}/examples/gpt2/\n")
+        print(f"\n  http://{args.host}:{args.port}/gpt2/\n")
     else:
-        print(f"\n  data only: http://{args.host}:{args.port}/gpt2/meta.json")
+        print(f"\n  data only: http://{args.host}:{args.port}/api/meta.json")
         print("  pages:     run `npm run dev` (it proxies /gpt2 here),")
         print(f"             or `npm run build` and restart with --root dist\n")
 

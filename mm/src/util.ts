@@ -45,7 +45,7 @@ export function makeSearchParams(params) {
 }
 
 export function updateObjectFromSearchParams(obj, searchParams) {
-  const from_search_params = {}
+  const from_search_params: Record<string, string> = {}
   searchParams.forEach((v, k) => from_search_params[k] = v)
   const keys = Object.keys(from_search_params)
 
@@ -279,7 +279,7 @@ export function deleteProps(obj, props) {
   return obj
 }
 
-export function syncProp(obj, k, v) {
+export function syncProp(obj, k, v = undefined) {
   if (v === undefined) {
     return obj[k]
   }
@@ -327,7 +327,9 @@ export function compress(obj) {
 
 export function uncompress(comp) {
   const [names, props] = [[], []]
-  Object.entries(comp).forEach(([k, v]) => +k == k ? (props[k] = v) : (names[v] = k))
+  Object.entries(comp).forEach(([k, v]) =>
+    // loose on purpose: 'is this key a number written as a string'
+    +k == (k as any) ? (props[k] = v) : (names[v as string] = k))
   const getpath = n => {
     const i = n.indexOf('.')
     return i == -1 ? names[n] : `${names[n.slice(0, i)] + '.' + names[n.slice(i + 1)]}`

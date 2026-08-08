@@ -10,7 +10,7 @@
   <script type="module">
     //
     // One attention head of a real GPT-2 checkpoint, with the QK and OV
-    // circuits premultiplied, driving ../../index.html (the mm viewer).
+    // circuits premultiplied, driving ../index.html (the mm viewer).
     //
     //   QK      = wQ @ wK_t                    (n_embd × n_embd)
     //   OV      = wV @ wO                      (n_embd × n_embd)
@@ -29,9 +29,9 @@
     // This page used to load fixed 256-row CSVs from a public bucket of
     // NanoGPT weights. It now reads mm/models/distilgpt2 through
     // tools/gpt2_server.py, with every shape coming from /gpt2/specs.json —
-    // see ../../src/gpt2page.js.
+    // see ../src/gpt2page.ts.
     //
-    import { mount, root, inner, node, leaf, L } from '../../src/gpt2page.js'
+    import { mount, root, inner, node, leaf, L } from '../src/gpt2page.ts'
 
     //
     // The epilog: 'softmax(tril(x/8))', not 'softmax(tril(x/sqrt(k)))'.
