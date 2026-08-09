@@ -1,5 +1,9 @@
 # distilgpt2 in the mm viewer
 
+**The page this describes is now `/`, mm's home page.** It used to be `/gpt2/`;
+this directory keeps the notes and no longer holds the page. Its source is
+`../index.html`, and the viewer it iframes moved down to `../viewer/index.html`.
+
 Drives the `mm` matrix-multiplication viewer from a real GPT-2 checkpoint —
 `mm/models/distilgpt2` (6 layers, 12 heads, `n_embd` 768, 352,824,413 bytes).
 Every matrix you see is read out of `model.safetensors`; every `input` matrix is
@@ -11,23 +15,23 @@ the model's own residual stream for the prompt you type.
 cd mm
 ../.venv/bin/python tools/gpt2_server.py &   # numpy present -> all 6 layers
 # or:  python3 tools/gpt2_server.py          # stdlib only  -> layer 0 only
-npm run dev                                  # proxies /gpt2 to the above
+npm run dev                                  # proxies /api to the above
 ```
 
-Then open the URL Vite prints, at `/gpt2/`.
+Then open the URL Vite prints — this page is the root of it.
 
-This page is a Vite entry — it imports `../src/gpt2page.ts` and that module's
+This page is a Vite entry — it imports `src/gpt2page.ts` and that module's
 stylesheet — so the static half has to come from Vite or from a built tree. To
 run without node, build once and point the python server at the result:
 
 ```bash
 npm run build
 ../.venv/bin/python tools/gpt2_server.py --root dist
-# then http://127.0.0.1:8000/gpt2/
+# then http://127.0.0.1:8000/
 ```
 
 Either way the CSV URLs the viewer loads are same-origin: under `npm run dev`
-`vite.config.js` proxies `/gpt2` to the python server, and under `--root dist`
+`vite.config.js` proxies `/api` to the python server, and under `--root dist`
 one process serves both halves. Nothing here touches the network, and the
 checkpoint is opened read-only.
 

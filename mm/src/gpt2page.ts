@@ -1,7 +1,7 @@
 //
 // Shared driver for the checkpoint-backed example pages.
 //
-// `gpt2/`, `attngpt2/` and `attnqkov/` all do the same
+// The home page (`index.html`), `attngpt2/` and `attnqkov/` all do the same
 // thing: ask `tools/gpt2_server.py` (under /api/) for the shape and URL of every matrix in a
 // tree, hand that tree to the unmodified mm viewer in an iframe, and say in the
 // status bar exactly what the picture is and is not. Only the *tree* differs
@@ -62,7 +62,7 @@ const $ = (id: string): any => document.getElementById(id)
 
 // Absolute, same-origin. The CSV URLs specs.json hands back are root-relative
 // (`/api/matrix.csv?…`), which works both under `vite dev` — vite.config.ts
-// proxies /gpt2 to the python server — and under gpt2_server.py serving mm/
+// proxies /api to the python server — and under gpt2_server.py serving mm/
 // directly. A cross-origin :8000 fetch from a :5173 page would be blocked.
 export const abs = u => new URL(u, location.href).href
 
@@ -569,11 +569,13 @@ const status = html => { $('status').innerHTML = html }
 //   strides    stride choices
 //   anims      default anim menu, label -> params patch (flat algs if omitted)
 //   require    (meta) => message | null — a precondition to refuse on
-//   viewerUrl  page-relative URL of the mm viewer ('../index.html')
+//   viewerUrl  page-relative URL of the mm viewer ('../viewer/index.html').
+//              The default suits a page at /<name>/; the home page at `/`
+//              passes 'viewer/index.html' instead.
 //
 // view:
 //   kinds   ['ln_1:w', 'wq:h', …] — `kind[:flags]`; t=transpose, r/c=stride
-//           axis, w/h=augment with a bias column/row (see gpt2/index.html)
+//           axis, w/h=augment with a bias column/row (see the home index.html)
 //   layers  true to fetch specs for *every* layer and hand `build` an array
 //           indexed by layer, for a view that draws the whole model at once
 //   stride  default stride for this view
@@ -587,7 +589,7 @@ const status = html => { $('status').innerHTML = html }
 //
 export async function mount(config: any) {
   const views = config.views
-  const viewer = config.viewerUrl || '../index.html'
+  const viewer = config.viewerUrl || '../viewer/index.html'
   const seqs = config.seqs || [16, 32, 64, 128, 256]
   const strides = config.strides || [1, 2, 4, 8, 16, 32, 64]
   const default_anims = config.anims || {
@@ -810,7 +812,7 @@ export async function mount(config: any) {
       ` Start it with <code>../.venv/bin/python tools/gpt2_server.py</code>` +
       ` from the <code>mm/</code> directory, then open` +
       ` <code>${esc(location.pathname)}</code> on that origin` +
-      ` (or run <code>npm run dev</code>, which proxies /gpt2 to it).</span>`)
+      ` (or run <code>npm run dev</code>, which proxies /api to it).</span>`)
     return
   }
 

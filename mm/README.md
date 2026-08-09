@@ -13,19 +13,20 @@ Notes
 
 | Route | What it is |
 | --- | --- |
-| `/` | the viewer itself — drives off `?params=` and `postMessage` |
-| `/gpt2/` | GPT-2 explorer: several views over a real checkpoint |
+| `/` | GPT-2 explorer: several views over a real checkpoint — the home page |
+| `/viewer/` | the viewer itself — drives off `?params=` and `postMessage` |
 | `/attngpt2/` | one attention head, conventional Q/K/V/O factoring |
 | `/attnqkov/` | the same head, premultiplied into QK and OV circuits |
 | `/ref.html`, `/intro/` | static docs, served from `public/` |
 
-The three checkpoint pages iframe `/` and drive it through its public surface
-only (`?params=` and `postMessage({setParams})`). They read their matrices from
-the model server under `/api/`.
+The three checkpoint pages iframe `/viewer/` and drive it through its public
+surface only (`?params=` and `postMessage({setParams})`). They read their
+matrices from the model server under `/api/`.
 
-Those pages used to live under `/examples/`. They are the product surface rather
-than samples of it, so they are top-level routes now — the old
-`/examples/<name>/` URLs no longer resolve.
+The GPT-2 explorer is what this tool is for, so it is what you land on: it moved
+from `/gpt2/` to `/`, and the viewer moved from `/` down to `/viewer/`. The old
+`/gpt2/` URL no longer resolves, and neither do the `/examples/<name>/` URLs
+these pages had before that.
 
 ## Commands
 
@@ -53,13 +54,16 @@ and `python3 tools/gpt2_server.py --root dist`, which serves both halves from a
 single origin and needs no proxy. Set `MM_MODEL_SERVER` if the server is not on
 `:8000`.
 
-`/` and the intro/reference pages need no server.
+`/viewer/` and the intro/reference pages need no server; `/` is the explorer and
+does need it.
 
 ## Layout
 
 ```
-index.html            the viewer page
-gpt2/ attngpt2/ attnqkov/    checkpoint pages (one index.html each + README)
+index.html            the GPT-2 explorer — the home page
+viewer/index.html     the viewer it iframes
+attngpt2/ attnqkov/   the other two checkpoint pages (index.html + README)
+gpt2/README.md        what the home page shows, and why (the page moved to /)
 src/                  all application TypeScript
   main.ts             entry: renderer, camera, animation loop, messaging
   viz.ts              Mat / MatMul — geometry, layout, animation, numerics
@@ -71,6 +75,8 @@ src/                  all application TypeScript
   util.ts             params (de)serialization, three.js helpers
   params.ts           the default params tree
   gpt2page.ts         shared driver for the three checkpoint pages
+  outliner.ts         the scene tree panel, inside the viewer
+  selection.ts scenetree.ts picking.ts interaction.ts  the tensor editor
 test/                 vitest suites (TypeScript), one per src module
 tools/gpt2_server.py  reads models/distilgpt2, serves /api/
 public/               copied byte-for-byte (ref.html, intro/)

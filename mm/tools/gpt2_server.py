@@ -43,9 +43,10 @@ stylesheet), so the static half has two modes:
 
   * `npm run dev` serves the *source* tree and proxies `/api` back here — see
     `vite.config.js`.  Open the URL Vite prints, not this one.
-  * `--root dist` serves a built tree, so this process alone is enough.  The
-    default root still serves `mm/`, which is right for everything except the
-    unbuilt example pages.
+  * `--root dist` serves a built tree, so this process alone is enough, and
+    the GPT-2 explorer is then at `/` with the viewer it iframes at `/viewer/`.
+    The default root still serves `mm/`, which is right for everything except
+    the unbuilt example pages.
 
 Fidelity labelling (this repo never presents a sampled figure as exact):
 
@@ -1022,14 +1023,17 @@ def main():
 
     # The example pages are Vite entries; unbuilt sources import a module and a
     # stylesheet this server cannot resolve. Say which URL is actually live
-    # rather than printing one that renders a blank page.
-    built = (static_root / "examples" / "gpt2" / "index.html").exists() \
+    # rather than printing one that renders a blank page. The GPT-2 explorer is
+    # the home page now and the viewer it iframes is /viewer/, so both are
+    # probed.
+    built = (static_root / "index.html").exists() \
+        and (static_root / "viewer" / "index.html").exists() \
         and (static_root / "assets").is_dir() and static_root.name == "dist"
     if built:
-        print(f"\n  http://{args.host}:{args.port}/gpt2/\n")
+        print(f"\n  http://{args.host}:{args.port}/\n")
     else:
         print(f"\n  data only: http://{args.host}:{args.port}/api/meta.json")
-        print("  pages:     run `npm run dev` (it proxies /gpt2 here),")
+        print("  pages:     run `npm run dev` (it proxies /api here),")
         print(f"             or `npm run build` and restart with --root dist\n")
 
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()

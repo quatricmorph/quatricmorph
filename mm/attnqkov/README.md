@@ -29,7 +29,7 @@ byte range. The page is a Vite entry, so it needs Vite (or a built tree):
 ```bash
 cd mm
 ../.venv/bin/python tools/gpt2_server.py &   # numpy present -> all 6 layers
-npm run dev                                  # proxies /gpt2 to the above
+npm run dev                                  # proxies /api to the above
 ```
 
 Then open the URL Vite prints, at `/attnqkov/`. Without node:

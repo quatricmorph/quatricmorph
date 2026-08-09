@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>mm</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <style>
+    /* The 3D matrix labels keep KaTeX_Main, loaded as a Three.js typeface from
+       ../assets/katex_main_regular.typeface.js (MIT, Khan Academy — see
+       ../assets/fonts/LICENSE-KaTeX.txt), imported by src/util.ts rather than
+       fetched from here. The HTML UI below uses a system sans. */
+
+    body {
+      margin: 0;
+      background-color: #000;
+      color: #fff;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 24px;
+      overscroll-behavior: none;
+    }
+
+    canvas {
+      display: block;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    #info {
+      position: absolute;
+      top: 0px;
+      left: 25vw;
+      right: 25vw;
+      padding: 10px;
+      box-sizing: border-box;
+      text-align: center;
+      font-size: 15px;
+      -moz-user-select: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* menu */
+
+    .lil-gui {
+      --folder-indent: 12px;
+      --title-background-color: #555;
+      --font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+    }
+
+    .lil-gui.autoPlace {
+      right: 0;
+    }
+
+    .lil-gui .title {
+      background-color: #555;
+    }
+
+    .lil-gui .lil-gui>.children {
+      margin-left: var(--folder-indent);
+    }
+
+    .lil-gui .allow-touch-styles {
+      border-left: 1px solid var(--widget-color);
+    }
+
+    .lil-gui .lil-gui .lil-gui>.children {
+      margin-left: var(--folder-indent);
+      border-left: none;
+    }
+
+    /* instructions */
+
+    .instructions-modal {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      left: 0;
+      top: 0;
+      padding: 10px;
+      background-color: rgb(0, 0, 0);
+      background-color: rgba(0, 0, 0, 0.3);
+    }
+
+    .instructions-content,
+    .minimized-content {
+      position: relative;
+      background-color: rgba(0, 0, 0, 0.3);
+      border: 1px solid #333;
+      box-sizing: border-box;
+      color: #ccc;
+    }
+
+    .instructions-content {
+      padding: 16px;
+      padding-top: 30px;
+      padding-bottom: 20px;
+      padding-right: 40px;
+    }
+
+    .minimized-content {
+      padding-left: 30px;
+      padding-bottom: 20px;
+      padding: 2px;
+      width: 36px;
+      height: 40px;
+    }
+
+    .control-btn {
+      position: absolute;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+      color: #fff;
+      top: 4px;
+      left: 25px;
+      font-size: 24px;
+    }
+
+    .control-btn:hover,
+    .control-btn:focus {
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .leftcol {
+      color: #fff;
+    }
+
+    table,
+    th,
+    td {
+      border: 1px solid black;
+      padding: 6px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    #mobile-instructions {
+      display: none;
+    }
+
+    @media screen and (max-width: 600px) {
+      #laptop-instructions {
+        display: none;
+      }
+
+      #mobile-instructions {
+        display: block;
+      }
+    }
+
+    /* The heatmap colorbar. Hidden until a matrix is actually drawn as a
+       heatmap -- a legend for a scale nothing on screen is using would be a
+       claim about the picture that is not true of it. main.js fills the
+       numbers from the live range of what is drawn; nothing here is a
+       literal. */
+    #colorbar {
+      display: none;
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 10;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 11px;
+      color: #cfd3e6;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 6px 8px;
+      border-radius: 4px;
+      user-select: none;
+    }
+
+    #colorbar .ramp {
+      height: 10px;
+      width: 190px;
+      border: 1px solid #444;
+    }
+
+    #colorbar .ends {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #colorbar .what {
+      margin-top: 3px;
+      color: #8d93ad;
+    }
+
+    #colorbar .reduced {
+      color: #e0a33a;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="info">loading</div>
+  <div id="colorbar">
+    <div class="ramp"></div>
+    <div class="ends"><span class="lo"></span><span class="hi"></span></div>
+    <div class="what"></div>
+  </div>
+  <div id="container"></div>
+  <div id="instructions" class="instructions-modal">
+    <div id="minimized" class="minimized-content">
+      <span id="maximize" class="control-btn">&gt;</span>
+    </div>
+    <div id="instructions-content" class="instructions-content">
+      <span id="minimize" class="control-btn">&lt;</span>
+      <div id="laptop-instructions">
+        <table>
+          <tr>
+            <td class="leftcol">Zoom</td>
+            <td>Two finger swipe</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Spin</td>
+            <td>Click + drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Pan</td>
+            <td>Cmd-click + drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Reveal</td>
+            <td>Long click + drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Select</td>
+            <td>Click (Shift adds, Alt whole matrix, 1&ndash;5 sets level, Tab cycles)</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Box select</td>
+            <td>B, then drag (Esc cancels)</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Frame</td>
+            <td>F selection / Home all / double-click</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Hide</td>
+            <td>H selected / Shift+H isolate / Alt+H unhide</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Cursor</td>
+            <td>C at pointer, &laquo;.&raquo; orbits it, X zeroes selection</td>
+          </tr>
+          <tr>
+            <td>
+              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="/ref.html">Reference</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div id="mobile-instructions">
+        <table>
+          <tr>
+            <td class="leftcol">Zoom</td>
+            <td>Pinch</td>  
+          </tr>
+          <tr>
+            <td class="leftcol">Spin</td>
+            <td>Tap and drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Pan</td>
+            <td>Two-finger drag</td>
+          </tr>
+          <tr>
+            <td class="leftcol">Reveal</td>
+            <td>Long tap + drag</td>
+          </tr>
+          <tr>
+            <td>
+              <a class="leftcol" target="_blank" onclick="event.stopPropagation()" href="/ref.html">Reference</a>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-------------------------- code -------------------------->
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url'
 const entry = p => fileURLToPath(new URL(p, import.meta.url))
 
 // The checkpoint data plane. It is mounted at /api rather than /gpt2 because
-// /gpt2/ is now a *page*: the server matches its data prefix before falling
-// through to static files, so sharing the prefix made the page unreachable
-// (it answered {"error": "unknown route ''"}).
+// the checkpoint pages are pages, not a data prefix: the server matches its
+// data prefix before falling through to static files, so sharing the prefix
+// made the page unreachable (it answered {"error": "unknown route ''"}).
+// Nothing about that changed when the GPT-2 explorer moved to `/`.
 const GPT2_PROXY = {
   '/api': {
     // Override with MM_MODEL_SERVER when the python server is on another port
@@ -25,11 +26,14 @@ const GPT2_PROXY = {
 // Multi-page build. Every HTML file that Vite processes has to be named here --
 // Rollup will not discover a page just because another page iframes it, and the
 // three checkpoint pages do exactly that. They set the iframe's src from JS
-// (`'../index.html?params=' + ...` in src/gpt2page.ts), which is even further
-// outside anything the bundler could follow.
+// (`'../viewer/index.html?params=' + ...` in src/gpt2page.ts), which is even
+// further outside anything the bundler could follow.
 //
-// The pages are top-level routes (/attngpt2/, /attnqkov/, /gpt2/) rather than
-// living under /examples/: they are the product surface, not samples of it.
+// The GPT-2 explorer is `/` — it is what this tool is for, so it is the page
+// you land on. The viewer it iframes moved down to /viewer/ to make room, and
+// the other two checkpoint pages stay top-level (/attngpt2/, /attnqkov/)
+// rather than living under /examples/: they are the product surface, not
+// samples of it. The old /gpt2/ URL no longer resolves.
 //
 // The pages NOT listed are deliberate: ref.html and intro/index.html live in
 // public/ instead. They embed zero-md's `<script type="text/markdown">` blocks,
@@ -56,9 +60,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: entry('./index.html'),
+        viewer: entry('./viewer/index.html'),
         attngpt2: entry('./attngpt2/index.html'),
         attnqkov: entry('./attnqkov/index.html'),
-        gpt2: entry('./gpt2/index.html'),
       },
     },
   },

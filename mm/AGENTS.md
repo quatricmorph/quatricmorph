@@ -106,13 +106,19 @@ Import specifiers differ by where you are, and both are correct: modules under
 `src/` import each other with `.js` (`import * as viz from './viz.js'`) — the
 extension the emitted code would use, which the bundler maps to the `.ts` file.
 The inline `<script type="module">` in each page HTML imports `.ts` directly
-(`'../src/gpt2page.ts'`), because it is not itself TypeScript.
+(`'./src/gpt2page.ts'` from the home page, `'../src/gpt2page.ts'` from the two
+under a directory), because it is not itself TypeScript.
 
 ## Routing
 
 Pages are top-level routes; the model server owns `/api/`. Keep those namespaces
-apart — they used to collide, and the symptom was the `/gpt2/` page being
-answered by the data router with `{"error": "unknown route ''"}`.
+apart — they used to collide, and the symptom was the GPT-2 page being answered
+by the data router with `{"error": "unknown route ''"}`.
+
+`/` is the GPT-2 explorer and `/viewer/` is the viewer it iframes. That is the
+one asymmetry in `viewerUrl`: the two pages under a directory take the
+`'../viewer/index.html'` default, and the home page passes `'viewer/index.html'`
+because the viewer is one level *down* from it, not up.
 
 Adding a page means adding it to `rollupOptions.input` in `vite.config.ts`. It
 will work in `dev` without that and silently vanish from `build`.
@@ -156,4 +162,4 @@ was left alone rather than decided unilaterally.
 The cross-frame protocol (page → iframe `?params=` → `postMessage({setParams})`
 → `getUrlInfo`) has no automated coverage and cannot get any while `main.ts`
 builds a renderer at import. Changes to `viewerUrl`, `RESPONDERS`, or the params
-wire format need a browser load of `/gpt2/` to verify.
+wire format need a browser load of `/` to verify.
