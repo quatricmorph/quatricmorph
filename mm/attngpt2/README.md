@@ -93,8 +93,12 @@ particular head is a shareable link:
 
 `Animate` walks the product outward from the innermost matmul: `attn @ V @ wO`
 animates the last two, `Q @ K @ V @ wO` adds the attention scores,
-`input @ wQ @ K @ V @ wO` adds the projections. `tensors` lists all 82 tensors
-in the checkpoint with shapes and byte sizes.
+`input @ wQ @ K @ V @ wO` adds the projections.
+
+The left sidebar is the checkpoint's own module hierarchy — all 82 tensors with
+shapes and byte sizes, and, against each, which of this page's views draws it.
+This page has one view, so most of the tree reads as undrawn; that is the honest
+answer rather than a hidden one. `hierarchy` collapses the panel.
 
 ## Provenance
 

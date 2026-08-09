@@ -2197,7 +2197,9 @@ export const UNARY_FUNCS = Object.keys(UNARY_FUNCS_)
 
 // Applied to a copy, never in place on the input: the whole point of the kind
 // is that the input stays on screen next to the result.
-function applyUnary(fn, h, w, data) {
+// Exported for editops.ts, which re-runs a UnaryOp's function over fresh input
+// data when an edit upstream invalidates the materialized result.
+export function applyUnary(fn, h, w, data) {
   const pw = POINTWISE[fn]
   if (pw) {
     for (let i = 0; i < data.length; i++) data[i] = pw(data[i])

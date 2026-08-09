@@ -607,6 +607,11 @@ export function whyNotDrawn(t, views) {
   return 'not classified by the server: no matrix kind names it and it matches no known non-matrix role.'
 }
 
+// `esc` covers the three characters that could break out of *text*. An
+// attribute needs the quote too, and the tree is the first place a checkpoint's
+// own tensor name reaches one.
+export const escAttr = t => esc(t).replace(/"/g, '&quot;')
+
 export const bytesShort = n => {
   const u = ['B', 'kB', 'MB', 'GB', 'TB']
   let i = 0
@@ -616,13 +621,24 @@ export const bytesShort = n => {
 
 // The tree as markup. Split from the DOM wiring so it can be tested without a
 // server, which is the same reason `mount` itself is not tested here.
-export function hierarchyHTML(root, views) {
+// opts.layers      how many layers this server can actually serve
+// opts.layerReason why the rest cannot be reached
+export function hierarchyHTML(root, views, opts: any = {}) {
   const meta = n => `<span class="c">${n.count}</span>` +
     `<span class="b">${bytesShort(n.bytes)}</span>`
 
   const leafRow = n => {
     const t = n.tensor
     const vs = viewsFor(t, views)
+    const has_layer = t.layer !== null && t.layer !== undefined
+
+    // Without numpy the server serves layer 0 and refuses the rest, and `mount`
+    // truncates the layer selector to match. A link into a layer that is not
+    // there would land on layer 0 and draw *a* matrix — the wrong one, silently,
+    // which is exactly the plausible-but-wrong picture this file exists to
+    // prevent. So the view names stay, unlinked, and say why.
+    const out_of_reach = has_layer && opts.layers !== undefined && t.layer >= opts.layers
+
     // Every view that draws the tensor is its own link, rather than the row
     // linking to whichever happened to be declared first: `c_attn.weight` is
     // reachable three ways and they are three different pictures of it.
@@ -630,15 +646,18 @@ export function hierarchyHTML(root, views) {
     // The layer rides along from the tensor's own name -- a tensor outside the
     // blocks carries none rather than a made-up 0. The head selector is left
     // alone: a per-head kind slices whichever head is already chosen.
-    const link = v => `<a href="#" class="lbl" data-view="${esc(v)}"` +
-      (t.layer === null || t.layer === undefined ? '' : ` data-layer="${t.layer}"`) +
-      `>${esc(v)}</a>`
-    return `<div class="ten ${esc(t.role)}" title="${esc(t.name)} · ${t.dtype} · ` +
+    const link = v => out_of_reach
+      ? `<span class="lbl off">${esc(v)}</span>`
+      : `<a href="#" class="lbl" data-view="${escAttr(v)}"` +
+        (has_layer ? ` data-layer="${t.layer}"` : '') + `>${esc(v)}</a>`
+
+    return `<div class="ten ${escAttr(t.role)}" title="${escAttr(t.name)} · ${escAttr(t.dtype)} · ` +
       `${t.bytes.toLocaleString()} bytes">` +
       `<span class="lbl">${esc(n.label)}</span>` +
       `<span class="sh">${(t.shape || []).join('×')}</span>` +
       (vs.length
-        ? `<span class="in">${vs.map(link).join('<span class="sep"> · </span>')}</span>`
+        ? `<span class="in">${vs.map(link).join('<span class="sep"> · </span>')}</span>` +
+          (out_of_reach ? `<span class="no">${esc(opts.layerReason || 'this layer is not being served')}</span>` : '')
         : `<span class="no">${esc(whyNotDrawn(t, views))}</span>`) +
       `</div>`
   }
@@ -983,7 +1002,13 @@ export async function mount(config: any) {
       (unclassified
         ? ` · <span class="err">${unclassified} unclassified</span>`
         : '')
-    $('tree_body').innerHTML = hierarchyHTML(tree, views)
+    // Same bound the layer selector is truncated to below, from the same fact:
+    // without numpy the server has only layer 0 to give.
+    $('tree_body').innerHTML = hierarchyHTML(tree, views, {
+      layers: META.deep_layers ? META.dims.n_layer : 1,
+      layerReason: 'this layer needs the forward pass, which needs numpy — ' +
+        'the server was started without it, so only layer 0 exists',
+    })
     $('tree_foot').innerHTML =
       `Read by byte range, never loaded whole. A named view opens that matrix; ` +
       `everything else says what it is instead. A bias is a vector, so it has no ` +
@@ -1008,8 +1033,11 @@ export async function mount(config: any) {
       $('view').value = a.dataset.view
       applyViewDefaults()
     }
-    if (a.dataset.layer !== undefined && !$('layer').disabled &&
-        [...$('layer').options].some(o => o.value == a.dataset.layer)) {
+    // `hierarchyHTML` does not emit a link into a layer the server cannot
+    // serve, so this only ever selects one the menu has; the check is the
+    // belt to that brace, and it refuses rather than landing on layer 0.
+    if (a.dataset.layer !== undefined) {
+      if (![...$('layer').options].some(o => o.value == a.dataset.layer)) return
       $('layer').value = a.dataset.layer
     }
     refresh(true)

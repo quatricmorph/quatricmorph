@@ -205,8 +205,12 @@ body {
 /* A column, so the tree body is the only part that scrolls and the two notes
    stay put -- the header names what the tree is and the footer says what the
    colours mean, and both are useless scrolled off the top. */
+/* `width` rather than `flex-basis`: `resize` writes an inline width, and a
+   flex-basis on the main axis would win over it — leaving a grip that renders
+   and does nothing. */
 #tree {
-  flex: 0 0 320px;
+  flex: 0 0 auto;
+  width: 320px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -333,6 +337,11 @@ body {
 
 #tree .ten .sep {
   color: #555;
+}
+
+/* a view that would draw this tensor, on a layer the server is not serving */
+#tree .ten .lbl.off {
+  color: #5a7a5a;
 }
 
 #tree .ten .sh {

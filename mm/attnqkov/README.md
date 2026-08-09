@@ -119,6 +119,12 @@ be the slowest of the three, and pick a small `Tokens` value.
 the two outer products, `+ inputQK @ input_t` adds the attention scores,
 `+ input @ QK` adds the read circuit.
 
+The left sidebar is the checkpoint's own module hierarchy — all 82 tensors with
+shapes and byte sizes, and, against each, which of this page's views draws it.
+This page has one view, so most of the tree reads as undrawn; that is the honest
+answer rather than a hidden one. `hierarchy` collapses the panel. See
+[`../gpt2`](../gpt2/) for what the panel says about each kind of tensor.
+
 ## Provenance
 
 `mm/` is Meta's matrix-multiplication visualizer, MIT licensed — see

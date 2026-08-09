@@ -823,10 +823,43 @@ describe('hierarchyHTML', () => {
     expect(html()).toContain('class="ten norm"')
   })
 
-  it('escapes a hostile tensor name rather than injecting it', () => {
+  it('escapes a hostile tensor name in text and in the attribute it reaches', () => {
+    // The title attribute is the first place a checkpoint's own name lands in
+    // an attribute, so the quote matters as much as the angle bracket.
     const h = hierarchyHTML(tensorTree([w('<img src=x>', [2, 2], [])]), VIEWS)
     expect(h).not.toContain('<img src=x>')
     expect(h).toContain('&lt;img src=x&gt;')
+    // Parsed rather than pattern-matched: a quote is harmless in text and fatal
+    // in an attribute, so the question is what a parser ends up with, not
+    // whether the string appears.
+    const el = document.createElement('div')
+    el.innerHTML = hierarchyHTML(tensorTree([w('a" onload="boom', [2, 2], [])]), VIEWS)
+    const row = el.querySelector('.ten')
+    expect(row.getAttribute('onload')).toBe(null)
+    expect(row.getAttribute('title')).toContain('a" onload="boom')
+    expect(row.querySelector('.lbl').textContent).toBe('a" onload="boom')
+  })
+
+  it('will not link into a layer the server is not serving', () => {
+    // Without numpy the server has only layer 0, and `mount` truncates the
+    // layer selector to match. A link into layer 1 would land on layer 0 and
+    // draw the wrong matrix in silence.
+    const h = hierarchyHTML(tensorTree(TENSORS, 'distilgpt2'), VIEWS,
+      { layers: 1, layerReason: 'needs numpy' })
+    expect(h).toContain('data-layer="0"')
+    expect(h).not.toContain('data-layer="1"')
+    // the views are still named, so the tree says what exists as well as why
+    // it cannot be opened
+    expect(h).toContain('<span class="lbl off">mlp up (gelu)</span>')
+    expect(h).toContain('needs numpy')
+    // and layer 0 is untouched
+    expect(h).toContain('data-view="mlp up (gelu)" data-layer="0"')
+  })
+
+  it('links every layer when the bound is not given', () => {
+    const h = hierarchyHTML(tensorTree(TENSORS, 'distilgpt2'), VIEWS)
+    expect(h).toContain('data-layer="1"')
+    expect(h).not.toContain('class="lbl off"')
   })
 })
 
