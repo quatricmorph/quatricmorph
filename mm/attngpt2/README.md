@@ -95,10 +95,11 @@ particular head is a shareable link:
 animates the last two, `Q @ K @ V @ wO` adds the attention scores,
 `input @ wQ @ K @ V @ wO` adds the projections.
 
-The left sidebar is the checkpoint's own module hierarchy — all 82 tensors with
-shapes and byte sizes, and, against each, which of this page's views draws it.
-This page has one view, so most of the tree reads as undrawn; that is the honest
-answer rather than a hidden one. `hierarchy` collapses the panel.
+The one panel is the viewer's own outliner, top left: the scene as a tree of
+matrices and matmuls, where a row selects, the eye hides and double-click
+frames. It lists what is drawn, not the checkpoint — the tensors this page's
+single view does not reach are not in it. See [`../gpt2`](../gpt2/) for what
+each kind of tensor in distilgpt2 is and why most of them are undrawn here.
 
 ## Provenance
 

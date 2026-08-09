@@ -497,185 +497,6 @@ export function adoptRenderMode(current, reported, allowed = RENDER_MODES) {
   return allowed.includes(reported) ? reported : null
 }
 
-// ---------------------------------------------------------------------------
-// the model hierarchy
-// ---------------------------------------------------------------------------
-//
-// The sidebar's tree is the checkpoint's own name hierarchy, split on '.'. It
-// is deliberately generic: nothing here knows that GPT-2 has blocks called `h`
-// or that attention lives under `attn`. What architecture knowledge the sidebar
-// shows arrives as data, from `/api/meta.json`, where `tensor_roles` builds it
-// by inverting the very tables the server slices with.
-//
-// The one invariant worth holding onto: the tree has exactly as many tensor
-// nodes as the checkpoint has tensors. A hierarchy that quietly dropped what it
-// could not classify would show 76 of distilgpt2's 82 and look complete, which
-// is the same failure mode as a mis-shaped leaf — plausible, and wrong.
-
-// `h.10` after `h.9`, not between `h.1` and `h.2`.
-//
-// Compares runs of digits as numbers rather than testing for a wholly numeric
-// label, because `collapse` may already have folded the layer index into a
-// longer one: a block holding a single tensor arrives here as
-// '10.mlp.c_fc.weight', and a plain string compare would file it under 1.
-const chunks = s => String(s).match(/\d+|\D+/g) || []
-
-const natural = (a, b) => {
-  const [A, B] = [chunks(a.label), chunks(b.label)]
-  for (let i = 0; i < Math.max(A.length, B.length); i++) {
-    if (A[i] === undefined) return -1
-    if (B[i] === undefined) return 1
-    if (A[i] === B[i]) continue
-    const both_num = /^\d/.test(A[i]) && /^\d/.test(B[i])
-    if (both_num && +A[i] !== +B[i]) return +A[i] - +B[i]
-    if (!both_num) return A[i] < B[i] ? -1 : 1
-  }
-  return 0
-}
-
-// A node with one child and no tensor of its own is pure indentation —
-// `wte` → `weight` says nothing `wte.weight` does not.
-function collapse(n) {
-  n.children.forEach(collapse)
-  while (n.children.length == 1 && !n.tensor) {
-    const [c] = n.children
-    n.label = `${n.label}.${c.label}`
-    n.path = c.path
-    n.tensor = c.tensor
-    n.children = c.children
-  }
-}
-
-function tally(n) {
-  n.children.forEach(tally)
-  n.count = (n.tensor ? 1 : 0) + n.children.reduce((s, c) => s + c.count, 0)
-  n.bytes = (n.tensor ? n.tensor.bytes : 0) + n.children.reduce((s, c) => s + c.bytes, 0)
-  return n
-}
-
-export function tensorTree(tensors, name = 'model') {
-  const root = { label: name, path: '', children: [], tensor: null, count: 0, bytes: 0 }
-  for (const t of tensors) {
-    const parts = String(t.name).split('.')
-    let n = root
-    parts.forEach((p, i) => {
-      let next = n.children.find(c => c.label === p)
-      if (!next) {
-        next = { label: p, path: parts.slice(0, i + 1).join('.'),
-                 children: [], tensor: null, count: 0, bytes: 0 }
-        n.children.push(next)
-      }
-      n = next
-    })
-    // A checkpoint may name both `a.b` and `a.b.c`; that leaves `a.b` holding a
-    // tensor *and* children, which the tree draws as exactly that.
-    n.tensor = t
-  }
-  const sort = n => { n.children.sort(natural); n.children.forEach(sort) }
-  root.children.forEach(collapse)
-  sort(root)
-  return tally(root)
-}
-
-// Which of this page's views draw a given tensor.
-//
-// Derived twice over and hand-written nowhere: the server says which matrix
-// *kinds* address the tensor, and each view already declares the kinds it
-// builds from. A weight is drawn by any view naming one of its kinds; a bias
-// only by a view that also asks to augment with it, which is why the `wo` view
-// does not reach attn.c_proj.bias and the 'attention output' view does.
-export function viewsFor(t, views) {
-  const drawn = (t.kinds || []).map(k => k.kind)
-  const augments = t.bias_for || []
-  return Object.entries(views).filter(([, v]) =>
-    (v as any).kinds.some(item =>
-      drawn.includes(kindOf(item)) ||
-      (augments.includes(kindOf(item)) && /[wh]/.test(flagsOf(item))))
-  ).map(([name]) => name)
-}
-
-// What a tensor is, when no view on this page draws it. The server's own note
-// where it has one — these are statements about the model, and the server is
-// where they are checked against the forward pass that consumes them.
-export function whyNotDrawn(t, views) {
-  if (viewsFor(t, views).length) return null
-  if (t.note) return t.note
-  if (t.role == 'weight')
-    return `addressed by ${list((t.kinds || []).map(k => k.kind))}, which no view on this page builds from.`
-  if (t.role == 'bias')
-    return `the bias on ${list(t.bias_for || [])} — drawn as the augmenting row or column of its weight, in views that ask for it. None on this page does.`
-  return 'not classified by the server: no matrix kind names it and it matches no known non-matrix role.'
-}
-
-// `esc` covers the three characters that could break out of *text*. An
-// attribute needs the quote too, and the tree is the first place a checkpoint's
-// own tensor name reaches one.
-export const escAttr = t => esc(t).replace(/"/g, '&quot;')
-
-export const bytesShort = n => {
-  const u = ['B', 'kB', 'MB', 'GB', 'TB']
-  let i = 0
-  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++ }
-  return `${i == 0 ? n : n.toFixed(n < 10 ? 1 : 0)} ${u[i]}`
-}
-
-// The tree as markup. Split from the DOM wiring so it can be tested without a
-// server, which is the same reason `mount` itself is not tested here.
-// opts.layers      how many layers this server can actually serve
-// opts.layerReason why the rest cannot be reached
-export function hierarchyHTML(root, views, opts: any = {}) {
-  const meta = n => `<span class="c">${n.count}</span>` +
-    `<span class="b">${bytesShort(n.bytes)}</span>`
-
-  const leafRow = n => {
-    const t = n.tensor
-    const vs = viewsFor(t, views)
-    const has_layer = t.layer !== null && t.layer !== undefined
-
-    // Without numpy the server serves layer 0 and refuses the rest, and `mount`
-    // truncates the layer selector to match. A link into a layer that is not
-    // there would land on layer 0 and draw *a* matrix — the wrong one, silently,
-    // which is exactly the plausible-but-wrong picture this file exists to
-    // prevent. So the view names stay, unlinked, and say why.
-    const out_of_reach = has_layer && opts.layers !== undefined && t.layer >= opts.layers
-
-    // Every view that draws the tensor is its own link, rather than the row
-    // linking to whichever happened to be declared first: `c_attn.weight` is
-    // reachable three ways and they are three different pictures of it.
-    //
-    // The layer rides along from the tensor's own name -- a tensor outside the
-    // blocks carries none rather than a made-up 0. The head selector is left
-    // alone: a per-head kind slices whichever head is already chosen.
-    const link = v => out_of_reach
-      ? `<span class="lbl off">${esc(v)}</span>`
-      : `<a href="#" class="lbl" data-view="${escAttr(v)}"` +
-        (has_layer ? ` data-layer="${t.layer}"` : '') + `>${esc(v)}</a>`
-
-    return `<div class="ten ${escAttr(t.role)}" title="${escAttr(t.name)} · ${escAttr(t.dtype)} · ` +
-      `${t.bytes.toLocaleString()} bytes">` +
-      `<span class="lbl">${esc(n.label)}</span>` +
-      `<span class="sh">${(t.shape || []).join('×')}</span>` +
-      (vs.length
-        ? `<span class="in">${vs.map(link).join('<span class="sep"> · </span>')}</span>` +
-          (out_of_reach ? `<span class="no">${esc(opts.layerReason || 'this layer is not being served')}</span>` : '')
-        : `<span class="no">${esc(whyNotDrawn(t, views))}</span>`) +
-      `</div>`
-  }
-
-  const walk = (n, depth) => {
-    if (!n.children.length) return n.tensor ? leafRow(n) : ''
-    const kids = n.children.map(c => walk(c, depth + 1)).join('')
-    const own = n.tensor ? leafRow(n) : ''
-    // Open down to the block list — the panel's whole point is that all six are
-    // there — and closed inside each block, which is where the 78 rows live.
-    return `<details class="grp"${depth < 3 ? ' open' : ''}>` +
-      `<summary><span class="lbl">${esc(n.label)}</span>${meta(n)}</summary>` +
-      `<div class="kids">${own}${kids}</div></details>`
-  }
-
-  return walk(root, 0)
-}
-
 async function getJSON(url): Promise<any> {
   const r = await fetch(abs(url))
   const body = await r.json().catch(() => ({ error: `HTTP ${r.status}` }))
@@ -705,7 +526,6 @@ const CHROME = `
   <select id="anim"></select>
   <label for="render">Render</label>
   <select id="render"></select>
-  <a href="#" id="tensors_link">hierarchy</a>
   <a href="#" id="popout_link">open&#x2197;</a>
 </div>
 <div id="status">loading…</div>
@@ -717,11 +537,6 @@ const CHROME = `
   <span id="tl_label" class="dim"></span>
 </div>
 <div id="stage">
-  <aside id="tree">
-    <div id="tree_head" class="dim">loading…</div>
-    <div id="tree_body"></div>
-    <div id="tree_foot" class="dim"></div>
-  </aside>
   <iframe id="mm" src="about:blank"></iframe>
 </div>
 `
@@ -974,75 +789,6 @@ export async function mount(config: any) {
     )
   }
 
-  // -- the hierarchy sidebar — the whole checkpoint, as its own name tree ---
-  //
-  // Every tensor in the file appears, whether or not a view draws it, and each
-  // one says which. The panel that used to live here was the same 82 rows flat;
-  // this is that list with its structure restored and its reachability stated,
-  // so there is one panel over the checkpoint rather than two.
-
-  function fillTree() {
-    const name = (META.model_dir || 'model').split('/').filter(Boolean).pop()
-    const tree = tensorTree(META.tensors, name)
-
-    // The count is asserted, not printed on trust: `tensorTree` walking a name
-    // it cannot place would drop a tensor silently, and the tree would look
-    // complete without it.
-    if (tree.count !== META.tensors.length) {
-      $('tree_head').innerHTML = `<span class="err">the hierarchy holds ` +
-        `${tree.count} of ${META.tensors.length} tensors — some name did not ` +
-        `place, so this tree is not the checkpoint</span>`
-      return
-    }
-
-    const unclassified = META.tensors.filter(t => t.role === 'unclassified').length
-    $('tree_head').innerHTML =
-      `<b>${esc(name)}</b> · ${tree.count} tensors · ` +
-      `${META.checkpoint_bytes.toLocaleString()} bytes on disk` +
-      (unclassified
-        ? ` · <span class="err">${unclassified} unclassified</span>`
-        : '')
-    // Same bound the layer selector is truncated to below, from the same fact:
-    // without numpy the server has only layer 0 to give.
-    $('tree_body').innerHTML = hierarchyHTML(tree, views, {
-      layers: META.deep_layers ? META.dims.n_layer : 1,
-      layerReason: 'this layer needs the forward pass, which needs numpy — ' +
-        'the server was started without it, so only layer 0 exists',
-    })
-    $('tree_foot').innerHTML =
-      `Read by byte range, never loaded whole. A named view opens that matrix; ` +
-      `everything else says what it is instead. A bias is a vector, so it has no ` +
-      `matmul of its own — it is drawn as the extra row or column of the weight ` +
-      `it belongs to, in the views that ask for it.`
-  }
-
-  function toggleTree() {
-    $('stage').classList.toggle('collapsed')
-  }
-
-  // One delegated listener: the tree is rebuilt wholesale and per-row handlers
-  // would have to be rebound with it.
-  $('tree').addEventListener('click', e => {
-    const a = e.target.closest && e.target.closest('a[data-view]')
-    if (!a) return
-    e.preventDefault()
-    // Same order as the view selector's own handler: `applyViewDefaults` resets
-    // stride and seq for the new view, so a layer set before it would survive
-    // but a stride would not — set the view, let it settle, then the layer.
-    if (a.dataset.view !== $('view').value) {
-      $('view').value = a.dataset.view
-      applyViewDefaults()
-    }
-    // `hierarchyHTML` does not emit a link into a layer the server cannot
-    // serve, so this only ever selects one the menu has; the check is the
-    // belt to that brace, and it refuses rather than landing on layer 0.
-    if (a.dataset.layer !== undefined) {
-      if (![...$('layer').options].some(o => o.value == a.dataset.layer)) return
-      $('layer').value = a.dataset.layer
-    }
-    refresh(true)
-  })
-
   function popout() {
     const w = window.open('', '_blank')
     const r = e => {
@@ -1190,15 +936,9 @@ export async function mount(config: any) {
   $('render').addEventListener('change', () => refresh(true))
   ;['layer', 'head', 'stride', 'seq', 'anim'].forEach(id =>
     $(id).addEventListener('change', () => refresh(false)))
-  $('tensors_link').addEventListener('click', e => { e.preventDefault(); toggleTree() })
   $('popout_link').addEventListener('click', e => { e.preventDefault(); popout() })
 
   applyViewDefaults()
-
-  // After the view menu exists: which views reach a tensor is a property of
-  // this page's own VIEWS, so a page with narrower ones honestly shows more of
-  // the checkpoint as undrawn rather than pretending otherwise.
-  fillTree()
 
   // deep link: ?view=mlp+down&layer=3&head=7&stride=4&prompt=…
   const qp = new URLSearchParams(location.search)

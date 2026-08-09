@@ -70,47 +70,34 @@ reflected in the page URL, so a particular view is a shareable link:
 ?view=mlp+down&layer=4&stride=4&prompt=The+capital+of+France+is+Paris
 ```
 
-## The hierarchy sidebar
+## The scene tree
 
-The left panel is the checkpoint's own name hierarchy, split on `.` — every
-tensor in `model.safetensors`, grouped the way the file names them, with a
-running tensor count and byte total up the tree. `hierarchy` in the header
-collapses it.
+There is one panel over the scene and it lives inside the viewer: the outliner
+(`src/outliner.ts`), top left. It lists what is actually drawn — every matrix
+and matmul in the current view, by scene path — and it is a control surface, not
+a legend: a row selects, shift-click adds, the eye hides, double-click frames.
+Selection is shared with the viewport, so clicking a matrix in 3D reveals its
+row and vice versa.
 
-Nothing in the splitter knows what GPT-2 is. It does not know that blocks are
-called `h` or that attention lives under `attn`; it groups dotted names, so it
-would draw any checkpoint's hierarchy. The architecture knowledge arrives as
-data, from `/api/meta.json`, where `Model.tensor_roles` builds it by inverting
-`WEIGHT_KINDS`, `BIAS_KINDS` and `NO_BIAS` — the same tables the reads go
-through. A second hand-written copy of that mapping in the page would be wrong
-the first time a kind moved.
-
-Against each tensor the panel says how it is reachable, and clicking a view name
-opens it at that tensor's own layer — except on a server without `numpy`, where
-only layer 0 exists. There the deeper layers' view names are still listed but
-not linked, and say why, rather than linking somewhere that would quietly serve
-layer 0's matrix instead:
+What it does not list is the rest of the checkpoint. The panel that used to sit
+to the left of the viewer showed all 82 tensors including the ones no view
+draws, and said why each was undrawn. That panel is gone, and with it the
+click-a-tensor-to-open-the-view-that-draws-it navigation. What each kind of
+tensor is, and why 33 of distilgpt2's 82 are drawn by no view on this page, is
+recorded below rather than in a panel:
 
 | | |
 | --- | --- |
-| **drawn** | the views that draw it, each a link. `c_attn.weight` is reachable three ways, and they are three different pictures of it. |
-| **a bias** | drawn as the augmenting row or column of its weight, so it links to the views that *ask* for it. `attn.c_proj.bias` therefore links to `attention output` and not to `attention head` — which is the `NO_BIAS` refusal above, visible instead of buried in a server error. |
-| **a LayerNorm gain or shift** | not drawn: the forward pass folds it into the activation, so it is already inside every matrix built from that activation. |
-| **a registered buffer** | `h.N.attn.bias` is the causal mask — not a learned parameter, and not read: `_forward` builds its own with `np.tril`. Six copies of a 1024×1024 float32 buffer are 25,165,824 of the checkpoint's bytes that nothing here touches. It is coloured apart from the merely undrawn, because "no view draws it" and "never read at all" are different facts. |
-| **unclassified** | shown in red. No matrix kind names it and it matches no known non-matrix role. Nothing in distilgpt2 is. |
+| **drawn** | 49 of 82. `c_attn.weight` is reachable three ways — `attention head`, `qkv projection`, and inside the staged model — and they are three different pictures of it. |
+| **a bias** | drawn as the augmenting row or column of its weight, in the views that *ask* for it. `attn.c_proj.bias` is a term of `attention output` and not of `attention head` — that is the `NO_BIAS` refusal below, not an oversight. |
+| **a LayerNorm gain or shift** | not drawn: the forward pass folds it into the activation, so it is already inside every matrix built from that activation. 26 tensors. |
+| **a registered buffer** | `h.N.attn.bias` is the causal mask — not a learned parameter, and not read: `_forward` builds its own with `np.tril`. Six copies of a 1024×1024 float32 buffer are 25,165,824 of the checkpoint's bytes that nothing here touches. |
+| **`wpe`** | the positional embedding, added to the residual stream before the first block rather than multiplied by anything. |
 
-Of distilgpt2's 82 tensors, 49 are drawn by some view on this page and 33 are
-not — 26 LayerNorm gains and shifts, the 6 causal masks, and `wpe`.
-
-The count is asserted rather than printed on trust: if the tree holds fewer
-tensors than `meta.json` listed, the panel says so and refuses to draw. A
-hierarchy that quietly dropped what it could not place would show 76 of 82 and
-look complete, which is the same failure as a mis-shaped leaf — plausible, and
-wrong.
-
-The three pages share this panel, and each computes reachability against its own
-`VIEWS`. On [`../attngpt2`](../attngpt2/) most of the tree reads as undrawn, and
-that is the accurate statement for a page with one view.
+`/api/meta.json` still serves the full inventory — `Model.tensor_roles` builds
+it by inverting `WEIGHT_KINDS`, `BIAS_KINDS` and `NO_BIAS`, the same tables the
+reads go through — so the facts above are checkable against the server without
+a panel to draw them.
 
 ## Why there is no single "whole model" scene
 
