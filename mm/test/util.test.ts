@@ -15,6 +15,7 @@
 //
 import { describe, it, expect } from 'vitest'
 import * as util from '../src/util.js'
+import * as viz from '../src/viz.js'
 
 // Shaped like the real thing: nested sub-objects, mixed value types, the
 // dotted-key hazard of duplicate leaf names at different depths.
@@ -232,5 +233,84 @@ describe('three.js constructions', () => {
     const g = util.axes()
     util.disposeAndClear(g)
     expect(g.children).toHaveLength(0)
+  })
+})
+
+//
+// alignGrid — the 3D alignment lattice.
+//
+// The failure it guards against is a lattice that drifts away from the elements
+// it claims to align: `emptyPoints` steps a whole `layout.gap` at every block
+// boundary, so a lattice built from a plain 0..n ladder lines up with the first
+// block and with nothing after it. That reads as a rendering bug rather than as
+// the off-by-a-gap it is, so the offsets are asserted rather than eyeballed.
+//
+// Line positions are read back out of the built geometry, so these assert what
+// is drawn and not what a helper says would be drawn.
+//
+describe('alignGrid', () => {
+  // Every child is a THREE.Line with a two-point position attribute.
+  const segs = (g): number[][][] => g.children.map(l => {
+    const p = l.geometry.attributes.position.array
+    return [[p[0], p[1], p[2]], [p[3], p[4], p[5]]]
+  })
+
+  const xsOf = g => [...new Set(segs(g).map(s => s[0][0]))].sort((a, b) => a - b)
+  const ysOf = g => [...new Set(segs(g).map(s => s[0][1]))].sort((a, b) => a - b)
+  const zsOf = g => [...new Set(segs(g).flatMap(s => [s[0][2], s[1][2]]))].sort((a, b) => a - b)
+
+  const blocks = (h, w, ni, nj) => ({
+    i: { n: ni, size: Math.ceil(h / ni), max: h },
+    j: { n: nj, size: Math.ceil(w / nj), max: w },
+  })
+
+  it('is off at brightness 0, so `grid` doubles as the on/off switch', () => {
+    expect(util.alignGrid(8, 8, 8, { i: 2, j: 2, k: 2 }, 0).children).toHaveLength(0)
+  })
+
+  it('covers all three axes, not a floor plane', () => {
+    // A matmul is drawn as three faces of an H x W x D box, so a lattice with
+    // no depth would line up with the result and with neither operand.
+    const g = util.alignGrid(4, 4, 4, { i: 4, j: 4, k: 4 }, 1)
+    expect(zsOf(g)).toEqual([0, 3])
+    expect(xsOf(g)).toEqual([0, 3])
+    expect(ysOf(g)).toEqual([0, 3])
+  })
+
+  it('steps over layout.gap exactly where emptyPoints does', () => {
+    // 8 rows in 2 blocks of 4, gap 10. Element rows are at
+    // 0,1,2,3, 14,15,16,17 -- so a lattice at spacing 4 must be at 0, 14, and
+    // the far face 17, NOT at 0, 4 and 7.
+    const g = util.alignGrid(8, 8, 0, { i: 4, j: 8, k: 8 }, 1, blocks(8, 8, 2, 1), 10)
+    expect(ysOf(g)).toEqual([0, 14, 17])
+  })
+
+  it('lines up with the element centres emptyPoints actually produces', () => {
+    // Same assertion, against the element path's own output rather than a
+    // restatement of its arithmetic.
+    const info = { ...blocks(8, 8, 2, 1), gap: 10 }
+    const centers = viz.emptyPoints(8, 8, info).geometry.attributes.pointCenter
+    const rowY = i => centers.array[(i * 8) * 3 + 1]
+    const g = util.alignGrid(8, 8, 0, { i: 4, j: 8, k: 8 }, 1, info, 10)
+    expect(ysOf(g)).toEqual([rowY(0), rowY(4), rowY(7)])
+  })
+
+  it('closes the box even when the extent is not a multiple of the spacing', () => {
+    // 10 rows at spacing 4 gives 0, 4, 8 -- and the far face at 9, or the
+    // lattice has a missing edge exactly where the matrix ends.
+    const g = util.alignGrid(10, 4, 0, { i: 4, j: 4, k: 4 }, 1)
+    expect(ysOf(g)).toEqual([0, 4, 8, 9])
+  })
+
+  it('takes an independent spacing per axis', () => {
+    // One knob cannot serve a 64 x 3072 weight: a line every 8 columns there
+    // is a solid sheet.
+    const g = util.alignGrid(8, 32, 0, { i: 4, j: 16, k: 8 }, 1)
+    expect(ysOf(g)).toEqual([0, 4, 7])
+    expect(xsOf(g)).toEqual([0, 16, 31])
+  })
+
+  it('rounds a fractional spacing up to at least one line per cell', () => {
+    expect(() => util.alignGrid(4, 4, 4, { i: 0, j: 0.2, k: -3 }, 1)).not.toThrow()
   })
 })

@@ -19,12 +19,39 @@
 // (`route_matrix`), and this module refuses to write a shape the server did not
 // give it.
 //
-// The pages drive mm through its existing public surface only — `?params=` on
-// the iframe URL and `postMessage({setParams})`. `index.html`, `viz.js`,
-// `util.js` and `gui.js` are not touched by any of this.
+// The pages drive mm through its public message surface. That surface has
+// grown, and this comment used to say the viewer was untouched by any of it:
+//
+//   `?params=` on the iframe URL          — unchanged, and still how every
+//                                           per-layer view is loaded
+//   postMessage({setParams})              — now also takes `replace: true`,
+//                                           which swaps the whole params object
+//                                           instead of merging onto it. A tree
+//                                           of a different *shape* leaves stale
+//                                           nodes behind under a merge.
+//   postMessage({setStage})               — new. Moves the active stage of a
+//                                           staged model scene without
+//                                           rebuilding it. A scrubbing timeline
+//                                           cannot be driven a reload at a time,
+//                                           which is what the view selector does.
+//   viewer -> page {stages: {...}}        — new. The stage list, the active
+//                                           index, and what the renderer
+//                                           actually built (texels, LOD level,
+//                                           colour encoding), so the chrome and
+//                                           the status bar describe the picture
+//                                           on screen rather than the one this
+//                                           file asked for.
+//
+// So `viz.ts`, `util.ts`, `gui.ts` and `main.ts` are no longer untouched by the
+// checkpoint pages: the node kinds a staged forward pass needs (a materialized
+// unary stage, a residual add, an ordered stack of stages) live in viz.ts, and
+// main.ts answers the two messages above. The page/viewer split is intact --
+// the page still owns the chrome, the fetches and the claims, and the viewer
+// still owns the scene -- but the protocol between them is wider than it was.
 //
 
 import './gpt2page.css'
+import { RENDER_MODES } from './heatmap.js'
 
 // Typed `any` deliberately. Everything this module looks up is an <input>, a
 // <select> or the <iframe>, and it reads .value / .options / .disabled / .src
@@ -89,10 +116,54 @@ export const root = (name, l, r, epilog = undefined) => ({
   name, epilog: epilog || 'none', left: l, right: r,
 })
 
+//
+// Node kinds beyond the matmul.
+//
+// mm's expression grammar is matmul-only, and the comment these pages used to
+// carry said that was why GPT-2's residual additions could not be drawn. That
+// named the obstacle slightly wrong: `parseExpr` is matmul-only, but these
+// pages never call it — they build the params tree directly. What was missing
+// was node *kinds*, not notation, and viz.ts now has three. (The grammar is
+// still matmul-only, and `genExpr`/`syncExpr` refuse a tree containing any of
+// these rather than printing an '@' where an add is drawn.)
+//
+
+// f(input), materialized as its own matrix beside the input that produced it.
+// This is the difference between mm's in-place epilogs — which mutate a
+// matmul's result buffer, and which every other view still uses — and a stage
+// an inspector can look at: `softmax(tril(QK^T/√d))` next to `Q @ K^T`.
+export const unary = (name, fn, input, extra = {}) => ({
+  name, op: 'unary', fn, input, anim: A(), block: B(), ...extra,
+})
+
+// An elementwise sum. GPT-2 adds twice per block and those are real edges of
+// the graph; drawing one as a matmul that happened to produce the right numbers
+// is exactly the class of lie this repository forbids.
+export const add = (name, l, r, extra = {}) => ({
+  name, op: 'add', left: l, right: r, anim: A(), block: B(), ...extra,
+})
+
+// An ordered list of stages in one scene. Keyed rather than an array because
+// mm's `copyTree` round trips through flatten/unflatten, which does not handle
+// arrays; string keys keep insertion order, which is the forward-pass order.
+export const stack = (name, stages) => ({
+  name, op: 'stack',
+  stages: Object.fromEntries(stages.map((st, i) => [`s${i}`, st])),
+})
+
 // Root defaults. `build()` supplies name/epilog/left/right on top of these.
 export const BASE = () => ({
   folder: 'closed',
-  anim: { alg: 'none', speed: 16, fuse: 'sync', 'hide inputs': false, spin: 0 },
+  // Every group the viewer's panel builds has to be here, because a staged
+  // scene is pushed with `{replace: true}` and that deletes the viewer's own
+  // defaults rather than merging onto them. `diag` in particular is easy to
+  // forget: nothing on this side reads it, and its absence surfaced as
+  // "cannot read properties of undefined (reading 'folder')" from lil-gui.
+  diag: { url: '', folder: 'closed' },
+  anim: {
+    alg: 'none', speed: 16, fuse: 'sync', 'hide inputs': false, spin: 0,
+    stage: 0, 'play stages': false,
+  },
   block: { 'i blocks': 1, 'k blocks': 1, 'j blocks': 1 },
   layout: {
     scheme: 'blocks', gap: 24, scatter: 0, molecule: 1, blast: 0,
@@ -102,10 +173,16 @@ export const BASE = () => ({
   deco: {
     legends: 6, shape: true, spotlight: 4, 'row guides': 0.1, 'flow guides': 0,
     'lens size': 0.5, magnification: 12, 'interior spotlight': false, axes: false,
+    grid: 0, 'grid spacing i': 8, 'grid spacing j': 8, 'grid spacing k': 8,
   },
+  // Written out rather than left to gui.ts's `||=` fallbacks: those run when
+  // the panel is built, which is after the first scene. A view that means to
+  // draw as heatmap has to say so before anything is constructed.
   viz: {
     sensitivity: 'local', 'min size': 0.05, 'min light': 0.2, 'max light': 0.9,
     'elem scale': 2, 'zero hue': 0.75, 'hue gap': 0.75, 'hue spread': 0.03,
+    'render mode': 'auto', 'heatmap encoding': 'magnitude',
+    'heatmap filter': 'nearest', 'lod reduce': 'maxAbs', 'texel budget': 0,
   },
   cam: { x: -400, y: 400, z: 400 },
 })
@@ -151,6 +228,20 @@ export function merge(dst: any, src: any, path = '') {
 // understates the attention-head views, where `attn` alone is n×n, and the
 // QK/OV view, where the two premultiplied factors are 768×768 each.
 export function countPoints(p) {
+  if (p.op === 'stack') {
+    const parts = Object.values(p.stages).map(countPoints)
+    const last = parts[parts.length - 1]
+    return { h: last.h, w: last.w, n: parts.reduce((n, x) => n + x.n, 0) }
+  }
+  if (p.op === 'unary') {
+    // the input's whole subtree, plus the materialized result
+    const i = countPoints(p.input)
+    return { h: i.h, w: i.w, n: i.n + i.h * i.w }
+  }
+  if (p.op === 'add') {
+    const l = countPoints(p.left), r = countPoints(p.right)
+    return { h: l.h, w: l.w, n: l.n + r.n + l.h * l.w }
+  }
   if (!p.left) return { h: p.h, w: p.w, n: p.h * p.w }
   const l = countPoints(p.left), r = countPoints(p.right)
   return { h: l.h, w: r.w, n: l.n + r.n + l.h * r.w }
@@ -164,12 +255,58 @@ export function countPoints(p) {
 // the rule that decides the camera distance, and a wrong camera is the failure
 // nobody notices: the scene still draws, just framed uselessly. At module scope
 // they can be asserted against a hand-computed tree.
-export const height = p => p.left ? height(p.left) : p.h
-export const width = p => p.left ? width(p.right) : p.w
+export const height = p =>
+  p.op === 'stack' ? bbox(p).h :
+    p.op === 'unary' ? height(p.input) :
+      p.op === 'add' ? height(p.left) :
+        p.left ? height(p.left) : p.h
 
-export function bbox(p) {
-  if (!p.left) return { h: p.h, w: p.w, d: 0 }
-  const child = (p.left.left ? bbox(p.left).d : 0) + (p.right.left ? bbox(p.right).d : 0)
+export const width = p =>
+  p.op === 'stack' ? bbox(p).w :
+    p.op === 'unary' ? width(p.input) :
+      p.op === 'add' ? width(p.right) :
+        p.left ? width(p.right) : p.w
+
+// The extents `Stack.layoutStages` and `OpNode.layoutRow` actually produce,
+// approximated the way the matmul case already is (gaps ignored). A wrong
+// camera on a 37-stage scene draws fine and frames nothing, so these have to
+// follow the layout rather than the arithmetic.
+const rowOf = (parts, margin = 0) => ({
+  h: Math.max(...parts.map(b => b.h)),
+  w: parts.reduce((n, b) => n + b.w + margin, -margin),
+  d: Math.max(...parts.map(b => b.d)),
+})
+
+export function bbox(p, gap = (p.layout && p.layout.gap) || 0) {
+  // The matmul cases ignore `gap`, as they always have — a matmul's own extent
+  // dwarfs it. The staged cases cannot: `Stack.layoutStages` puts a `gap * 4`
+  // margin between rows and every stage extent carries `2 * gap` of its own, so
+  // for a 7-row model scene of 30-token matrices the gaps are most of the
+  // height. Ignoring them underestimated the scene by 6x on that axis, and the
+  // camera distance derived from it framed a fifth of the model.
+  const pad = 2 * gap, margin = 4 * gap
+  if (p.op === 'stack') {
+    // stages laid out left to right within a row, rows stacked downwards
+    const rows: any = {}
+    Object.values(p.stages).forEach((st: any) => (rows[st.row || 0] ||= []).push(bbox(st, gap)))
+    const laid = Object.keys(rows).map(k => rowOf(rows[k], margin))
+    return {
+      h: laid.reduce((n, r) => n + r.h + margin, -margin),
+      w: Math.max(...laid.map(r => r.w)),
+      d: Math.max(...laid.map(r => r.d)),
+    }
+  }
+  if (p.op === 'unary') {
+    const i = bbox(p.input, gap)
+    return rowOf([i, { h: height(p.input) + pad, w: width(p.input) + pad, d: 0 }], margin)
+  }
+  if (p.op === 'add') {
+    const [l, r] = [bbox(p.left, gap), bbox(p.right, gap)]
+    return rowOf([l, r, { h: l.h, w: l.w, d: 0 }], margin)
+  }
+  if (!p.left) return { h: p.h + pad, w: p.w + pad, d: 0 }
+  const child = (p.left.left || p.left.op ? bbox(p.left, gap).d : 0) +
+    (p.right.left || p.right.op ? bbox(p.right, gap).d : 0)
   return { h: height(p.left), w: width(p.right), d: width(p.left) + child }
 }
 
@@ -255,6 +392,52 @@ export function productClaim(view: any) {
       `<span class="dim">— what is drawn is the value GPT-2 computes here</span>`)
 }
 
+// `render:` — what the *renderer* did to the numbers on their way to pixels.
+//
+// The third claim, and it earns its place for the same reason the other two do:
+// a heatmap at LOD 2 is showing one maxAbs per 4x4 block of the matrix, and a
+// bar that printed "exact" over the leaf data while that was on screen would be
+// telling the truth about the wrong thing. `summary` is measured by the viewer
+// after it builds -- never predicted here, because the LOD ladder is bounded by
+// the viewer's viewport and this side does not know it.
+//
+// The exact/sampled/approximate rule applied to pixels: visual fidelity is not
+// numerical fidelity, and the hover readout still prints the checkpoint's own
+// FP32 value whatever the texel says.
+// Spheres past this many elements are drawn but will not be smooth: it is one
+// instanced quad -- four vertices -- per element, so this is ~8M vertices a
+// frame. Said rather than prevented: an explicit override is the user's call.
+const SPHERE_WARN = 2_000_000
+
+export function renderClaim(summary) {
+  if (!summary) return ''
+  const spheres = summary.elements
+    ? `<span class="${summary.elements > SPHERE_WARN ? 'sampled' : 'dim'}">` +
+      `${summary.elements.toLocaleString()} elements as spheres` +
+      `${summary.elements > SPHERE_WARN ? ' — 4 vertices each, expect a slow frame' : ''}</span>`
+    : ''
+  if (!summary.heatmaps) {
+    return `<span class="exact">spheres</span> <span class="dim">— one shaded ` +
+      `sphere per element across ${summary.mats} ` +
+      `${summary.mats == 1 ? 'matrix' : 'matrices'}</span>` +
+      (spheres ? `<span class="dim"> · </span>` + spheres : '')
+  }
+  const enc = summary.encoding === 'signed' ? 'signed (hue by sign)'
+    : summary.encoding === 'mixed' ? 'mixed encodings'
+      : 'magnitude |x|'
+  const where = `<span class="dim">${summary.heatmaps}/${summary.mats} as heatmap, ` +
+    `${summary.texels.toLocaleString()} texels, ${enc}</span>` +
+    (spheres ? `<span class="dim"> · </span>` + spheres : '')
+  return (summary.lod > 1
+    ? `<span class="sampled">LOD ${Math.log2(summary.lod)}</span> ` +
+      `<span class="dim">— one texel per ${summary.lod}×${summary.lod} cells by ` +
+      `${summary.reducer}, so the picture is not exact even where the data is; ` +
+      `hover still reads the checkpoint's own value</span>`
+    : `<span class="exact">LOD 0</span> <span class="dim">— one texel per element, ` +
+      `quantized to 8 bits for display only</span>`) +
+    `<span class="dim"> · </span>` + where
+}
+
 // Every matmul in the tree must contract over a shared extent. mm does not
 // check: `tryURLInit` wraps out-of-range indices, so a left operand 769 wide
 // against a right operand 768 tall is *tiled* into a plausible, wrong picture
@@ -262,6 +445,27 @@ export function productClaim(view: any) {
 // two sides of a matmul now grow together, and augmenting one and not the
 // other is a one-character mistake — so the tree is checked before it is sent.
 export function checkShapes(p, path = 'root') {
+  if (p.op === 'stack') {
+    const shapes = Object.entries(p.stages)
+      .map(([k, st]) => checkShapes(st, `${path}.${k} ('${(st as any).name}')`))
+    return shapes[shapes.length - 1]
+  }
+  if (p.op === 'unary') {
+    // pointwise and row-wise stages preserve shape by construction
+    return checkShapes(p.input, path + '.input')
+  }
+  if (p.op === 'add') {
+    const l = checkShapes(p.left, path + '.left')
+    const r = checkShapes(p.right, path + '.right')
+    if (l.h !== r.h || l.w !== r.w) {
+      throw new Error(
+        `${path} ('${p.name}') adds '${p.left.name}' ${l.h}×${l.w} to ` +
+        `'${p.right.name}' ${r.h}×${r.w}: an elementwise sum needs one shape. ` +
+        `A strided residual stream has to be strided with the projection whose ` +
+        `output it is added to.`)
+    }
+    return l
+  }
   if (!p.left) return { h: p.h, w: p.w }
   const l = checkShapes(p.left, path + '.left')
   const r = checkShapes(p.right, path + '.right')
@@ -301,10 +505,19 @@ const CHROME = `
   <select id="stride"></select>
   <label for="anim">Animate</label>
   <select id="anim"></select>
+  <label for="render">Render</label>
+  <select id="render"></select>
   <a href="#" id="tensors_link">tensors</a>
   <a href="#" id="popout_link">open&#x2197;</a>
 </div>
 <div id="status">loading…</div>
+<div id="timeline" class="hidden">
+  <button id="tl_prev" title="previous stage">&#x25C0;</button>
+  <button id="tl_play" title="play / pause">&#x25B6;</button>
+  <button id="tl_next" title="next stage">&#x25B6;&#x25B6;</button>
+  <input type="range" id="tl_scrub" min="0" max="0" value="0" step="1" />
+  <span id="tl_label" class="dim"></span>
+</div>
 <iframe id="mm" src="about:blank"></iframe>
 <div id="tensors"></div>
 `
@@ -342,6 +555,8 @@ const status = html => { $('status').innerHTML = html }
 // view:
 //   kinds   ['ln_1:w', 'wq:h', …] — `kind[:flags]`; t=transpose, r/c=stride
 //           axis, w/h=augment with a bias column/row (see gpt2/index.html)
+//   layers  true to fetch specs for *every* layer and hand `build` an array
+//           indexed by layer, for a view that draws the whole model at once
 //   stride  default stride for this view
 //   seq     default token count for this view (optional)
 //   head    whether the head selector applies
@@ -373,6 +588,12 @@ export async function mount(config: any) {
   let current_view = null
   let mm_ready = false
 
+  // A staged scene is far too big to travel as `?params=` on the iframe URL --
+  // distilgpt2's is tens of thousands of nodes -- so it is pushed over the
+  // message protocol once the blank viewer has loaded.
+  let pending_params = null
+  let stage_state = null
+
   const anims = () => views[$('view').value].anims || default_anims
 
   const state = () => ({
@@ -383,6 +604,7 @@ export async function mount(config: any) {
     stride: +$('stride').value,
     seq: +$('seq').value,
     anim: $('anim').value,
+    render: $('render').value,
     dims: META.dims,
   })
 
@@ -393,31 +615,55 @@ export async function mount(config: any) {
     const view = views[s.view]
 
     // stride only reaches matrices whose flags asked for it
-    const q = new URLSearchParams({
-      layer: String(s.layer), head: String(s.head), stride: String(s.stride),
+    const qs = layer => new URLSearchParams({
+      layer: String(layer), head: String(s.head), stride: String(s.stride),
       text: s.prompt, seq: String(s.seq), kinds: view.kinds.join(','),
     })
 
-    let specs: Record<string, any>, n_tokens: number, toks: string[]
+    // A whole-model view needs every layer's shapes, and specs.json answers for
+    // one layer at a time. Same rule as everywhere else: the shapes come from
+    // the server, one request per layer, never from a literal.
+    const layers = view.layers ? META.dims.n_layer : 1
+    let specs: Record<string, any>, by_layer: Record<string, any>[]
+    let n_tokens: number, toks: string[]
     try {
-      const [sp, tk] = await Promise.all([
-        getJSON('/api/specs.json?' + q),
+      const [sps, tk] = await Promise.all([
+        Promise.all(Array.from({ length: layers }, (_, l) =>
+          getJSON('/api/specs.json?' + qs(view.layers ? l : s.layer)))),
         getJSON('/api/tokens.json?seq=' + s.seq + '&text=' + encodeURIComponent(s.prompt)),
       ])
-      specs = sp.specs; n_tokens = sp.n_tokens; toks = tk.tokens
+      by_layer = sps.map(r => r.specs)
+      // Every layer carries the same kinds at the same shapes, so the status
+      // bar's claims are the same for all of them; merging is only so the
+      // claim functions see one entry per kind rather than six identical ones.
+      specs = Object.assign({}, ...by_layer)
+      n_tokens = sps[0].n_tokens; toks = tk.tokens
     } catch (e) {
       status(`<span class="err">${esc(e.message)}</span>`)
       return
     }
 
-    // refuse up front rather than let mm coerce a 501 body into NaN
-    const missing = Object.entries(specs).filter(([, v]) => v.available === false)
-    if (missing.length) {
-      status(`<span class="err">${esc(missing[0][1].reason)}</span>`)
-      return
+    // refuse up front rather than let mm coerce a 501 body into NaN. Scanned
+    // per layer, not over the merge: a merge would let an available layer 0
+    // hide an unavailable layer 3.
+    for (const [l, sp] of by_layer.entries()) {
+      const missing = Object.entries(sp).filter(([, v]: any) => v.available === false)
+      if (missing.length) {
+        status(`<span class="err">${esc((missing[0][1] as any).reason)}` +
+          `${view.layers ? ` (layer ${l})` : ''}</span>`)
+        return
+      }
     }
 
-    const params = Object.assign(BASE(), view.build(specs, s))
+    const params = Object.assign(BASE(), view.build(view.layers ? by_layer : specs, s))
+
+    // The render path, chosen here rather than only in the viewer's own panel:
+    // it is a property of the picture, so it belongs beside the other choices
+    // that decide what the picture is. 'auto' is the default and is the only
+    // one that varies per matrix (see pickRenderMode); 'spheres' and 'heatmap'
+    // apply to every matrix in the tree, including a staged model scene, which
+    // would otherwise force heatmap on everything and make this control a lie.
+    params.viz['render mode'] = s.render
 
     // refuse a tree mm would tile rather than reject
     try {
@@ -442,10 +688,17 @@ export async function mount(config: any) {
     const bb = bbox(params)
     const d = Math.round((bb.h + bb.w + bb.d) / 2)
     params.cam = { x: -d, y: d, z: d }
+    // For a staged scene this is a starting point, not the final answer: the
+    // viewer re-fits the camera to the world box of what it actually built
+    // (`frameStagedScene` in main.ts), because a stack's content does not
+    // straddle the origin the way a single matmul's does. This still has to be
+    // right to within an order of magnitude — it is what the viewer's near/far
+    // planes and its first frame are sized against.
 
     history.replaceState({}, '', '?' + new URLSearchParams({
       view: s.view, layer: String(s.layer), head: String(s.head),
-      stride: String(s.stride), seq: String(s.seq), anim: s.anim, prompt: s.prompt,
+      stride: String(s.stride), seq: String(s.seq), anim: s.anim,
+      render: s.render, prompt: s.prompt,
     }))
 
     // a different view is a different tree shape, so merging props onto the
@@ -453,16 +706,36 @@ export async function mount(config: any) {
     if (reload || s.view !== current_view || !mm_ready) {
       current_view = s.view
       mm_ready = false
-      $('mm').src = viewer + '?params=' + encodeURIComponent(JSON.stringify(params))
+      stage_state = null
+      if (params.op) {
+        // Staged scene: load the viewer bare and hand it the tree over the
+        // protocol. `replace` (not a merge) because the default tree it comes
+        // up with is a matmul and this one is not the same shape.
+        pending_params = params
+        $('mm').src = viewer
+      } else {
+        pending_params = null
+        $('mm').src = viewer + '?params=' + encodeURIComponent(JSON.stringify(params))
+      }
+    } else if (params.op) {
+      $('mm').contentWindow.postMessage(
+        { setParams: { props: params, reset: false, replace: true } }, '*')
     } else {
       const { cam, ...rest } = params            // keep the user's camera
       $('mm').contentWindow.postMessage({ setParams: { props: rest, reset: false } }, '*')
     }
 
+    $('timeline').classList.toggle('hidden', !params.op)
     showStatus(s, view, specs, toks, n_tokens, params)
   }
 
+  // The last status render's inputs, so the bar can be redrawn when the viewer
+  // reports back what it built without refetching anything.
+  let last_status = null
+  let render_summary = null
+
   function showStatus(s, view, specs: Record<string, any>, toks, n_tokens, params) {
+    last_status = [s, view, specs, toks, n_tokens, params]
     const entries = Object.entries(specs)
     const points = countPoints(params).n
 
@@ -480,9 +753,13 @@ export async function mount(config: any) {
         `<span class="dim">${n_tokens} tokens</span></div>` +
       `<div style="flex-basis:100%"><span class="expr">${esc(view.note(s))}</span></div>` +
       `<div>${shapes}</div>` +
-      `<div class="dim">${points.toLocaleString()} points</div>` +
+      `<div class="dim">${points.toLocaleString()} drawn matrix elements</div>` +
       `<div style="flex-basis:100%"><span class="dim">data:</span> ${data}</div>` +
-      `<div style="flex-basis:100%"><span class="dim">product:</span> ${product}</div>`
+      `<div style="flex-basis:100%"><span class="dim">product:</span> ${product}</div>` +
+      (render_summary
+        ? `<div style="flex-basis:100%"><span class="dim">render:</span> ` +
+          `${renderClaim(render_summary)}</div>`
+        : '')
     )
   }
 
@@ -541,6 +818,8 @@ export async function mount(config: any) {
   Object.keys(views).forEach(k => option($('view'), k))
   fillRange($('layer'), META.dims.n_layer)
   fillRange($('head'), META.dims.n_head)
+  RENDER_MODES.forEach(m => option($('render'), m,
+    m === 'auto' ? 'auto (by size)' : m))
   strides.forEach(n => option($('stride'), String(n), n == 1 ? '1 (exact)' : String(n)))
   seqs.forEach(n => option($('seq'), String(n)))
   $('seq').value = String(config.seq || 64)
@@ -555,7 +834,67 @@ export async function mount(config: any) {
     $('view_label').classList.add('hidden')
   }
 
+  // `load` is too early to *talk* to the viewer -- main.ts has a top-level
+  // await, so its message listener is installed after this fires -- but it is
+  // the right moment to know the frame exists. The push waits for the viewer's
+  // own `ready`.
   $('mm').addEventListener('load', () => { mm_ready = $('mm').src != 'about:blank' })
+
+  const flushPending = () => {
+    if (!pending_params) return
+    $('mm').contentWindow.postMessage(
+      { setParams: { props: pending_params, reset: true, replace: true } }, '*')
+    pending_params = null
+  }
+
+  // -- stage timeline ------------------------------------------------------
+  //
+  // The chrome lives here and the scene lives in the viewer, which is the split
+  // the header comment argues for. What crosses is two small messages: this
+  // side says which stage, that side says what it built.
+
+  const sendStage = (patch) =>
+    mm_ready && $('mm').contentWindow.postMessage({ setStage: patch }, '*')
+
+  window.addEventListener('message', e => {
+    if (e.data && e.data.ready) { mm_ready = true; flushPending() }
+    if (e.data && e.data.render) {
+      render_summary = e.data.render
+      if (last_status) showStatus.apply(null, last_status)
+    }
+    if (!e.data || !e.data.stages) return
+    stage_state = e.data.stages
+    const { list, active, playing, summary } = stage_state
+    $('tl_scrub').max = String(Math.max(0, list.length - 1))
+    $('tl_scrub').value = String(active)
+    $('tl_play').textContent = playing ? '\u23F8' : '\u25B6'
+    const st = list[active] || { name: '?', kind: '?', note: '' }
+    // Names what is on screen *and* what it is: a stage drawn one maxAbs per
+    // 16x16 block is not exact, and the bar must not let it read as though it
+    // were.
+    const lod = summary && summary.lod > 1
+      ? ` · <span class="sampled">LOD ${Math.log2(summary.lod)}</span>` +
+        ` <span class="dim">— 1 texel per ${summary.lod}×${summary.lod} cells` +
+        ` by ${summary.reducer}, not exact</span>`
+      : ' · <span class="dim">LOD 0 — one texel per element</span>'
+    const enc = summary && summary.heatmaps
+      ? ` · <span class="dim">${summary.encoding === 'signed' ? 'signed' :
+          summary.encoding === 'mixed' ? 'mixed encodings' : 'magnitude |x|'} ramp,` +
+        ` ${summary.texels.toLocaleString()} texels over ${summary.heatmaps}/${summary.mats}` +
+        ` matrices</span>`
+      : ''
+    $('tl_label').innerHTML =
+      `stage ${active + 1}/${list.length}: <b>${esc(st.name)}</b>` +
+      `<span class="dim"> (${esc(st.kind)})</span>` +
+      (st.note ? ` <span class="dim">— ${esc(st.note)}</span>` : '') + enc + lod
+  })
+
+  $('tl_scrub').addEventListener('input', () =>
+    sendStage({ index: +$('tl_scrub').value, playing: false }))
+  $('tl_prev').addEventListener('click', () => sendStage({ step: -1, playing: false }))
+  $('tl_next').addEventListener('click', () => sendStage({ step: 1, playing: false }))
+  $('tl_play').addEventListener('click', () =>
+    sendStage({ playing: !(stage_state && stage_state.playing) }))
 
   const applyViewDefaults = () => {
     const v = views[$('view').value]
@@ -576,6 +915,9 @@ export async function mount(config: any) {
 
   $('view').addEventListener('change', () => { applyViewDefaults(); refresh(true) })
   $('prompt').addEventListener('change', () => refresh(false))
+  // A render-mode change rebuilds the scene from scratch: which path a matrix
+  // takes is decided when it is built, so this reloads rather than patching.
+  $('render').addEventListener('change', () => refresh(true))
   ;['layer', 'head', 'stride', 'seq', 'anim'].forEach(id =>
     $(id).addEventListener('change', () => refresh(false)))
   $('tensors_link').addEventListener('click', e => { e.preventDefault(); toggleTensors() })
@@ -587,7 +929,7 @@ export async function mount(config: any) {
   const qp = new URLSearchParams(location.search)
   if (qp.has('prompt')) $('prompt').value = qp.get('prompt')
   if (views[qp.get('view')]) { $('view').value = qp.get('view'); applyViewDefaults() }
-  for (const id of ['layer', 'head', 'stride', 'seq', 'anim']) {
+  for (const id of ['layer', 'head', 'stride', 'seq', 'anim', 'render']) {
     if (qp.has(id) && [...$(id).options].some(o => o.value == qp.get(id))) {
       $(id).value = qp.get(id)
     }

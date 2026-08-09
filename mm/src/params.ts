@@ -244,6 +244,13 @@ export function defaultParams(): Params {
       magnification: 7,
       'interior spotlight': false,
       axes: false,
+      // The 3D alignment lattice. 0 is off, which is the default: at model
+      // scale a line every element is a solid sheet, so the spacings below are
+      // what make it readable and they are per axis on purpose.
+      grid: 0,
+      'grid spacing i': 8,
+      'grid spacing j': 8,
+      'grid spacing k': 8,
       folder: 'closed',
     },
     viz: {
@@ -255,6 +262,13 @@ export function defaultParams(): Params {
       'zero hue': 0.356,
       'hue gap': 0.7,
       'hue spread': 0.04,
+      // Which element-render path a matrix gets, and what a heatmap texel
+      // means. See src/heatmap.ts for the thresholds behind 'auto'.
+      'render mode': 'auto',
+      'heatmap encoding': 'magnitude',
+      'heatmap filter': 'nearest',
+      'lod reduce': 'maxAbs',
+      'texel budget': 0,          // 0 = HEATMAP_TEXEL_BUDGET
       folder: 'open',
     },
     diag: {

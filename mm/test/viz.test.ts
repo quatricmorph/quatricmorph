@@ -291,3 +291,245 @@ describe('setElemSize', () => {
     expect(() => setElemSize({ x: 1, y: 1 }, 2)).not.toThrow()
   })
 })
+
+//
+// Node kinds beyond the matmul: the numerics, and the expression guard.
+//
+// These build real viz objects with `init_viz` off, which is the whole scene
+// graph minus the geometry — so the arithmetic is reachable with no GPU, no
+// camera and no network.
+//
+import {
+  UnaryOp, AddOp, Stack, buildOpNode, genExpr, syncExpr, treeHasOps, describeTree,
+  nodeHeight, nodeWidth, mergeVizSummaries, UNARY_FUNCS,
+} from '../src/viz.js'
+
+const ctx = () => ({ raycaster: null, camera: null, pointer: null })
+
+// A leaf whose values are i*w + j, so every assertion below is hand-checkable.
+const lf = (name, h, w, init = 'row major') => ({
+  name, matmul: false, h, w, init, url: '', expr: '', min: 0, max: 1, dropout: 0,
+})
+// 'expr' initializers are evaluated, so this gives exact known values.
+const ex = (name, h, w, e) => ({ ...lf(name, h, w, 'expr'), expr: e })
+
+const OPTS = () => ({
+  epilog: 'none',
+  anim: { alg: 'none', speed: 16, fuse: 'none', 'hide inputs': false, spin: 0 },
+  block: { 'i blocks': 1, 'k blocks': 1, 'j blocks': 1 },
+  layout: {
+    scheme: 'blocks', gap: 2, scatter: 0, molecule: 1, blast: 0,
+    polarity: 'negative', 'left placement': 'left',
+    'right placement': 'top', 'result placement': 'front',
+  },
+  deco: { legends: 0, shape: false, spotlight: 0, 'row guides': 0, 'flow guides': 0, grid: 0 },
+  viz: {
+    sensitivity: 'local', 'min size': 0.05, 'min light': 0.2, 'max light': 0.9,
+    'elem scale': 2, 'zero hue': 0.75, 'hue gap': 0.75, 'hue spread': 0.03,
+    'render mode': 'spheres', 'heatmap encoding': 'magnitude',
+    'heatmap filter': 'nearest', 'lod reduce': 'maxAbs', 'texel budget': 0,
+  },
+})
+
+describe('UnaryOp', () => {
+  it('materializes f(input) as a second matrix and leaves the input alone', () => {
+    // The difference from an in-place epilog, which is the point of the kind:
+    // `applyInPlaceEpilog_` mutates the parent's result buffer, so the
+    // pre-epilog matrix stops existing. Here both are on screen.
+    const p = { ...OPTS(), name: 'g', op: 'unary', fn: 'relu', input: ex('x', 2, 2, 'i*2+j-2') }
+    const u = new UnaryOp(p, ctx(), false)
+    // x = [[-2, -1], [0, 1]]  ->  relu = [[0, 0], [0, 1]]
+    expect(Array.from(u.input.getDataArray())).toEqual([-2, -1, 0, 1])
+    expect(Array.from(u.getDataArray())).toEqual([0, 0, 0, 1])
+  })
+
+  it('applies a row-wise stage, not just a pointwise one', () => {
+    // softmax(tril(x)) over [[0,0],[0,0]]: row 0 is [1, 0] (masked), row 1 is
+    // [0.5, 0.5]. Hand-computed, same as the in-place epilog's own test above.
+    const p = { ...OPTS(), name: 's', op: 'unary', fn: 'softmax(tril(x))', input: ex('x', 2, 2, '0') }
+    const u = new UnaryOp(p, ctx(), false)
+    const d = Array.from(u.getDataArray()) as number[]
+    close(d[0], 1); expect(d[1]).toBe(0); close(d[2], 0.5); close(d[3], 0.5)
+  })
+
+  it('refuses an unknown stage function rather than drawing zeros', () => {
+    const p = { ...OPTS(), name: 'g', op: 'unary', fn: 'nope', input: lf('x', 2, 2) }
+    expect(() => new UnaryOp(p, ctx(), false)).toThrow(/unknown unary stage function 'nope'/)
+    expect(UNARY_FUNCS).toContain('gelu')
+    expect(UNARY_FUNCS).toContain('softmax(tril(x))')
+  })
+
+  it('takes its shape from its input', () => {
+    const p = { name: 'g', op: 'unary', fn: 'relu', input: lf('x', 3, 5) }
+    expect([nodeHeight(p), nodeWidth(p)]).toEqual([3, 5])
+  })
+})
+
+describe('AddOp', () => {
+  it('sums elementwise — and is never a matmul', () => {
+    const p = {
+      ...OPTS(), name: 'x + y', op: 'add',
+      left: ex('x', 2, 3, 'i*3+j'), right: ex('y', 2, 3, '10'),
+    }
+    const a = new AddOp(p, ctx(), false)
+    expect(Array.from(a.getDataArray())).toEqual([10, 11, 12, 13, 14, 15])
+    // three drawn matrices, not two operands folded into a product
+    expect(a.childNodes()).toHaveLength(3)
+    expect(a.H).toBe(2)
+    expect(a.W).toBe(3)
+  })
+
+  it('refuses mismatched operands instead of tiling the shorter one', () => {
+    const p = { ...OPTS(), name: 'a', op: 'add', left: lf('x', 2, 3), right: lf('y', 2, 4) }
+    expect(() => new AddOp(p, ctx(), false)).toThrow(/elementwise sum needs one shape/)
+  })
+})
+
+describe('Stack', () => {
+  const stackParams = () => ({
+    ...OPTS(), name: 'model', op: 'stack',
+    stages: {
+      s0: { ...OPTS(), name: 'p', matmul: true, left: lf('a', 2, 3), right: lf('b', 3, 2) },
+      s1: { ...OPTS(), name: 'g', op: 'unary', fn: 'relu', input: ex('x', 2, 2, 'i*2+j-2') },
+      s2: { ...OPTS(), name: 's', op: 'add', left: ex('u', 2, 2, '1'), right: ex('v', 2, 2, '2') },
+    },
+  })
+
+  it('keeps its stages in forward-pass order and names their kinds', () => {
+    const st = new Stack(stackParams(), ctx(), false)
+    expect(st.stageList().map(s => `${s.name}:${s.kind}`)).toEqual(['p:matmul', 'g:unary', 's:add'])
+  })
+
+  it('computes nothing of its own — its data is the last stage\'s', () => {
+    const st = new Stack(stackParams(), ctx(), false)
+    expect(Array.from(st.getDataArray())).toEqual([3, 3, 3, 3])
+  })
+
+  it('divides the scene texel budget among its stages', () => {
+    // C3's rule, made a number: adding a stage lowers every other stage's
+    // resolution rather than growing the upload.
+    const st = new Stack(stackParams(), ctx(), false)
+    const b3 = st.stageBudget()
+    const more = stackParams()
+    for (let i = 3; i < 30; i++) more.stages[`s${i}`] = { ...OPTS(), ...lf(`m${i}`, 2, 2), matmul: false }
+    expect(new Stack(more, ctx(), false).stageBudget()).toBeLessThan(b3)
+  })
+
+  it('gives every stage a heatmap under auto, and the active one the sphere path', () => {
+    // C3's budget rule: full-resolution texels and spheres are spent on the
+    // active stage only. It is what `auto` does, not an invariant of the kind.
+    const p: any = stackParams()
+    p.viz = { ...p.viz, 'render mode': 'auto' }
+    const st = new Stack(p, ctx(), false)
+    expect(st.stageRenderMode(false)).toBe('heatmap')
+    expect(st.stageRenderMode(true)).toBe('auto')
+  })
+
+  it('honours an explicit render mode on every stage, active or not', () => {
+    // Without this the model view forces heatmap everywhere and the Render
+    // control silently does nothing — the exact failure "no method may
+    // silently no-op" is about, one level up.
+    for (const want of ['spheres', 'heatmap']) {
+      const p: any = stackParams()
+      p.viz = { ...p.viz, 'render mode': want }
+      const st = new Stack(p, ctx(), false)
+      expect(st.stageRenderMode(false)).toBe(want)
+      expect(st.stageRenderMode(true)).toBe(want)
+    }
+  })
+
+  it('refuses an empty stack rather than drawing an empty scene', () => {
+    expect(() => new Stack({ ...OPTS(), name: 'm', op: 'stack', stages: {} }, ctx(), false))
+      .toThrow(/no stages/)
+  })
+
+  it('is built by buildOpNode, which is what main.js dispatches on', () => {
+    expect(buildOpNode(stackParams(), ctx(), false)).toBeInstanceOf(Stack)
+    expect(() => buildOpNode({ op: 'nope' }, ctx(), false)).toThrow(/unknown node op/)
+  })
+})
+
+describe('the expression grammar refuses what it cannot spell', () => {
+  // The landmine C1 names. `parseExpr` maps '@' and nothing else, and
+  // `genExpr`/`syncExpr` round-trip a tree back into that notation. Handed a
+  // tree with an `add` in it they would print `x @ y` where an add is drawn —
+  // a matmul claimed for something that is not one. Both refuse instead.
+  const addTree = () => ({
+    name: 'x + y', op: 'add', left: lf('x', 2, 2), right: lf('y', 2, 2),
+  })
+  const matmulTree = () => ({
+    name: 'p', left: lf('a', 2, 3), right: lf('b', 3, 2), expr: '',
+  })
+
+  it('still round-trips an ordinary matmul tree', () => {
+    expect(genExpr(matmulTree())).toBe('p = a @ b')
+    expect(treeHasOps(matmulTree())).toBe(false)
+  })
+
+  it('never prints an @ for a tree containing an add', () => {
+    const e = genExpr(addTree())
+    expect(e).not.toContain('@')
+    expect(e).toContain('not an expression')
+    expect(e).toContain('1 add')
+  })
+
+  it('never prints an @ for a matmul tree with an add buried inside it', () => {
+    // The dangerous shape: `left`/`right` are both present, so nothing about
+    // the node's *structure* says it is not a matmul.
+    const buried = { name: 'p', left: addTree(), right: lf('b', 2, 2), expr: '' }
+    expect(treeHasOps(buried)).toBe(true)
+    expect(genExpr(buried)).not.toContain('@')
+  })
+
+  it('describes a stack rather than pretending to spell it', () => {
+    const st = {
+      name: 'model', op: 'stack',
+      stages: { s0: matmulTree(), s1: addTree() },
+    }
+    const d = describeTree(st)
+    expect(d).toContain('2 stages')
+    expect(d).toContain('1 add')
+    expect(d).not.toContain('@')
+  })
+
+  it('syncExpr refuses rather than rebuilding the tree as matmuls', () => {
+    // childParams() rebuilds every node as a matmul or a leaf, so parsing over
+    // this tree would silently turn the add into a matmul.
+    const p: any = { ...addTree(), expr: 'x @ y' }
+    expect(syncExpr(p)).toBe(false)
+    expect(p.op).toBe('add')        // untouched
+    expect(p.left.name).toBe('x')
+  })
+
+  it('syncExpr still works on a tree it can spell', () => {
+    const p: any = { ...matmulTree(), expr: 'c @ d', layout: { scheme: 'blocks' } }
+    expect(syncExpr(p)).toBe(true)
+    expect(p.left.name).toBe('c')
+  })
+})
+
+describe('mergeVizSummaries', () => {
+  const s = (o = {}) => ({
+    absmin: 0, absmax: 1, mats: 1, encoding: 'magnitude', reducer: 'maxAbs',
+    lod: 1, texels: 10, elements: 0, heatmaps: 1, ...o,
+  })
+
+  it('reports the coarsest level anything on screen is at, never the average', () => {
+    // What a viewer needs to know is whether *anything* is reduced.
+    expect(mergeVizSummaries([s(), s({ lod: 8 }), s()]).lod).toBe(8)
+  })
+
+  it('says "mixed" rather than picking one encoding and implying it holds', () => {
+    expect(mergeVizSummaries([s(), s({ encoding: 'signed' })]).encoding).toBe('mixed')
+    expect(mergeVizSummaries([s(), s()]).encoding).toBe('magnitude')
+  })
+
+  it('leaves the encoding null when nothing is a heatmap at all', () => {
+    expect(mergeVizSummaries([s({ encoding: null }), s({ encoding: null })]).encoding).toBe(null)
+  })
+
+  it('adds up the counts and widens the range', () => {
+    const m = mergeVizSummaries([s({ absmax: 3 }), s({ absmin: -1, texels: 5, heatmaps: 0 })])
+    expect([m.absmin, m.absmax, m.mats, m.texels, m.heatmaps]).toEqual([-1, 3, 2, 15, 1])
+  })
+})

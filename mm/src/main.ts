@@ -8,6 +8,7 @@ import * as viz from './viz.js'
 import * as util from './util.js'
 import * as gui from './gui.js'
 import { defaultParams, type Params } from './params.js'
+import { colormapHex, elementHSL, indexValue } from './colormap.js'
 
 // The element material's magnifier uniform. points.ts hangs `.uniforms` on the
 // NodeMaterial as a deliberate alias for this one call site -- NodeMaterial
@@ -34,6 +35,73 @@ function resetParams() {
 
 function updateTitle() {
   document.getElementById('info').innerHTML = viz.genExpr(params)
+  updateColorbar()
+}
+
+//
+// The heatmap colorbar.
+//
+// The ramp, with the *live* range of what is on screen at each end, the active
+// encoding named, and the mip level called out when it is not 0. All four are
+// claims about what the picture means and none of them is safe to leave
+// implicit: |x| and signed are different pictures of the same matrix, and a
+// heatmap showing one maxAbs per 16x16 block is not exact and must not read as
+// though it were.
+//
+const fmt = x => !isFinite(x) ? String(x)
+  : x === 0 ? '0'
+    : Math.abs(x) >= 1e4 || Math.abs(x) < 1e-3 ? x.toExponential(2) : x.toPrecision(4)
+
+function updateColorbar() {
+  const el = document.getElementById('colorbar')
+  if (!el || !obj) return
+  const s = obj.getVizSummary()
+  if (!s.heatmaps) {
+    el.style.display = 'none'
+    return
+  }
+  el.style.display = 'block'
+
+  // The gradient is sampled through the same functions that fill the shader's
+  // lookup -- *including the encoding*, which is the part that is easy to get
+  // wrong. 'signed' does not use the seven-stop ramp at all: it fills the LUT
+  // from elementHSL, mm's hue-by-sign encoding. Drawing the sequential ramp
+  // there would put a legend on screen describing colours nothing is using,
+  // and no test could catch it, because the test and the legend would be
+  // calling the same (wrong) function.
+  const signed = s.encoding === 'signed'
+  const swatch = (t: number) => {
+    if (!signed) return colormapHex(t)
+    const x = indexValue(Math.round(t * 255), 'signed', s.absmin, s.absmax)
+    const hsl = elementHSL(x, { absmin: s.absmin, absmax: s.absmax, absdiff: s.absmax - s.absmin },
+      params.viz)
+    if (!hsl) return '#000000'
+    const c = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+    return '#' + [c.r, c.g, c.b]
+      .map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+  }
+  // more samples for 'signed': its lightness ramp is a sqrt and its hue jumps
+  // at zero, neither of which a 12-step gradient reproduces
+  const n = signed ? 48 : 12
+  const stops = Array.from({ length: n + 1 }, (_, k) =>
+    `${swatch(k / n)} ${(k / n * 100).toFixed(1)}%`).join(', ')
+  ;(el.querySelector('.ramp') as HTMLElement).style.background =
+    `linear-gradient(to right, ${stops})`
+  ;(el.querySelector('.lo') as HTMLElement).textContent =
+    signed ? fmt(-s.absmax) : fmt(s.absmin)
+  ;(el.querySelector('.hi') as HTMLElement).textContent = fmt(s.absmax)
+
+  const enc = s.encoding === 'signed' ? 'signed'
+    : s.encoding === 'mixed' ? 'mixed encodings'
+      : 'magnitude |x|'
+  const lod = s.lod > 1
+    ? ` · <span class="reduced">LOD ${Math.log2(s.lod)} — 1 texel per ` +
+      `${s.lod}×${s.lod} cells by ${s.reducer}, not exact</span>`
+    : ' · LOD 0 — one texel per element'
+  ;(el.querySelector('.what') as HTMLElement).innerHTML =
+    `${enc} · ${params.viz.sensitivity} range · ` +
+    `${s.heatmaps}/${s.mats} matrices as heatmap · ` +
+    `${s.texels.toLocaleString()} texels${lod}`
 }
 
 const url_info = { json: '', url: urlPrefix(), compressed: '', search_params: '' }
@@ -43,6 +111,17 @@ function urlPrefix() {
 }
 
 function saveUrlInfo() {
+  // A staged model scene is tens of thousands of nodes. Serializing it on every
+  // camera move would push a multi-hundred-kilobyte history entry per frame, so
+  // the URL says what the scene is instead of trying to be it. The page that
+  // built the tree is the thing that can rebuild it, and it keeps its own deep
+  // link; `open↗` on a model view therefore lands on the page, not the viewer.
+  if (params.op) {
+    url_info.json = `{"op":"${params.op}","name":${JSON.stringify(params.name)}}`
+    url_info.url = url_info.compressed = urlPrefix()
+    url_info.search_params = ''
+    return
+  }
   url_info.json = JSON.stringify(params)
   const prefix = urlPrefix()
   let search_params = util.makeSearchParams(params)
@@ -72,6 +151,19 @@ let obj
 
 const getObj = () => obj
 
+// Set while initFromParams is driving, to suppress the zoom-preserving rescale
+// below. A module flag rather than an argument to initObj because gui.ts passes
+// initObj itself as an onChange handler, so it is routinely called with the
+// changed *value* as its first argument -- a `rescale = true` parameter would
+// silently take the slider's value as its answer.
+let applying_params = false
+
+// Whether the next initObj should fit the camera to what it built. Decided in
+// initFromParams and *before* orbit.update(), because that dispatches a change
+// event whose handler writes a `target` into params.cam -- so by the time
+// initObj runs, "the caller supplied no target" is no longer answerable.
+let frame_staged = false
+
 function initObj() {
 
   let oldmag
@@ -82,11 +174,22 @@ function initObj() {
     obj.disposeAll()
   }
 
-  obj = new viz.MatMul(params, getContext())
+  // A root carrying `op` is one of the non-matmul node kinds -- today a
+  // `stack`, the whole-model staged scene. It presents the same surface the
+  // rest of this file drives (group, center, setLegends, initAnimation, bump).
+  obj = params.op ?
+    viz.buildOpNode(params, getContext(), true) :
+    new viz.MatMul(params, getContext())
   obj.group.rotation.x = Math.PI
   obj.center()
 
-  if (oldmag) {
+  // Only when the scene changed *underneath* a camera the user placed -- a
+  // shape edit in the panel, say. initFromParams has just set the camera from
+  // params for this exact scene, and rescaling that by how much bigger the new
+  // scene is than the old one multiplies a correct camera by a large number:
+  // swapping the viewer's small default scene for the 25-stage model pushed it
+  // 21.4x further out, past the 10,000 far plane, and drew a black frame.
+  if (oldmag && !applying_params) {
     const newsz = util.bbhwd(obj.getBoundingBox())
     const newmag = newsz.h + newsz.w + newsz.d
     const ratio = newmag / oldmag
@@ -99,10 +202,83 @@ function initObj() {
   }
 
   obj.setLegends()
-  obj.initAnimation()
+  if (obj.stages) {
+    // The page owns the timeline chrome, so it needs the stage list and every
+    // change of active stage. See the protocol note above RESPONDERS.
+    obj.onStageChange = (i, playing) => postStages(i, playing)
+    // Parked, not playing: a 25-stage scene that starts walking on load has
+    // moved on before anyone has read the first stage.
+    obj.playing = params.anim['play stages'] === true
+    obj.setStage(params.anim.stage | 0)
+  } else {
+    obj.initAnimation()
+  }
   scene.add(obj.group)
+  frameStagedScene()
 
   updateTitle()
+  postRender()
+}
+
+/**
+ * Aim the camera at a staged scene's actual pixels.
+ *
+ * Every other view is framed by the page, which derives a distance from its own
+ * approximate bbox and leaves `orbit.target` at the origin. That works because
+ * a matmul is one box near the origin. A stack is seven rows of stages spread
+ * over thousands of units, and `center()`'s translation happens *after* the
+ * group's x-rotation, so the drawn content does not straddle the origin -- the
+ * scene ends up off screen even at the right distance.
+ *
+ * So this measures the world box of what was actually built and fits the camera
+ * to it. Deliberately only for `op` roots and only when the caller did not
+ * supply its own target: every existing view keeps the framing it has.
+ */
+function frameStagedScene() {
+  if (!frame_staged) return
+  frame_staged = false
+  obj.group.updateMatrixWorld(true)
+  const box = new THREE.Box3().setFromObject(obj.group)
+  if (box.isEmpty()) return
+  const centre = box.getCenter(new THREE.Vector3())
+  const radius = box.getBoundingSphere(new THREE.Sphere()).radius
+  // Fit the sphere in the narrower of the two half-angles, with a little air.
+  const vfov = THREE.MathUtils.degToRad(camera.fov)
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect)
+  const dist = 1.15 * radius / Math.sin(Math.min(vfov, hfov) / 2)
+  const dir = new THREE.Vector3(-1, 1, 1).normalize()
+  camera.position.copy(centre).addScaledVector(dir, dist)
+  camera.far = Math.max(camera.far, dist + 2 * radius)
+  camera.updateProjectionMatrix()
+  util.updateProps(orbit.target, centre)
+  orbit.update()
+}
+
+// -- stage timeline --------------------------------------------------------
+
+function postStages(active = undefined, playing = undefined) {
+  if (!obj || !obj.stages || window.parent === window) return
+  params.anim.stage = active === undefined ? obj.active : active
+  params.anim['play stages'] = playing === undefined ? obj.playing : playing
+  window.parent.postMessage({
+    stages: {
+      list: obj.stageList(),
+      active: params.anim.stage,
+      playing: params.anim['play stages'],
+      summary: obj.getVizSummary(),
+    }
+  }, '*')
+  updateColorbar()
+}
+
+// What the renderer actually built, for every view and not only staged ones.
+// The page cannot work this out for itself: the LOD ladder is bounded by the
+// *viewer's* viewport, which the page does not know, so a claim computed on
+// that side would be optimistic about how much resolution is on screen. This
+// is measured, after the fact, from the objects that exist.
+function postRender() {
+  if (!obj || window.parent === window) return
+  window.parent.postMessage({ render: obj.getVizSummary() }, '*')
 }
 
 //
@@ -166,6 +342,12 @@ function getContext() {
     raycaster: raycaster,
     camera: camera,
     pointer: pointer,
+    // The heatmap LOD ladder's screen bound. The viewport's larger dimension
+    // in physical pixels is a real upper bound on how many texels any single
+    // matrix could show, and unlike a live projected footprint it does not
+    // change as the camera moves -- so the ladder does not churn 512 KB
+    // uploads on every orbit. See chooseLodFactor in heatmap.ts.
+    screenPx: Math.max(window.innerWidth, window.innerHeight) * window.devicePixelRatio,
   }
 }
 
@@ -265,14 +447,20 @@ orbit.addEventListener('end', () => {
 
 function initFromParams(save = true) {
   save && saveUrlInfo()
+  frame_staged = !!params.op && !(params.cam && params.cam.target)
   camera.position.set(params.cam.x, params.cam.y, params.cam.z)
   params.cam.target && util.updateProps(orbit.target, params.cam.target)
   orbit.update()
   initAxes(params.deco.axes)
-  initObj()
+  applying_params = true
+  try {
+    initObj()
+  } finally {
+    applying_params = false
+  }
 
   // gui setup happens here but probably shouldn't
-  const callbacks = { initObj, getObj, saveUrl, updateTitle, animPause, animStep }
+  const callbacks = { initObj, getObj, saveUrl, updateTitle, animPause, animStep, initAxes }
   const info = { url_info, render_info }
   gui.initGui(params, callbacks, info)
 }
@@ -417,9 +605,17 @@ const RESPONDERS = {
     // console.log(`HEY getParams called`)
     event.source.postMessage({ params }, event.origin)
   },
-  setParams: ({ props = {} as Params, reset = false }) => {
-    console.log(`HEY setParams called props ${JSON.stringify(props)} reset ${reset}`)
+  // Replace the whole params object rather than merging onto it. A tree of a
+  // different *shape* -- a stack where there was a matmul -- leaves stale
+  // `left`/`right` nodes behind under a merge, and mm would go on drawing them.
+  // The page uses this instead of `?params=` for the model view, whose tree is
+  // far too big to be a URL.
+  setParams: ({ props = {} as Params, reset = false, replace = false }) => {
+    console.log(`HEY setParams called reset ${reset} replace ${replace}`)
     reset && resetParams()
+    if (replace) {
+      Object.keys(params).forEach(k => delete params[k])
+    }
 
     if (props.sync_expr) {
       params.expr = props.expr
@@ -432,7 +628,28 @@ const RESPONDERS = {
       viz.setLayoutScheme(params)
     }
     initFromParams()
-  }
+  },
+
+  // Stage control for a `stack` root. Deliberately *not* routed through
+  // setParams: that rebuilds the whole scene, and a scrubbing timeline cannot
+  // be driven a rebuild at a time.
+  setStage: ({ index = undefined, playing = undefined, step = 0 }) => {
+    if (!obj || !obj.stages) return
+    if (playing !== undefined) obj.playing = !!playing
+    const target = index === undefined ? obj.active + step : index
+    obj.setStage(target, obj.playing)
+  },
+
+  getStages: (_, event) => {
+    if (obj && obj.stages) {
+      event.source.postMessage({
+        stages: {
+          list: obj.stageList(), active: obj.active,
+          playing: obj.playing, summary: obj.getVizSummary(),
+        }
+      }, event.origin)
+    }
+  },
 }
 
 window.addEventListener('message', event => {
@@ -494,10 +711,14 @@ let last_render = 0, last_anim = 0
 
 function animate() {
   const t = performance.now()
-  if (params.anim.alg != 'none' &&
+  // A staged scene keeps ticking while it is playing even with the algorithm
+  // set to 'none': the thing being animated then is the *timeline*, not any one
+  // matmul, and the stage driver dwells on each stage rather than sweeping it.
+  const anim_live = params.anim.alg != 'none' || (obj.stages && obj.playing)
+  if (anim_live &&
     (anim_step || !anim_pause) &&
     (t - last_render) > (1000 / params.anim.speed)) {
-    obj.bump()
+    obj.bump && obj.bump()
     last_render = t
     anim_step = false
   }
@@ -621,3 +842,16 @@ if (document.readyState === 'complete') {
 
 initFromSearchParams()
 animate()
+
+// Announce readiness to an embedding page.
+//
+// The iframe's `load` event is not a safe moment to post to this window: this
+// module has a top-level `await renderer.init()`, and a module with top-level
+// await finishes *after* `load` fires. A page that pushed its scene on `load`
+// would post into a window whose message listener did not exist yet, and the
+// message would be dropped with nothing to say so -- which is exactly what the
+// staged model view did before this line existed, coming up with the viewer's
+// own default scene instead.
+if (window.parent !== window) {
+  window.parent.postMessage({ ready: true }, '*')
+}

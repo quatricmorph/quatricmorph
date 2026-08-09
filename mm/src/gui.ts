@@ -7,7 +7,7 @@ import * as util from './util.js'
 let gui // global! we manage reinitialization, disposal etc.
 
 export function initGui(params, callbacks, info) {
-  const { initObj, getObj, saveUrl, updateTitle, animPause, animStep } = callbacks
+  const { initObj, getObj, saveUrl, updateTitle, animPause, animStep, initAxes } = callbacks
   const { url_info, render_info } = info
 
   function set(k, v, f = initObj, param_path = p => p, obj_path = o => o) {
@@ -60,6 +60,13 @@ export function initGui(params, callbacks, info) {
   }
 
   function addFolder(parent, name, p) {
+    if (!p) {
+      // Reachable since `setParams {replace: true}` arrived: replace deletes
+      // every key, so a page that omits a group the panel builds leaves this
+      // undefined. Say which group rather than "cannot read 'folder'".
+      throw new Error(`gui: params has no '${name}' group; a params object sent ` +
+        `with {replace: true} must carry every group the panel builds`)
+    }
     const child = parent.addFolder(name).open(p.folder == 'open')
     child.onOpenClose(g => {
       if (g === child) {
@@ -280,7 +287,9 @@ export function initGui(params, callbacks, info) {
     // layout
     const gui_layout = addFolder(g, 'layout', p.layout)
     if (is_root) {
-      addNumParam(gui_layout, 'gap', 1, 64, initObj, p => p.layout)
+      // 0, not 1. Heatmap mode is only "a normal heatmap" when neighbouring
+      // texels touch, and `gap` is what separates them.
+      addNumParam(gui_layout, 'gap', 0, 64, initObj, p => p.layout)
       addNumParam(gui_layout, 'scatter', 0, 128, initObj, p => p.layout)
       addIntParam(gui_layout, 'molecule', 1, 8, initObj, p => p.layout)
       addNumParam(gui_layout, 'blast', -2.0, 2.0, initObj, p => p.layout)
@@ -297,6 +306,40 @@ export function initGui(params, callbacks, info) {
       addChoiceParam(gui_layout, 'right placement', viz.RIGHT_PLACEMENTS, initObj, p => path(p).layout, path)
       addChoiceParam(gui_layout, 'result placement', viz.RESULT_PLACEMENTS, initObj, p => path(p).layout, path)
     }
+  }
+
+  // addStackParams
+  //
+  // A `stack` root has no left, no right and no expression, so none of
+  // addMatmulParams applies to it. What it does have is an ordered stage list
+  // and one active stage, which is what this panel drives. The page's own
+  // timeline chrome drives the same thing over the message protocol; this is
+  // here so the viewer is still usable on its own (the `open↗` link).
+
+  function addStackParams(g) {
+    const stages = () => (getObj().stageList ? getObj().stageList() : [])
+    // Read-only: describeTree(), not an expression. There is no '@' that means
+    // "add", so there is nothing here to edit.
+    g.add({ scene: viz.genExpr(params) }, 'scene').disable()
+
+    const gui_anim = addFolder(g, 'animation', params.anim)
+    addChoiceParam(gui_anim, 'alg', viz.TOP_LEVEL_ANIM_ALGS, initObj, p => p.anim)
+    addIntParam(gui_anim, 'speed', 1, 100, _ => { }, p => p.anim)
+    params.anim.stage ||= 0
+    addIntParam(gui_anim, 'stage', 0, Math.max(0, stages().length - 1),
+      x => getObj().setStage(Math.floor(x)), p => p.anim).listen()
+    params.anim['play stages'] ??= false
+    addParam(gui_anim, 'play stages', x => getObj().setStage(getObj().active, x), p => p.anim)
+    gui_anim.add({ next: () => getObj().setStage(getObj().active + 1, false) }, 'next')
+    gui_anim.add({ prev: () => getObj().setStage(getObj().active - 1, false) }, 'prev')
+    gui_anim.add({ pause: false }, 'pause').onChange(x => animPause(x))
+    gui_anim.add({ step: animStep }, 'step')
+    addParam(gui_anim, 'hide inputs', x => getObj().hideInputs(x), p => p.anim)
+    params.anim.spin ||= 0
+    addNumParam(gui_anim, 'spin', -10, 10, x => { }, p => p.anim)
+
+    const gui_layout = addFolder(g, 'layout', params.layout)
+    addNumParam(gui_layout, 'gap', 0, 64, initObj, p => p.layout)
   }
 
   // expr eval
@@ -328,20 +371,42 @@ export function initGui(params, callbacks, info) {
   params.deco.shape ||= false // temp BC
   params.deco['lens size'] ||= 0.25 // temp BC
   params.deco.magnification ||= 5 // temp BC
+  params.deco.grid ??= 0 // temp BC
+  params.deco['grid spacing i'] ||= 8 // temp BC
+  params.deco['grid spacing j'] ||= 8 // temp BC
+  params.deco['grid spacing k'] ||= 8 // temp BC
   function addDecoParams(g) {
     const gui_deco = addFolder(g, 'deco', params.deco)
     addNumParam(gui_deco, 'legends', 0, 10, x => getObj().setLegends(x), p => p.deco)
     addParam(gui_deco, 'shape', x => getObj().setLegends(undefined, x), p => p.deco)
     addNumParam(gui_deco, 'row guides', 0.0, 1.0, x => getObj().setRowGuides(x), p => p.deco)
     addNumParam(gui_deco, 'flow guides', 0.0, 1.0, x => getObj().setFlowGuide(x), p => p.deco)
+    // The alignment lattice. Brightness first, then one spacing per axis --
+    // see the note on gridSpacing in viz.ts for why they are not one knob.
+    // Spacing changes rebuild the lattice, which setAlignGrid only does when
+    // the brightness changed, so these go through initObj.
+    addNumParam(gui_deco, 'grid', 0.0, 1.0, x => getObj().setAlignGrid(x), p => p.deco)
+    addIntParam(gui_deco, 'grid spacing i', 1, 256, initObj, p => p.deco)
+    addIntParam(gui_deco, 'grid spacing j', 1, 256, initObj, p => p.deco)
+    addIntParam(gui_deco, 'grid spacing k', 1, 256, initObj, p => p.deco)
     addIntParam(gui_deco, 'spotlight', 0, 10, x => getObj().updateLabels(params), p => p.deco)
     addNumParam(gui_deco, 'lens size', 0.0, 1.0, x => { }, p => p.deco)
     addNumParam(gui_deco, 'magnification', 1, 25, x => { }, p => p.deco)
     addParam(gui_deco, 'interior spotlight', x => getObj().updateLabels(params), p => p.deco)
-    // addParam(gui_deco, 'axes', x => initAxes(getObj().params.axes = x), p => p.deco)
+    // Live again. It was commented out because `initAxes` lives in main.ts and
+    // was never in scope here; it now arrives through `callbacks` like every
+    // other cross-module handler. (The old body also wrote
+    // `getObj().params.axes`, which is not where this param lives -- `set()`
+    // has already written params.deco.axes by the time the handler runs.)
+    addParam(gui_deco, 'axes', x => initAxes(x), p => p.deco)
   }
 
   params.viz['elem scale'] ||= 1.25 // temp BC
+  params.viz['render mode'] ||= 'auto' // temp BC
+  params.viz['heatmap encoding'] ||= 'magnitude' // temp BC
+  params.viz['heatmap filter'] ||= 'nearest' // temp BC
+  params.viz['lod reduce'] ||= 'maxAbs' // temp BC
+  params.viz['texel budget'] ??= 0 // temp BC
   function addVizParams(g) {
     const gui_viz = addFolder(g, 'colors and sizes', params.viz)
     addChoiceParam(gui_viz, 'sensitivity', viz.SENSITIVITIES, initObj, p => p.viz)
@@ -352,6 +417,14 @@ export function initGui(params, callbacks, info) {
     addNumParam(gui_viz, 'zero hue', 0.0, 1.0, initObj, p => p.viz)
     addNumParam(gui_viz, 'hue gap', 0.0, 1.0, initObj, p => p.viz)
     addNumParam(gui_viz, 'hue spread', 0.0, 1.0, initObj, p => p.viz)
+    // Heatmap mode. All five rebuild the scene: the render path, the texture
+    // encoding, the filter and the mip ladder are all decided when a Mat is
+    // built, and a knob that changed a label without changing the picture
+    // would be worse than no knob.
+    addChoiceParam(gui_viz, 'render mode', viz.RENDER_MODES, initObj, p => p.viz)
+    addChoiceParam(gui_viz, 'heatmap encoding', viz.HEATMAP_ENCODINGS, initObj, p => p.viz)
+    addChoiceParam(gui_viz, 'heatmap filter', ['nearest', 'linear'], initObj, p => p.viz)
+    addChoiceParam(gui_viz, 'lod reduce', viz.HEATMAP_REDUCERS, initObj, p => p.viz)
   }
 
   function addDiagParams(g) {
@@ -377,7 +450,7 @@ export function initGui(params, callbacks, info) {
     }
   })
 
-  addMatmulParams(gui)
+  params.op ? addStackParams(gui) : addMatmulParams(gui)
   addDecoParams(gui)
   addVizParams(gui)
   addDiagParams(gui)

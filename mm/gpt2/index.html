@@ -18,17 +18,23 @@
     // indices (`data[i % data.length]`) and would silently tile a mis-shaped
     // matrix instead of failing.
     //
-    import { mount, root, inner, node, leaf, L } from '../src/gpt2page.ts'
+    import { mount, root, inner, node, leaf, L, unary, add, stack } from '../src/gpt2page.ts'
 
     //
     // views
     //
-    // mm's expression grammar is matmul-only (viz.js parseExpr maps '@' and
-    // nothing else), so GPT-2's two residual additions cannot be drawn as part
-    // of the graph. They live in the data instead: the server runs the real
-    // forward pass and each `input` leaf below is the actual residual-stream
-    // state at that point, for the prompt you type. Every layer and every head
-    // is reachable; what you cannot get is all 6 blocks fused into one scene.
+    // This comment used to say that GPT-2's two residual additions could not be
+    // drawn as part of the graph, because mm's expression grammar is matmul
+    // only. That named the obstacle slightly wrong. `parseExpr` *is* matmul
+    // only — but these pages never call it; they build the params tree
+    // directly. What was missing was node kinds, and viz.ts now has three:
+    // `unary` (a pointwise or row-wise stage materialized as its own matrix),
+    // `add` (an elementwise sum, never a matmul), and `stack` (an ordered list
+    // of stages in one scene). The 'whole model' view below uses all three.
+    //
+    // The per-layer views are unchanged and still the way to look at one step
+    // closely. Their `input` leaves are still the real residual-stream state at
+    // that point, from the server's own forward pass.
     //
     // `kinds` entries are `kind[:flags]` — t=transpose, r/c = apply stride to
     // rows/cols. Stride is only ever applied to an axis that is NOT contracted
@@ -55,7 +61,129 @@
     //   `gap`   what the drawn product still is not, or null if there is nothing
     //
 
+    //
+    // The whole model, staged.
+    //
+    // Four stages per transformer block, laid out one block per row so the
+    // residual stream reads as a spine down the left and each block expands
+    // rightwards through attention and then the MLP, plus the logits stage:
+    //
+    //   head[l]   softmax(tril(QKᵀ/√d)) @ V   for one head — the softmax is
+    //             drawn as its own matrix beside the scores it came from,
+    //             which is what a `unary` stage is for
+    //   x + attn  resid[l] + heads @ c_proj   — an `add`, not a matmul
+    //   mlp[l]    gelu(ln_2 @ c_fc)           — another `unary`
+    //   x + mlp   resid_mid[l] + h @ c_proj   — the second `add`
+    //
+    // Three things about this view that are claims, not decoration:
+    //
+    // **Heads.** Every stage is the concatenated all-heads form except the
+    // attention scores and softmax, which have no concatenated form — GPT-2
+    // softmaxes each head separately. Those two are drawn for the head the
+    // selector names. Changing it rebuilds the whole scene, as changing the
+    // prompt or the token count does.
+    //
+    // **Stride.** The unsampled weights here are 42.5M elements per forward
+    // pass plus 38.6M for the tied-wte logits, and `tryLoadData` fetches each
+    // leaf with a synchronous XHR. So the three big projections are column
+    // strided, which the status bar prints as `sampled`. Stride is only ever
+    // applied to an axis a matmul does not contract, so every product drawn is
+    // a true product of the columns it shows — never a partial sum. The
+    // residual leaves are strided with the projection they are added to, or the
+    // add would be over two different column sets; `checkShapes` refuses that.
+    //
+    // **Stages are not chained.** Each stage's inputs are the server's own
+    // forward-pass activations at that point, not the previous stage's drawn
+    // output. That is what makes each one exactly what GPT-2 computes there
+    // rather than an accumulation of everything drawn before it — and it is why
+    // `resid_mid` had to be added to the server: the second add's left operand
+    // is the residual stream between the two adds, and there was no honest way
+    // to get it otherwise.
+    //
+    const block = (m, s, l) => [
+      // attention, for one head. Q and Kᵀ carry c_attn.bias by augmentation,
+      // and attn contracts over head_dim, so mm's sqrt(k) is the right scale.
+      {
+        ...inner(`head [${l}]`,
+          unary('softmax(tril(·))', 'softmax(tril(x))',
+            inner(`QKᵀ/√d`,
+              node('Q', 'ln_1(x)|1', m['ln_1:w'], 'wQ;bq', m['wq:h'],
+                'none', L('positive', 'left', 'bottom', 'back')),
+              node('Kᵀ', 'wK_tᵀ|bk', m['wk_t:w'], 'ln_1(x)ᵀ;1', m['ln_1:th'],
+                'none', L('positive', 'right', 'top', 'back')),
+              'x/sqrt(k)', L('negative', 'left', 'top', 'front'))),
+          node('V', 'ln_1(x)|1', m['ln_1:w'], 'wV;bv', m['wv:h'],
+            'none', L('negative', 'right', 'top', 'back'))),
+        row: l,
+        note: `layer ${l} head ${s.head}: scores, then softmax(tril(·)) as its own matrix, then @ V`,
+      },
+      // the first residual add. `heads` is every head concatenated, which is
+      // the one matmul attn.c_proj.bias is genuinely a term of.
+      {
+        ...add(`x + attn [${l}]`,
+          leaf('resid(x)', m['resid:c']),
+          inner('heads @ c_proj',
+            leaf('heads|1', m['attn_out:w']), leaf('c_proj;b', m['attn_c_proj:ch']))),
+        row: l,
+        note: `layer ${l}: residual stream + attention output`,
+      },
+      // MLP up, with GELU materialized rather than folded into the matmul
+      {
+        ...unary(`gelu(h) [${l}]`, 'gelu',
+          inner('ln_2 @ c_fc',
+            leaf('ln_2(x)|1', m['ln_2:w']), leaf('c_fc;b', m['c_fc:ch']))),
+        row: l,
+        note: `layer ${l}: ${s.dims.n_embd} → ${4 * s.dims.n_embd}, then GELU as its own matrix`,
+      },
+      // the second residual add
+      {
+        ...add(`x + mlp [${l}]`,
+          leaf('resid_mid(x)', m['resid_mid:c']),
+          inner('h @ c_proj',
+            leaf('gelu(h)|1', m['mlp_h:w']), leaf('c_proj;b', m['mlp_c_proj:ch']))),
+        row: l,
+        note: `layer ${l}: residual stream + MLP output`,
+      },
+    ]
+
     const VIEWS = {
+      'whole model (staged)': {
+        kinds: [
+          'ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'resid:c',
+          'attn_out:w', 'attn_c_proj:ch', 'ln_2:w', 'c_fc:ch',
+          'mlp_h:w', 'mlp_c_proj:ch', 'resid_mid:c', 'final', 'wte_t:r',
+        ],
+        layers: true,
+        // One stride for every kind in the view, deliberately: `dataClaim`
+        // prints a single figure ("every 32nd column"), and a view whose
+        // matrices were sampled at two different rates would make that claim
+        // false for half of them. 32 is the largest that still leaves the
+        // residual stream 24 columns wide to look at; see the note above for
+        // why it is the fetch, not the texel budget, that sets it.
+        stride: 32, head: true, seq: 64,
+        bias: 'c_attn.bias, attn.c_proj.bias, mlp.c_fc.bias and mlp.c_proj.bias',
+        gap: 'the attention scores and softmax are one head of '
+          + 'n_head; every other stage is the concatenated all-heads form. '
+          + 'GELU is drawn in its erf form where GPT-2 trained the tanh form '
+          + '(~1e-5 relative). Stages take their inputs from the server’s own '
+          + 'forward pass rather than from the previous drawn stage, so each is '
+          + 'exactly what GPT-2 computes there and the chain between them is not '
+          + 'itself drawn',
+        note: s => `all ${s.dims.n_layer} blocks in one scene · 4 stages per block `
+          + `+ logits · attention shown for head ${s.head} of ${s.dims.n_head}`,
+        build: (m, s) => stack('distilgpt2', [
+          ...Array.from({ length: s.dims.n_layer }, (_, l) => block(m[l], s, l)).flat(),
+          {
+            ...inner('logits',
+              leaf('ln_f(x)', m[0]['final']), leaf('wteᵀ', m[0]['wte_t:r'])),
+            row: s.dims.n_layer,
+            note: `ln_f(x) against the tied embedding — `
+              + `${s.stride === 1 ? 'every' : `one in every ${s.stride}`} `
+              + `of ${s.dims.vocab_size} vocabulary rows`,
+          },
+        ]),
+      },
+
       'attention head': {
         kinds: ['ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'wo'],
         stride: 1, head: true,

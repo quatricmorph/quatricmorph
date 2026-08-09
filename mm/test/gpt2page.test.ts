@@ -15,8 +15,9 @@ import { describe, it, expect } from 'vitest'
 import {
   abs, esc, L, A, B, leaf, inner, node, root, BASE,
   countPoints, bbox, height, width, merge, mount,
-  dataClaim, productClaim, checkShapes,
+  dataClaim, productClaim, renderClaim, checkShapes,
 } from '../src/gpt2page.js'
+import { flatten, unflatten } from '../src/util.js'
 
 // Stand-ins for /api/specs.json entries.
 const spec = (h, w, url = '/api/m.csv') => ({ h, w, url })
@@ -375,5 +376,205 @@ describe('mount', () => {
     // mount() itself needs a live /gpt2 server and is exercised by loading a
     // page, not by this suite. Everything it composes is tested above.
     expect(typeof mount).toBe('function')
+  })
+})
+
+//
+// Node kinds beyond the matmul, and the whole-model tree they build.
+//
+// Same class of failure as everything else in this file: a tree that is
+// plausible but wrong. An add over two differently-sampled residual streams
+// contracts nothing, so mm would draw it happily and tile the shorter operand;
+// a stage list whose camera is computed from the old matmul-only bbox draws
+// fine and frames nothing.
+//
+import { unary, add, stack } from '../src/gpt2page.js'
+
+// A 64-token, 768-wide model at stride 16, shaped like the real one.
+const S = 16
+const M = {
+  'ln_1:w': sp(64, 769), 'ln_1:th': sp(769, 64), 'wq:h': sp(769, 64),
+  'wk_t:w': sp(64, 769), 'wv:h': sp(769, 64), 'resid:c': sp(64, 768 / S),
+  'attn_out:w': sp(64, 769), 'attn_c_proj:ch': sp(769, 768 / S),
+  'ln_2:w': sp(64, 769), 'c_fc:ch': sp(769, 3072 / S),
+  'mlp_h:w': sp(64, 3073), 'mlp_c_proj:ch': sp(3073, 768 / S),
+  'resid_mid:c': sp(64, 768 / S),
+}
+const headStage = (m = M) => inner('head',
+  unary('softmax', 'softmax(tril(x))',
+    inner('QKt',
+      node('Q', 'ln_1|1', m['ln_1:w'], 'wQ;b', m['wq:h']),
+      node('Kt', 'wK_t|b', m['wk_t:w'], 'ln_1t;1', m['ln_1:th']), 'x/sqrt(k)')),
+  node('V', 'ln_1|1', m['ln_1:w'], 'wV;b', m['wv:h']))
+const attnAdd = (m = M) => add('x + attn', leaf('resid', m['resid:c']),
+  inner('heads @ c_proj', leaf('heads|1', m['attn_out:w']), leaf('c_proj;b', m['attn_c_proj:ch'])))
+const mlpStage = (m = M) => unary('gelu(h)', 'gelu',
+  inner('ln_2 @ c_fc', leaf('ln_2|1', m['ln_2:w']), leaf('c_fc;b', m['c_fc:ch'])))
+const mlpAdd = (m = M) => add('x + mlp', leaf('resid_mid', m['resid_mid:c']),
+  inner('h @ c_proj', leaf('gelu|1', m['mlp_h:w']), leaf('c_proj;b', m['mlp_c_proj:ch'])))
+const modelTree = () => stack('distilgpt2', [0, 1].flatMap(l => [
+  { ...headStage(), row: l }, { ...attnAdd(), row: l },
+  { ...mlpStage(), row: l }, { ...mlpAdd(), row: l },
+]))
+
+describe('node builders', () => {
+  it('marks each kind so viz.js can tell them apart', () => {
+    expect(unary('s', 'gelu', leaf('x', sp(2, 3))).op).toBe('unary')
+    expect(add('a', leaf('x', sp(2, 3)), leaf('y', sp(2, 3))).op).toBe('add')
+    expect(stack('m', [leaf('x', sp(2, 3))]).op).toBe('stack')
+  })
+
+  it('keys stages rather than listing them, because copyTree cannot hold arrays', () => {
+    // util.copyTree round trips through flatten/unflatten, whose own comment
+    // says "no arrays". A stage array would silently lose the whole scene.
+    const st = stack('m', [leaf('a', sp(1, 1)), leaf('b', sp(1, 1))])
+    expect(Array.isArray(st.stages)).toBe(false)
+    expect(Object.keys(st.stages)).toEqual(['s0', 's1'])
+    // insertion order is forward-pass order, and it survives a round trip
+    const back = unflatten(flatten(st))
+    expect(Object.keys(back.stages)).toEqual(['s0', 's1'])
+    expect(back.stages.s0.name).toBe('a')
+  })
+})
+
+describe('checkShapes over the new node kinds', () => {
+  it('accepts the whole-model tree the page actually builds', () => {
+    expect(checkShapes(modelTree())).toEqual({ h: 64, w: 768 / S })
+  })
+
+  it('still refuses a mis-contracted matmul inside a stage', () => {
+    // The original hazard, now one level deeper: mm tiles rather than fails, so
+    // a stage list would hide a bad contraction behind 24 good ones.
+    const bad = { ...M, 'wq:h': sp(768, 64) }     // 768, not the augmented 769
+    expect(() => checkShapes(stack('m', [headStage(bad)])))
+      .toThrow(/contracts .*769.*768|768 ≠ 769|769 ≠ 768/)
+  })
+
+  it('refuses an add whose operands are sampled differently', () => {
+    // The live risk in a strided model view: the residual stream has to be
+    // strided with the projection it is added to. Off by one stride step and
+    // both operands are real matrices of the wrong columns.
+    const bad = { ...M, 'resid:c': sp(64, 768 / 32) }
+    expect(() => checkShapes(stack('m', [attnAdd(bad)])))
+      .toThrow(/elementwise sum needs one shape/)
+  })
+
+  it('refuses an add whose operands disagree in height', () => {
+    expect(() => checkShapes(add('a', leaf('x', sp(4, 8)), leaf('y', sp(5, 8)))))
+      .toThrow(/4×8.*5×8/)
+  })
+
+  it('names the stage as well as the node when a stage is wrong', () => {
+    const bad = { ...M, 'resid:c': sp(64, 1) }
+    expect(() => checkShapes(stack('m', [headStage(), attnAdd(bad)])))
+      .toThrow(/root\.s1 \('x \+ attn'\)/)
+  })
+})
+
+describe('countPoints and bbox over the new node kinds', () => {
+  it('counts a unary stage as its input plus the materialized result', () => {
+    // 4x6 @ 6x5 = 24 + 30 + 20 = 74 drawn elements, then gelu adds its own 4x5.
+    const u = unary('g', 'gelu', node('m', 'l', sp(4, 6), 'r', sp(6, 5)))
+    expect(countPoints(u)).toEqual({ h: 4, w: 5, n: 74 + 20 })
+  })
+
+  it('counts an add as both operands plus the sum', () => {
+    const a = add('a', leaf('x', sp(4, 5)), leaf('y', sp(4, 5)))
+    expect(countPoints(a)).toEqual({ h: 4, w: 5, n: 20 + 20 + 20 })
+  })
+
+  it('sums a stack over its stages and reports the last one\'s shape', () => {
+    const st = stack('m', [
+      leaf('a', sp(2, 3)),                                   // 6
+      add('b', leaf('x', sp(4, 5)), leaf('y', sp(4, 5))),    // 60
+    ])
+    expect(countPoints(st)).toEqual({ h: 4, w: 5, n: 66 })
+  })
+
+  it('measures the whole-model scene as rows of stages, not as one matmul', () => {
+    // A wrong camera here draws fine and frames nothing, so the bbox has to
+    // follow Stack.layoutStages: stages left to right within a row, rows down.
+    const bb = bbox(modelTree())
+    const one = bbox({ ...headStage(), row: 0 })
+    expect(bb.h).toBeGreaterThan(one.h)            // two rows, so taller
+    expect(bb.w).toBeGreaterThan(one.w)            // four stages wide
+    expect(bb.d).toBeGreaterThan(0)
+  })
+
+  it('gives the model scene a camera distance that is not the old matmul rule', () => {
+    // The old bbox would have thrown on `p.left` of a stack; this pins that the
+    // camera rule in mount() gets a finite, sane distance out of the new shape.
+    const bb = bbox(modelTree())
+    const d = Math.round((bb.h + bb.w + bb.d) / 2)
+    expect(Number.isFinite(d)).toBe(true)
+    expect(d).toBeGreaterThan(100)
+  })
+})
+
+describe('renderClaim', () => {
+  // The third claim. `data:` says what the numbers are, `product:` says what
+  // the matmul computes, and this says what the renderer did to them on the way
+  // to pixels — because a heatmap at LOD 2 is showing one maxAbs per 4x4 block
+  // and "exact" over the leaf data would be true about the wrong thing.
+  const sum = (o = {}) => ({
+    absmin: 0, absmax: 1, mats: 10, encoding: 'magnitude', reducer: 'maxAbs',
+    lod: 1, texels: 1000, elements: 0, heatmaps: 10, ...o,
+  })
+
+  it('says nothing at all before the viewer has reported back', () => {
+    expect(renderClaim(null)).toBe('')
+  })
+
+  it('calls the sphere path exact, because one element is one element', () => {
+    const c = renderClaim(sum({ heatmaps: 0, texels: 0, encoding: null, elements: 4096 }))
+    expect(c).toContain('exact')
+    expect(c).toContain('sphere')
+    expect(c).not.toContain('LOD')
+  })
+
+  it('prints what forcing spheres costs, rather than preventing it', () => {
+    // The Render control takes an override at its word, so the bar has to say
+    // what the override bought: one instanced quad per element, four vertices
+    // each. Below the threshold it is stated plainly, above it, marked.
+    const small = renderClaim(sum({ heatmaps: 0, texels: 0, encoding: null, elements: 4096 }))
+    expect(small).toContain('4,096 elements as spheres')
+    expect(small).not.toContain('slow frame')
+
+    const big = renderClaim(sum({ heatmaps: 0, texels: 0, encoding: null, elements: 6_122_373 }))
+    expect(big).toContain('6,122,373 elements as spheres')
+    expect(big).toContain('class="sampled"')
+    expect(big).toContain('slow frame')
+  })
+
+  it('reports both paths when a scene is mixed, which auto makes it', () => {
+    const c = renderClaim(sum({ heatmaps: 147, mats: 159, elements: 250_000 }))
+    expect(c).toContain('147/159 as heatmap')
+    expect(c).toContain('250,000 elements as spheres')
+  })
+
+  it('never lets a reduced heatmap print as exact', () => {
+    const c = renderClaim(sum({ lod: 4 }))
+    expect(c).toContain('class="sampled"')
+    expect(c).toContain('LOD 2')                  // log2(4)
+    expect(c).toContain('4×4')
+    expect(c).toContain('maxAbs')
+    expect(c).not.toContain('class="exact"')
+  })
+
+  it('says LOD 0 is exact-per-element, and says the quantization out loud', () => {
+    const c = renderClaim(sum())
+    expect(c).toContain('class="exact"')
+    expect(c).toContain('one texel per element')
+    expect(c).toContain('8 bits')                 // display only, never the readout
+  })
+
+  it('names the encoding, because |x| and signed are different pictures', () => {
+    expect(renderClaim(sum())).toContain('magnitude |x|')
+    expect(renderClaim(sum({ encoding: 'signed' }))).toContain('signed (hue by sign)')
+    expect(renderClaim(sum({ encoding: 'mixed' }))).toContain('mixed encodings')
+  })
+
+  it('promises the hover readout is still the checkpoint\'s own number', () => {
+    expect(renderClaim(sum({ lod: 2 }))).toContain("checkpoint's own value")
   })
 })

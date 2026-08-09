@@ -142,6 +142,69 @@ export function axes() {
   return group
 }
 
+/**
+ * A thin white wireframe lattice over an H x W x D box, so every element sits
+ * inside a visible cell.
+ *
+ * Built the way `rowGuide` is -- a Group of one-pixel `lineSeg`s -- and driven
+ * the same way, through `deco.grid` recursing down the tree. All three axes,
+ * because a matmul is drawn as three faces of an H x W x D box: a floor plane
+ * would line up with the result and with neither operand.
+ *
+ * `blocks` carries the same `{i, j}` (and optionally `k`) block info the
+ * elements are laid out from, so the lattice steps over `gap` exactly where
+ * `emptyPoints` does. Without that the lattice drifts one gap per block from
+ * the elements it is supposed to align, which reads as a rendering bug rather
+ * than as the off-by-a-gap it is.
+ *
+ * Note on thickness: `LineBasicMaterial.linewidth` is always 1px under WebGPU.
+ * Thin is what this can be, so thin is what it is -- no fat-line dependency.
+ */
+export function alignGrid(h, w, d, spacing, light = 1.0, blocks = undefined, gap = 0) {
+  const group = new THREE.Group()
+  if (!(light > 0)) {
+    return group
+  }
+  const color = new THREE.Color().setHSL(1.0, 0.0, light)
+
+  // Element (i, j) sits at j + floor(j/size)*gap along x, and likewise for i.
+  // `off` is that displacement, for whichever axis is asked for.
+  const off = (n, axis) => {
+    const b = blocks && blocks[axis]
+    return b && b.size > 0 ? n + Math.floor(n / b.size) * gap : n
+  }
+  const [si, sj, sk] = [
+    Math.max(1, Math.round(spacing.i)),
+    Math.max(1, Math.round(spacing.j)),
+    Math.max(1, Math.round(spacing.k)),
+  ]
+
+  // Inclusive ladders: the far face always gets a line, so the box closes even
+  // when the extent is not a multiple of the spacing.
+  const ladder = (n, s, axis) => {
+    const out = []
+    for (let x = 0; x < n; x += s) out.push(off(x, axis))
+    const last = off(n - 1, axis)
+    if (out[out.length - 1] !== last) out.push(last)
+    return out
+  }
+
+  const [xs, ys, zs] = [ladder(w, sj, 'j'), ladder(h, si, 'i'), ladder(d, sk, 'k')]
+  const [x0, x1] = [xs[0], xs[xs.length - 1]]
+  const [y0, y1] = [ys[0], ys[ys.length - 1]]
+  const [z0, z1] = [zs[0], zs[zs.length - 1]]
+  const seg = (ax, ay, az, bx, by, bz) =>
+    group.add(lineSeg(new THREE.Vector3(ax, ay, az), new THREE.Vector3(bx, by, bz), color))
+
+  // Three faces, matching the three faces a matmul is drawn on: the result
+  // plane at z0, and the two operand planes at x0 and y0.
+  ys.forEach(y => { seg(x0, y, z0, x1, y, z0); seg(x0, y, z0, x0, y, z1) })
+  xs.forEach(x => { seg(x, y0, z0, x, y1, z0); seg(x, y0, z0, x, y0, z1) })
+  zs.forEach(z => { seg(x0, y0, z, x1, y0, z); seg(x0, y0, z, x0, y1, z) })
+
+  return group
+}
+
 export function rowGuide(h, w, light = 1.0, denom = 8) {
   const group = new THREE.Group()
   const color = new THREE.Color()
@@ -349,6 +412,10 @@ export function copyTree(obj) {
 
 export function disposeAndClear(obj) {
   obj.geometry && obj.geometry.dispose()
+  // Textures are not reachable from `geometry`, and a heatmap matrix owns two
+  // of them (its value texture and its ramp lookup). Without this a scene
+  // rebuild -- which happens on every params change -- leaks the whole upload.
+  obj.isHeatmap && obj.dispose()
   obj.children && obj.children.map(disposeAndClear)
   obj.clear()
 }

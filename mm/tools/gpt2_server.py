@@ -385,7 +385,8 @@ class Activations:
         x = x + s.numpy("transformer.wpe.weight")[:n].astype(np.float32)
 
         mask = np.tril(np.ones((n, n), dtype=bool))
-        out = {"resid": {}, "ln_1": {}, "ln_2": {}, "attn_out": {}, "mlp_h": {}}
+        out = {"resid": {}, "resid_mid": {}, "ln_1": {}, "ln_2": {},
+               "attn_out": {}, "mlp_h": {}}
 
         for l in range(self.cfg["n_layer"]):
             p = f"transformer.h.{l}."
@@ -408,6 +409,13 @@ class Activations:
             attn = np.concatenate(heads, axis=-1)
             out["attn_out"][l] = attn.copy()
             x = x + attn @ s.numpy(p + "attn.c_proj.weight") + s.numpy(p + "attn.c_proj.bias")
+
+            # The residual stream *between* the two adds.  GPT-2 adds twice per
+            # block, and a staged view has to be able to draw the second add
+            # with its real left operand: without this the only honest way to
+            # get it would be to redraw the first add inside the second, and
+            # the only dishonest ways are worse.
+            out["resid_mid"][l] = x.copy()
 
             h2 = self._ln(x, s.numpy(p + "ln_2.weight"), s.numpy(p + "ln_2.bias"))
             out["ln_2"][l] = h2.copy()
@@ -472,7 +480,8 @@ WEIGHT_KINDS = {
 }
 
 # activation kind -> width in units of n_embd (mlp_h is the 4x GELU hidden state)
-ACT_KINDS = {"resid": 1, "ln_1": 1, "ln_2": 1, "attn_out": 1, "mlp_h": 4, "final": 1}
+ACT_KINDS = {"resid": 1, "resid_mid": 1, "ln_1": 1, "ln_2": 1, "attn_out": 1,
+             "mlp_h": 4, "final": 1}
 
 # weight kind -> the bias GPT-2 adds to that weight's product.  A Conv1D bias is
 # indexed by the weight's *output* axis, which is its column axis as stored, so

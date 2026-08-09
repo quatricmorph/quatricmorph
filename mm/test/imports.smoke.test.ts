@@ -31,6 +31,22 @@ describe('headless import of every src module', () => {
     expect(Array.isArray(viz.INITS)).toBe(true)
   })
 
+  it('imports colormap and heatmap, which are deliberately THREE-free', async () => {
+    // These two are pure arithmetic so a jsdom test can reach every decision
+    // the heatmap shader acts on. If either ever grows a THREE import, the
+    // page bundle grows with it and this stops being the reason they exist.
+    const colormap = await import('../src/colormap.js')
+    const heatmap = await import('../src/heatmap.js')
+    expect(colormap.COLORMAP_STOPS).toHaveLength(7)
+    expect(typeof heatmap.chooseLodFactor).toBe('function')
+  })
+
+  it('imports heatmapmesh, whose per-block TSL graphs build on construction', async () => {
+    const { HeatmapMesh } = await import('../src/heatmapmesh.js')
+    const info = { i: { n: 1, size: 2, max: 2 }, j: { n: 1, size: 2, max: 2 }, gap: 0 }
+    expect(new HeatmapMesh(2, 2, info, { lod: 1 }).blocks).toHaveLength(1)
+  })
+
   it('imports gpt2page, whose CSS import Vite has to resolve', async () => {
     const page = await import('../src/gpt2page.js')
     expect(typeof page.mount).toBe('function')

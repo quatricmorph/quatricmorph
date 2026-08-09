@@ -16,6 +16,25 @@ import { PointCloud } from './points.js'
 export { MATERIAL } from './points.js'
 
 //
+// The second element-render path: texture-backed heatmap.
+//
+// A Mat picks one of the two per matrix (see `pickRenderMode`). `elements`
+// is unchanged and stays the default for small matrices -- it is what the
+// magnifier lens and the spotlight labels are tuned against. `heatmap` is one
+// quad per block with the matrix as an RG8 texture, which is the only way a
+// 768x3072 weight is drawable at all: as instanced quads it is 2.4M elements
+// and ~9.4M vertices.
+//
+import { HeatmapMesh } from './heatmapmesh.js'
+import {
+  pickRenderMode, chooseLodFactor, lodSize,
+  HEATMAP_TEXEL_BUDGET, HEATMAP_SCENE_TEXEL_BUDGET,
+  TEXEL_HIDDEN, TEXEL_SHOWN, TEXEL_BUMPED, RENDER_MODES,
+} from './heatmap.js'
+import { colormapLUT, elementHSL, HEATMAP_ENCODINGS, HEATMAP_REDUCERS } from './colormap.js'
+export { RENDER_MODES, HEATMAP_ENCODINGS, HEATMAP_REDUCERS }
+
+//
 // initialization
 //
 
@@ -411,7 +430,20 @@ export function setElemSize(scale, pixel_ratio) {
 const ZERO_COLOR = new THREE.Color(0, 0, 0)
 const COLOR_TEMP = new THREE.Color()
 
-function emptyPoints(h, w, info) {
+// Per-axis lattice spacing. Independent knobs because one number does not read
+// well across a matmul: a 64 x 3072 weight wants a line every 8 rows and every
+// 128 columns, and a single spacing makes one of the two a solid sheet.
+const gridSpacing = deco => ({
+  i: deco['grid spacing i'] || 8,
+  j: deco['grid spacing j'] || 8,
+  k: deco['grid spacing k'] || 8,
+})
+
+// Exported so the heatmap path's texel placement can be asserted against the
+// element path's own attribute rather than against a restatement of this
+// arithmetic. A heatmap that silently transposes or flips is the failure
+// nobody notices; see test/points.test.ts.
+export function emptyPoints(h, w, info) {
   const { i: { size: si }, j: { size: sj }, gap } = info
   const n = h * w
   const points = new Float32Array(n * 3)
@@ -440,6 +472,9 @@ export class Mat {
   _extents: any
   absmax: any
   absmin: any
+  _global_absmax: any
+  _range: any
+  align_grid_group: any
   context: any
   data: any
   group: any
@@ -454,6 +489,12 @@ export class Mat {
   points: any
   row_guide_groups: any
   wdim_text: any
+
+  // heatmap mode. `heat` is null in elements mode and is the only thing any
+  // mode-aware branch below tests, so there is exactly one place the two paths
+  // can disagree about which one is live.
+  heat: any
+  mode: string
 
 
   constructor(data, params, context, init_viz) {
@@ -494,14 +535,92 @@ export class Mat {
     return this.W + this.params.layout.gap * (Math.min(n, Math.ceil(this.W / size)) - 1)
   }
 
+  //
+  // heatmap mode
+  //
+
+  /** The per-matrix texel cap in force. C3's scene budget lowers it. */
+  getTexelBudget() {
+    const b = this.params.viz['texel budget']
+    return b > 0 ? b : HEATMAP_TEXEL_BUDGET
+  }
+
+  getEncoding() {
+    return this.params.viz['heatmap encoding'] || 'magnitude'
+  }
+
+  /** What the picture claims, for the status bar. Never inferred by a caller. */
+  getHeatmapInfo() {
+    if (!this.heat) return null
+    const { h, w } = lodSize(this.H, this.W, this.heat.f)
+    return {
+      lod: this.heat.f, encoding: this.heat.enc, reducer: this.heat.op,
+      texels: this.heat.texels, h, w,
+    }
+  }
+
+  buildHeatmap(info) {
+    const viz = this.params.viz
+    // The viewport bound is a real footprint bound and a stable one; see
+    // chooseLodFactor for why it is not the live projected size.
+    const screen_px = this.context.screenPx || Infinity
+    const lod = chooseLodFactor(this.H, this.W, this.getTexelBudget(), screen_px)
+    this.heat = new HeatmapMesh(this.H, this.W, info, {
+      lod,
+      reducer: viz['lod reduce'] || 'maxAbs',
+      encoding: this.getEncoding(),
+      linear: viz['heatmap filter'] === 'linear',
+    })
+    this.refreshLUT()
+    this.paint([0, this.H], [0, this.W], TEXEL_SHOWN)
+    return this.heat
+  }
+
+  /**
+   * Rebuild the ramp lookup. Kept explicit rather than left to the full
+   * rebuild `gui.ts` happens to trigger for `sensitivity`: the LUT depends on
+   * getRangeInfo() and on four viz knobs, and a texture encoded once against a
+   * range that has since moved is a wrong picture with nothing to say so.
+   */
+  refreshLUT() {
+    if (!this.heat) return
+    const { absmin, absmax } = this.getRangeInfo()
+    this.heat.setLUT(colormapLUT(
+      this.getEncoding(), absmin, absmax, this.params.viz,
+      (h, s, l) => { COLOR_TEMP.setHSL(h, s, l); return [COLOR_TEMP.r * 255, COLOR_TEMP.g * 255, COLOR_TEMP.b * 255] }))
+  }
+
+  /** Write the value channel over a range, and set the cells' state. */
+  paint(r, c, state) {
+    const rr = toRange(r, this.H), cc = toRange(c, this.W)
+    const { absmin, absmax } = this.getRangeInfo()
+    if (state !== TEXEL_HIDDEN) {
+      this.heat.writeValues(this.data.data, rr, cc, this.getEncoding(), absmin, absmax)
+    }
+    this.heat.writeState(state, rr, cc)
+    // Labels cache by element and carry the value they were built from. In
+    // elements mode checkLabel() invalidates them one at a time as the loop
+    // passes; here there is no such loop, and iterating H*W to invalidate
+    // would defeat the point of the mode. Dropping the cache is O(1) and the
+    // labels are rebuilt on the next hover anyway.
+    if (this.label_cache) this.label_cache = []
+  }
+
   initViz() {
     const gap = this.params.layout.gap
     const info = { ...this.getBlockInfo(), gap }
 
-    this.points = emptyPoints(this.H, this.W, info)
+    this._range = null
+    this.heat = null
+    this.mode = pickRenderMode(this.H, this.W, this.params.viz['render mode'] || 'auto')
+    this.points = this.mode === 'heatmap' ?
+      this.buildHeatmap(info) :
+      emptyPoints(this.H, this.W, info)
     this.points.name = `${this.params.name}.points`
 
-    this.setColorsAndSizes()
+    if (!this.heat) {
+      this.setColorsAndSizes()
+    }
 
     this.inner_group = new THREE.Group()
     this.inner_group.name = `${this.params.name}.inner_group`
@@ -517,6 +636,15 @@ export class Mat {
   }
 
   setColorsAndSizes(r = undefined, c = undefined, get_size = undefined, get_color = undefined) {
+    if (this.heat) {
+      // The two overrides that exist -- hide's `_ => ZERO_COLOR` and
+      // bumpColor's `+ 0x808080` -- are both colour-as-state, and both are
+      // handled as state below rather than as colour. So every remaining
+      // caller of this method means "restore these cells to their data", which
+      // is what this does. Nothing silently no-ops.
+      this.paint(r, c, TEXEL_SHOWN)
+      return
+    }
     const [rstart, rend] = toRange(r, this.H)
     const [cstart, cend] = toRange(c, this.W)
     get_size = get_size || this.sizeFromData.bind(this)
@@ -540,7 +668,16 @@ export class Mat {
     })
   }
 
+  // Cached: setColorsAndSizes calls this twice per element (sizeFromData and
+  // colorFromData each ask), and it allocated a fresh object every time. It is
+  // a function of params.viz and of this matrix's own absmin/absmax, neither of
+  // which moves without a rebuild -- so the cache is dropped in initViz() and
+  // in setVizProp(), which are the two places those can change.
   getRangeInfo() {
+    return this._range ??= this.computeRangeInfo()
+  }
+
+  computeRangeInfo() {
     const viz = this.params.viz
     const use_absmin = viz.sensitivity == 'superlocal'
 
@@ -601,34 +738,72 @@ export class Mat {
       return COLOR_TEMP.setHSL(0.0, 1.0, 0.0)
     }
 
-    const { viz, absmin, absmax, absdiff } = this.getRangeInfo()
-
-    // boundary violations can happen in intermediates
-    const absx = Math.min(absmax, Math.max(absmin, Math.abs(x)))
-
-    if (absx === Infinity) {
+    if (Math.abs(x) === Infinity) {
       return COLOR_TEMP.setHSL(1.0, 1.0, 1.0)
     }
 
-    const hue_vol = absdiff <= 0 ? 0 : (x - Math.sign(x) * absmin) / absdiff
-    const gap = viz['hue gap'] * Math.sign(x)
-    const hue = (viz['zero hue'] + gap + (hue_vol * viz['hue spread'])) % 1
-
-    const min_light = Math.max(viz['min light'], 0.00001)
-    const max_light = Math.max(viz['max light'], min_light)
-    const range = max_light - min_light
-    const light_vol = absdiff <= 0 ? 0 : (absx - absmin)
-    const light = min_light + range * Math.sqrt(light_vol) / Math.sqrt(absdiff)
-
-    return COLOR_TEMP.setHSL(hue, 1.0, light)
+    // The arithmetic itself lives in colormap.ts, as a pure function, because
+    // the heatmap's 'signed' ramp lookup has to produce exactly these colours.
+    // Two copies of it would drift, and the drift would show up as two modes
+    // disagreeing about what a weight looks like.
+    const range = this.getRangeInfo()
+    const hsl = elementHSL(x, range, range.viz)
+    return hsl ? COLOR_TEMP.setHSL(hsl.h, hsl.s, hsl.l) : COLOR_TEMP.setHSL(0.0, 1.0, 0.0)
   }
 
   getAbsmax() {
     return this.absmax
   }
 
+  /**
+   * What the colours on screen currently mean, for the colorbar and the status
+   * bar. Aggregated up the tree by MatMul below.
+   *
+   * `lod` is the coarsest level any matrix in the subtree is showing. It is
+   * reported rather than left implicit because a reduced heatmap is not exact,
+   * and a picture that is one maxAbs per 16 cells must not print as though
+   * every cell were its own.
+   */
+  getVizSummary() {
+    const { absmin, absmax } = this.getRangeInfo()
+    const hm = this.getHeatmapInfo()
+    return {
+      absmin, absmax, mats: 1,
+      encoding: hm ? hm.encoding : null,
+      reducer: hm ? hm.reducer : null,
+      lod: hm ? hm.lod : 1,
+      texels: hm ? hm.texels : 0,
+      elements: hm ? 0 : this.H * this.W,
+      heatmaps: hm ? 1 : 0,
+    }
+  }
+
+  // Memoized, and it has to be.
+  //
+  // getRangeInfo() calls this once *per element* -- from both sizeFromData and
+  // colorFromData -- and `params.getGlobalAbsmax` climbs to the root of the
+  // tree, whose getAbsmax() walks every matrix under it. In a four-node matmul
+  // that is a few calls per element and merely wasteful. In a 25-stage model
+  // scene the root walks 159 matrices, so setColorsAndSizes over a 250,000
+  // element stage did 40 million subtree traversals and took six seconds.
+  //
+  // Nothing invalidates it, because nothing moves it: `absmax` is measured in
+  // the constructor and no path recomputes it (reinit deliberately leaves it
+  // alone, which is why intermediates can exceed their own range -- see the
+  // "boundary violations" clamps above).
   getGlobalAbsmax() {
-    return this.params.getGlobalAbsmax ? this.params.getGlobalAbsmax() : this.absmax
+    return this._global_absmax ??=
+      (this.params.getGlobalAbsmax ? this.params.getGlobalAbsmax() : this.absmax)
+  }
+
+  // Params were copied down at construction, so a viz knob set on the root
+  // after the fact reaches nothing. This is how C3's budget is enforced in
+  // practice: Stack.setStage sets 'texel budget' and 'render mode' on one
+  // stage and then rebuilds it, so full-resolution texels and the sphere path
+  // are spent on the active stage and nowhere else.
+  setVizProp(k, v) {
+    this.params.viz[k] = v
+    this._range = null
   }
 
   reinit(init, epi = undefined, r = undefined, c = undefined) {
@@ -649,38 +824,73 @@ export class Mat {
   }
 
   getColor(i, j) {
+    if (this.heat) {
+      // The ramp entry this cell is showing. Not the element's value -- that is
+      // getData()'s job and comes from the FP32 Array2D.
+      const lut = this.heat.lutTex.image.data
+      const b = this.heat.byteAt(i, j) * 4
+      return COLOR_TEMP.setRGB(lut[b] / 255, lut[b + 1] / 255, lut[b + 2] / 255)
+    }
     const colors = this.points.geometry.attributes.pointColor.array
     return COLOR_TEMP.fromArray(colors, this.data.addr(i, j) * 3)
   }
 
   setColor(i, j, c) {
+    if (this.heat) {
+      // Deliberately loud rather than a no-op: a heatmap cell's colour is the
+      // ramp entry for its value, so there is nothing an arbitrary colour could
+      // honestly mean here. Nothing in viz.ts reaches this in heatmap mode --
+      // setColorsAndSizes above short-circuits first.
+      throw new Error('setColor is an elements-mode operation; a heatmap cell ' +
+        'takes its colour from the ramp. Use show/hide/bumpColor.')
+    }
     const colors = this.points.geometry.attributes.pointColor.array
     c.toArray(colors, this.data.addr(i, j) * 3)
     this.points.geometry.attributes.pointColor.needsUpdate = true
   }
 
   getSize(i, j) {
+    if (this.heat) {
+      throw new Error('getSize is an elements-mode operation; heatmap cells are ' +
+        'contiguous texels and have no per-element size')
+    }
     return this.points.geometry.attributes.pointSize.array[this.data.addr(i, j)]
   }
 
   setSize(i, j, x) {
+    if (this.heat) {
+      throw new Error('setSize is an elements-mode operation; heatmap cells are ' +
+        'contiguous texels and have no per-element size')
+    }
     this.points.geometry.attributes.pointSize.array[this.data.addr(i, j)] = x
     this.points.geometry.attributes.pointSize.needsUpdate = true
   }
 
   show(r = undefined, c = undefined) {
-    this.setColorsAndSizes(r, c)
+    this.heat ? this.paint(r, c, TEXEL_SHOWN) : this.setColorsAndSizes(r, c)
   }
 
   hide(r = undefined, c = undefined) {
-    this.setColorsAndSizes(r, c, _ => 0, _ => ZERO_COLOR)
+    this.heat ?
+      this.paint(r, c, TEXEL_HIDDEN) :
+      this.setColorsAndSizes(r, c, _ => 0, _ => ZERO_COLOR)
   }
 
   isHidden(i, j) {
-    return this.getColor(i, j).equals(ZERO_COLOR)
+    // Elements mode reads visibility out of the colour. Heatmap mode cannot:
+    // the ramp's low stop is #03051A, so a hidden cell and the smallest value
+    // in the matrix would be one byte apart and the animation would look like
+    // it was skipping cells. Hence the separate state channel.
+    return this.heat ?
+      this.heat.stateAt(i, j) === TEXEL_HIDDEN :
+      this.getColor(i, j).equals(ZERO_COLOR)
   }
 
   bumpColor(r = undefined, c = undefined) {
+    if (this.heat) {
+      this.paint(r, c, TEXEL_BUMPED)
+      return
+    }
     COLOR_TEMP.set(0x808080)
     this.setColorsAndSizes(r, c, undefined, x => this.colorFromData(x).add(COLOR_TEMP))
   }
@@ -726,6 +936,28 @@ export class Mat {
   }
 
   setFlowGuide(light) { }
+
+  // The alignment lattice, in this matrix's own plane so it lines up with this
+  // matrix's own elements wherever the layout has put it. `d` is 0: a Mat is
+  // one face. The enclosing MatMul draws the box that gives the third axis.
+  setAlignGrid(light = undefined) {
+    const prev = this.params.deco.grid
+    light = util.syncProp(this.params.deco, 'grid', light)
+    if (this.align_grid_group && prev == light) {
+      return
+    }
+    if (this.align_grid_group) {
+      this.inner_group.remove(this.align_grid_group)
+      util.disposeAndClear(this.align_grid_group)
+      this.align_grid_group = undefined
+    }
+    if (light > 0.0) {
+      this.align_grid_group = util.alignGrid(
+        this.H, this.W, 0, gridSpacing(this.params.deco), light,
+        this.getBlockInfo(), this.params.layout.gap)
+      this.inner_group.add(this.align_grid_group)
+    }
+  }
 
   setName(name) {
     util.syncProp(this.params, 'name', name)
@@ -917,17 +1149,52 @@ export const TOP_LEVEL_ANIM_ALGS = [
 export const ANIM_ALGS = TOP_LEVEL_ANIM_ALGS.concat('inherit')
 export const FUSE_MODE = ['none', 'sync', 'async']
 
+/**
+ * Fold subtree summaries into one. `lod` takes the *coarsest* level in the
+ * subtree, never the average and never the finest: what a viewer needs to know
+ * is whether anything on screen is reduced, and by how much at worst.
+ * `encoding` collapses to null when the subtree disagrees, so the colorbar
+ * says "mixed" rather than picking one and implying it holds everywhere.
+ */
+export function mergeVizSummaries(parts) {
+  // null means "this matrix is drawn as elements and has no ramp", which is not
+  // a disagreement -- a scene of 12 sphere matrices and 147 magnitude heatmaps
+  // is a magnitude scene, and calling it 'mixed' would describe a ramp nothing
+  // is using. Only two *stated* values that differ make it mixed.
+  const fold = (x, y) => x === y ? x : x == null ? y : y == null ? x : 'mixed'
+  return parts.reduce((a, b) => ({
+    absmin: Math.min(a.absmin, b.absmin),
+    absmax: Math.max(a.absmax, b.absmax),
+    mats: a.mats + b.mats,
+    encoding: fold(a.encoding, b.encoding),
+    reducer: fold(a.reducer, b.reducer),
+    lod: Math.max(a.lod, b.lod),
+    texels: a.texels + b.texels,
+    elements: a.elements + b.elements,
+    heatmaps: a.heatmaps + b.heatmaps,
+  }))
+}
+
+// Children of a node, whatever kind it is. One place that knows the shapes, so
+// a new node kind cannot half-exist -- the recursions below all go through it.
+export const childParamsOf = p =>
+  p.op === 'stack' ? Object.values(p.stages || {}) :
+    p.op === 'unary' ? [p.input] :
+      p.matmul === false ? [] :
+        [p.left, p.right].filter(Boolean)
+
 const ensureChildCounts = p => {
   if (p.count === undefined) {
     p.count = p.matmul === false ? 0 :
-      (1 + ensureChildCounts(p.left).count + ensureChildCounts(p.right).count)
-    // sloppy - this means root
-    if (p.matmul === undefined) {
+      childParamsOf(p).reduce((n, c) => n + ensureChildCounts(c).count, 1)
+    // sloppy - this means root. `!p.op` keeps an `add` node -- which has no
+    // `matmul` key either -- from being mistaken for one and blowing away the
+    // real root's `total`.
+    if (p.matmul === undefined && !p.op) {
       const total = p.count
       const setTotal = p => {
         p.total = total
-        p.left && setTotal(p.left)
-        p.right && setTotal(p.right)
+        childParamsOf(p).forEach(setTotal)
       }
       setTotal(p)
     }
@@ -944,6 +1211,8 @@ export class MatMul {
   W: any
   _extents: any
   alg_join: any
+  _absmax: any
+  align_grid_group: any
   anim_mats: any
   bump: any
   context: any
@@ -966,15 +1235,15 @@ export class MatMul {
     this.group = new THREE.Group()
     this.group.name = `${this.params.name}.group`
 
-    const height = p => p.matmul ? height(p.left) : p.h
-    const width = p => p.matmul ? width(p.right) : p.w
+    // nodeHeight/nodeWidth, not a local matmul-only pair: an operand may now
+    // be a materialized unary stage or a residual add, and a shape helper that
+    // did not know that would silently read `undefined` off it.
+    this.H = nodeHeight(params.left)
+    this.D = nodeWidth(params.left)
+    this.W = nodeWidth(params.right)
 
-    this.H = height(params.left)
-    this.D = width(params.left)
-    this.W = width(params.right)
-
-    if (this.D != height(params.right)) {
-      console.log(`HEY left width ${this.D} != right height ${height(params.right)}`)
+    if (this.D != nodeHeight(params.right)) {
+      console.log(`HEY left width ${this.D} != right height ${nodeHeight(params.right)}`)
     }
 
     this.initLeft()
@@ -1025,7 +1294,9 @@ export class MatMul {
     left_params.is_child = 'left'
     left_params.block['i blocks'] = this.params.block['i blocks']
     left_params.block['j blocks'] = this.params.block['k blocks']
-    if (left_params.matmul) {
+    if (left_params.op) {
+      this.left = buildOpNode(left_params, this.context)
+    } else if (left_params.matmul) {
       this.left = new MatMul(left_params, this.context, false)
     } else {
       const { right, result, polarity } = this.getPlacementInfo()
@@ -1043,7 +1314,9 @@ export class MatMul {
     right_params.is_child = 'right'
     right_params.block['i blocks'] = this.params.block['k blocks']
     right_params.block['j blocks'] = this.params.block['j blocks']
-    if (right_params.matmul) {
+    if (right_params.op) {
+      this.right = buildOpNode(right_params, this.context)
+    } else if (right_params.matmul) {
       this.right = new MatMul(right_params, this.context, false)
     } else {
       const { left, result, polarity } = this.getPlacementInfo()
@@ -1177,6 +1450,7 @@ export class MatMul {
 
     this.setFlowGuide()
     this.setRowGuides()
+    this.setAlignGrid()
   }
 
   initLeftViz() {
@@ -1283,26 +1557,24 @@ export class MatMul {
     }
 
     const spotlight = this.params.deco.spotlight
-    this.left.updateLabels(this.left.params.matmul ? params : spotlight)
-    this.right.updateLabels(this.right.params.matmul ? params : spotlight)
+    this.left.updateLabels(isInterior(this.params.left) ? params : spotlight)
+    this.right.updateLabels(isInterior(this.params.right) ? params : spotlight)
     this.result.updateLabels(spotlight)
 
     const interior_spotlight = this.params.deco['interior spotlight'] ? spotlight : 0
     this.anim_mats.map(m => m.updateLabels(interior_spotlight))
   }
 
+  // The children `nodeBoundingBox` may recurse into. It guards on
+  // `getBoundingBox`, which only the interior kinds have -- a leaf Mat's box is
+  // inside this one's extent by construction -- so this is the same set the
+  // matmul-only version unioned, spelled once for every node kind.
+  childNodes() {
+    return [this.left, this.right, this.result]
+  }
+
   getBoundingBox() {
-    const get_bb = mm => {
-      const min = mm.group.localToWorld(new THREE.Vector3())
-      const max = mm.group.localToWorld(new THREE.Vector3().copy(mm.getExtent()))
-      const swap = d => { const temp = min[d]; min[d] = max[d]; max[d] = temp }
-      ['x', 'y', 'z'].forEach(d => { if (min[d] > max[d]) swap(d) })
-      let bb = new THREE.Box3(min, max)
-      mm.params.left.matmul && bb.union(get_bb(mm.left))
-      mm.params.right.matmul && bb.union(get_bb(mm.right))
-      return bb
-    }
-    return get_bb(this)
+    return nodeBoundingBox(this)
   }
 
   center() {
@@ -1310,8 +1582,20 @@ export class MatMul {
     util.updateProps(this.group.position, c.negate())
   }
 
+  // Memoized for the same reason Mat.getGlobalAbsmax is, and with the same
+  // justification: no path changes a Mat's `absmax` after construction.
   getAbsmax() {
-    return Math.max(this.left.getAbsmax(), this.right.getAbsmax(), this.result.getAbsmax())
+    return this._absmax ??=
+      Math.max(this.left.getAbsmax(), this.right.getAbsmax(), this.result.getAbsmax())
+  }
+
+  getVizSummary() {
+    return mergeVizSummaries([this.left, this.right, this.result].map(m => m.getVizSummary()))
+  }
+
+  setVizProp(k, v) {
+    this.params.viz[k] = v
+    ;[this.left, this.right, this.result].forEach(m => m.setVizProp(k, v))
   }
 
   getGlobalAbsmax() {
@@ -1320,16 +1604,15 @@ export class MatMul {
 
   hideInputs(hide) {
     util.syncProp(this.params.anim, 'hide inputs', hide)
-    if (this.params.left.matmul) {
-      this.left.hideInputs(hide)
-    } else if (this.params.anim.alg != 'none') {
-      hide ? this.left.hide() : this.left.show()
+    const one = m => {
+      if (m.hideInputs) {
+        m.hideInputs(hide)
+      } else if (this.params.anim.alg != 'none') {
+        hide ? m.hide() : m.show()
+      }
     }
-    if (this.params.right.matmul) {
-      this.right.hideInputs(hide)
-    } else if (this.params.anim.alg != 'none') {
-      hide ? this.right.hide() : this.right.show()
-    }
+    one(this.left)
+    one(this.right)
   }
 
   setRowGuides(light = undefined) {
@@ -1338,6 +1621,35 @@ export class MatMul {
     this.right.setRowGuides(light)
     this.result.setRowGuides(light)
     this.anim_mats.forEach(m => m.setRowGuides(light))
+  }
+
+  // The 3D half of the lattice: one box over this matmul's own H x W x D
+  // extent, which is the box its three faces are drawn on. At scatter 0 the
+  // operand faces coincide with two of these faces, which is the point -- it
+  // is what makes an operand read as belonging to the product.
+  setAlignGrid(light = undefined) {
+    const prev = this.params.deco.grid
+    light = util.syncProp(this.params.deco, 'grid', light)
+    if (!this.align_grid_group || prev != light) {
+      if (this.align_grid_group) {
+        this.group.remove(this.align_grid_group)
+        util.disposeAndClear(this.align_grid_group)
+        this.align_grid_group = undefined
+      }
+      if (light > 0.0) {
+        this.align_grid_group = util.alignGrid(
+          this.getDispH(), this.getDispW(), this.getDispD(),
+          gridSpacing(this.params.deco), light,
+          this.getBlockInfo(), this.params.layout.gap)
+        util.updateProps(this.align_grid_group.position, {
+          x: this.params.layout.gap, y: this.params.layout.gap,
+        })
+        this.group.add(this.align_grid_group)
+      }
+    }
+    this.left.setAlignGrid(light)
+    this.right.setAlignGrid(light)
+    this.result.setAlignGrid(light)
   }
 
   setName(name) {
@@ -1825,6 +2137,564 @@ export class MatMul {
 }
 
 //
+// Node kinds beyond the matmul
+//
+// mm's graph has always been matmuls all the way down, and everything else was
+// squeezed into one of two places: a pointwise or in-place *epilog* mutated
+// into a matmul's own result buffer, and a bias was augmented into the operands
+// (`X @ W + b` drawn as `[X | 1] @ [W ; b]`). Both are still here and every
+// existing view still uses them.
+//
+// What they cannot express is a stage of a forward pass that is a matrix in its
+// own right. GPT-2's two residual additions per block are real edges of the
+// graph, and `softmax(tril(QK^T/sqrt(d)))` is a matrix an inspector wants to
+// look at *next to* `Q @ K^T`, not a mutation of it. So there are three more
+// node kinds, marked by an explicit `op` on the params node:
+//
+//   op: 'unary'  materializes f(input) as its own Mat, drawn beside its input.
+//                The in-place epilogs are untouched; this is the other form.
+//   op: 'add'    an elementwise sum of two same-shaped operands. Never drawn
+//                as a matmul: a fake matmul that happened to produce the right
+//                numbers is exactly the class of lie this repository forbids.
+//   op: 'stack'  an ordered list of stages laid out in one scene, with no
+//                arithmetic of its own. This is what makes a whole-model view
+//                possible; see the Stack class below.
+//
+// `genExpr`/`syncExpr` refuse trees containing any of them -- see the note
+// there. They are a matmul-only notation and there is no honest '@' for an add.
+//
+
+// Shape of any node, by kind. MatMul used to carry a matmul-only pair of these
+// as locals; an operand can now be a unary or an add, and a helper that did not
+// know that would read `undefined` and draw an empty matrix.
+export const nodeHeight = p =>
+  p.op === 'unary' ? nodeHeight(p.input) :
+    p.op === 'add' ? nodeHeight(p.left) :
+      p.matmul ? nodeHeight(p.left) : p.h
+
+export const nodeWidth = p =>
+  p.op === 'unary' ? nodeWidth(p.input) :
+    p.op === 'add' ? nodeWidth(p.right) :
+      p.matmul ? nodeWidth(p.right) : p.w
+
+// Whether a node draws a subtree of its own (so it takes the whole params
+// object for label recursion) or is a single matrix (so it takes a spotlight).
+export const isInterior = p => !!(p.matmul || p.op)
+
+// The unary functions a materialized stage may apply. Both families:
+// elementwise (POINTWISE) and row/matrix-wise (the in-place epilogs). Named
+// separately from EPILOGS because the scale factors there -- 'x/sqrt(k)' and
+// friends -- belong to a matmul's contraction depth and mean nothing to a
+// stage that has no contraction.
+const UNARY_FUNCS_ = {
+  ...POINTWISE,
+  'softmax': (h, w, d) => softmax_(h, w, d),
+  'softmax(tril(x))': (h, w, d) => softmax_tril_(h, w, d),
+  'layernorm': (h, w, d) => layernorm_(h, w, d),
+}
+
+export const UNARY_FUNCS = Object.keys(UNARY_FUNCS_)
+
+// Applied to a copy, never in place on the input: the whole point of the kind
+// is that the input stays on screen next to the result.
+function applyUnary(fn, h, w, data) {
+  const pw = POINTWISE[fn]
+  if (pw) {
+    for (let i = 0; i < data.length; i++) data[i] = pw(data[i])
+    return
+  }
+  const mw = UNARY_FUNCS_[fn]
+  if (!mw) {
+    // Loud, and naming what is missing. A stage that cannot be computed must
+    // not draw a zero-filled placeholder that looks like an answer.
+    throw new Error(`unknown unary stage function '${fn}'; known: ${UNARY_FUNCS.join(', ')}`)
+  }
+  mw(h, w, data)
+}
+
+export function buildOpNode(params, context, init_viz = false) {
+  switch (params.op) {
+    case 'unary': return new UnaryOp(params, context, init_viz)
+    case 'add': return new AddOp(params, context, init_viz)
+    case 'stack': return new Stack(params, context, init_viz)
+    default: throw new Error(`unknown node op '${params.op}'`)
+  }
+}
+
+/** Build whatever kind of node `params` describes, sized `h` x `w` if a leaf. */
+function buildChildNode(params, context, h, w) {
+  if (params.op) return buildOpNode(params, context)
+  if (params.matmul) return new MatMul(params, context, false)
+  return new Mat(Array2D.fromInit(h, w, getInitFunc(params)), params, context, false)
+}
+
+/** Bounding box of any node and every interior node hanging off it. */
+export function nodeBoundingBox(node) {
+  const min = node.group.localToWorld(new THREE.Vector3())
+  const max = node.group.localToWorld(new THREE.Vector3().copy(node.getExtent()))
+  const swap = d => { const temp = min[d]; min[d] = max[d]; max[d] = temp }
+  ;['x', 'y', 'z'].forEach(d => { if (min[d] > max[d]) swap(d) })
+  const bb = new THREE.Box3(min, max)
+  node.childNodes().forEach(c => c.getBoundingBox && bb.union(c.getBoundingBox()))
+  return bb
+}
+
+/**
+ * What UnaryOp, AddOp and Stack share: they own child node objects, they lay
+ * them out in a row, and every recursion the app performs over the tree has to
+ * reach them. Subclasses supply `childNodes()` and `initViz()`; everything else
+ * here is the same recursion MatMul does, spelled once.
+ */
+abstract class OpNode {
+  params: any
+  context: any
+  group: any
+  H: any
+  W: any
+  _extents: any
+  onAnimDone: any
+  bump: any
+
+  constructor(params, context) {
+    this.context = context
+    this.params = util.copyTree(params)
+    ensureChildCounts(this.params)
+    this.group = new THREE.Group()
+    this.group.name = `${this.params.name}.group`
+  }
+
+  abstract childNodes(): any[]
+  abstract initViz(params?): void
+  abstract getDataArray(): any
+  abstract getData(i, j): any
+
+  prepChildParams(base) {
+    return {
+      ...base,
+      anim: { ...this.params.anim, ...base.anim || {} },
+      block: { ...this.params.block, ...base.block || {} },
+      deco: { ...this.params.deco, ...base.deco || {} },
+      layout: { ...this.params.layout, ...base.layout || {} },
+      viz: { ...this.params.viz, ...base.viz || {} },
+      getGlobalAbsmax: this.getGlobalAbsmax.bind(this),
+    }
+  }
+
+  // Row layout: children left to right along x, separated by a gap, each
+  // sitting on the same y and z. It is deliberately not a matmul's three-faces
+  // arrangement -- these nodes do not contract anything, and borrowing the
+  // matmul geometry would imply they did.
+  layoutRow(nodes) {
+    const gap = this.params.layout.gap
+    let x = 0
+    let [y, z] = [0, 0]
+    nodes.forEach(n => {
+      n.group.position.x = x
+      const e = n.getExtent()
+      x += e.x + 2 * gap
+      y = Math.max(y, e.y)
+      z = Math.max(z, e.z)
+      this.group.add(n.group)
+    })
+    this._extents = { x: Math.max(0, x - 2 * gap), y, z }
+  }
+
+  getExtent() { return this._extents || { x: 0, y: 0, z: 0 } }
+  getBoundingBox() { return nodeBoundingBox(this) }
+  disposeAll() { util.disposeAndClear(this.group) }
+  center() {
+    util.updateProps(this.group.position,
+      this.getBoundingBox().getCenter(new THREE.Vector3()).negate())
+  }
+  _absmax: any
+  getAbsmax() { return this._absmax ??= Math.max(...this.childNodes().map(n => n.getAbsmax())) }
+  getGlobalAbsmax() {
+    return this.params.getGlobalAbsmax ? this.params.getGlobalAbsmax() : this.getAbsmax()
+  }
+  getVizSummary() { return mergeVizSummaries(this.childNodes().map(n => n.getVizSummary())) }
+  show(r?, c?) { this.childNodes().forEach(n => n.show(r, c)) }
+  hide(r?, c?) { this.childNodes().forEach(n => n.hide(r, c)) }
+  setColorsAndSizes(r?, c?, size?, color?) {
+    this.childNodes().forEach(n => n.setColorsAndSizes(r, c, size, color))
+  }
+  bumpColor(r?, c?) { this.childNodes().forEach(n => n.bumpColor(r, c)) }
+  setRowGuides(light?) {
+    light = util.syncProp(this.params.deco, 'row guides', light)
+    this.childNodes().forEach(n => n.setRowGuides(light))
+  }
+  setAlignGrid(light?) {
+    light = util.syncProp(this.params.deco, 'grid', light)
+    this.childNodes().forEach(n => n.setAlignGrid(light))
+  }
+  setFlowGuide(light?) { this.childNodes().forEach(n => n.setFlowGuide(light)) }
+  setLegends(name?, shape?) {
+    name = util.syncProp(this.params.deco, 'legends', name)
+    shape = util.syncProp(this.params.deco, 'shape', shape)
+    this.childNodes().forEach(n => n.setLegends(name, shape))
+  }
+  setName(name) { util.syncProp(this.params, 'name', name) }
+  setVizProp(k, v) {
+    this.params.viz[k] = v
+    this.childNodes().forEach(n => n.setVizProp(k, v))
+  }
+  hideInputs(hide) {
+    util.syncProp(this.params.anim, 'hide inputs', hide)
+    this.childNodes().forEach(n => n.hideInputs && n.hideInputs(hide))
+  }
+  updateLabels(params?) {
+    const spotlight = this.params.deco.spotlight
+    this.childNodes().forEach((n, k) => n.updateLabels(
+      isInterior(this.childParams()[k]) ? params : spotlight))
+  }
+  abstract childParams(): any[]
+}
+
+/**
+ * f(input), drawn as its own matrix beside the input that produced it.
+ *
+ * The animation is the point of the kind: the input animates by whatever
+ * algorithm it carries, and the result materializes when it finishes. That is
+ * the picture the whole-model view is for -- `Q @ K^T` sweeps out, and then a
+ * softmax matrix appears next to it.
+ */
+export class UnaryOp extends OpNode {
+  input: any
+  result: any
+  fn: string
+
+  constructor(params, context, init_viz = false) {
+    super(params, context)
+    this.fn = this.params.fn
+    const ip = this.params.input
+    this.H = nodeHeight(ip)
+    this.W = nodeWidth(ip)
+    this.input = buildChildNode(this.prepChildParams(ip), this.context, this.H, this.W)
+
+    const data = new Float32Array(this.H * this.W)
+    data.set(this.input.getDataArray().subarray(0, data.length))
+    applyUnary(this.fn, this.H, this.W, data)
+    const result_params = this.prepChildParams(util.copyTree(this.params))
+    delete result_params.input
+    result_params.name = this.params.name
+    this.result = new Mat(new Array2D(this.H, this.W, data), result_params, this.context, false)
+
+    if (init_viz) this.initViz()
+  }
+
+  childNodes() { return [this.input, this.result] }
+  childParams() { return [this.params.input, { matmul: false }] }
+  getDataArray() { return this.result.getDataArray() }
+  getData(i, j) { return this.result.getData(i, j) }
+
+  initViz(params = undefined) {
+    if (params) this.params = params
+    util.disposeAndClear(this.group)
+    this.input.initViz()
+    this.result.initViz()
+    this.layoutRow([this.input, this.result])
+    this.setRowGuides()
+    this.setAlignGrid()
+  }
+
+  initAnimation(cb = undefined) {
+    const reveal = () => {
+      this.result.show()
+      cb ? cb() : this.initAnimation()
+    }
+    if (this.input.initAnimation && this.params.anim.alg != 'none') {
+      this.result.hide()
+      this.input.initAnimation(reveal)
+      this.bump = () => this.input.bump()
+    } else {
+      this.result.show()
+      this.bump = () => reveal()
+    }
+  }
+}
+
+/**
+ * left + right, elementwise. GPT-2 adds the attention output and the MLP output
+ * back into the residual stream twice per block, and those are edges of the
+ * graph, not matmuls.
+ */
+export class AddOp extends OpNode {
+  left: any
+  right: any
+  result: any
+
+  constructor(params, context, init_viz = false) {
+    super(params, context)
+    const [lp, rp] = [this.params.left, this.params.right]
+    this.H = nodeHeight(lp)
+    this.W = nodeWidth(lp)
+    if (nodeHeight(rp) != this.H || nodeWidth(rp) != this.W) {
+      // An add over mismatched shapes has no honest reading, and mm's leaf
+      // loader would tile the shorter operand into a plausible wrong picture
+      // rather than fail. Refuse here, naming both shapes.
+      throw new Error(
+        `add '${this.params.name}' has operands ${this.H}x${this.W} and ` +
+        `${nodeHeight(rp)}x${nodeWidth(rp)}: an elementwise sum needs one shape`)
+    }
+    this.left = buildChildNode(this.prepChildParams(lp), this.context, this.H, this.W)
+    this.right = buildChildNode(this.prepChildParams(rp), this.context, this.H, this.W)
+
+    const ld = this.left.getDataArray(), rd = this.right.getDataArray()
+    const data = new Float32Array(this.H * this.W)
+    for (let i = 0; i < data.length; i++) data[i] = ld[i] + rd[i]
+    const result_params = this.prepChildParams(util.copyTree(this.params))
+    delete result_params.left
+    delete result_params.right
+    result_params.name = this.params.name
+    this.result = new Mat(new Array2D(this.H, this.W, data), result_params, this.context, false)
+
+    if (init_viz) this.initViz()
+  }
+
+  childNodes() { return [this.left, this.right, this.result] }
+  childParams() { return [this.params.left, this.params.right, { matmul: false }] }
+  getDataArray() { return this.result.getDataArray() }
+  getData(i, j) { return this.result.getData(i, j) }
+
+  initViz(params = undefined) {
+    if (params) this.params = params
+    util.disposeAndClear(this.group)
+    this.left.initViz()
+    this.right.initViz()
+    this.result.initViz()
+    this.layoutRow([this.left, this.right, this.result])
+    this.setRowGuides()
+    this.setAlignGrid()
+  }
+
+  initAnimation(cb = undefined) {
+    // An add has nothing to sweep: both operands are already there and the sum
+    // is elementwise. So it reveals, and hands straight back to the driver.
+    // Pretending otherwise would be an animation of an algorithm that is not
+    // what the model does.
+    const done = () => { this.result.show(); cb ? cb() : undefined }
+    this.result.show()
+    this.bump = done
+  }
+}
+
+
+/**
+ * An ordered list of stages laid out in one scene.
+ *
+ * A Stack computes nothing. It owns no matrix of its own, contracts nothing,
+ * and adds nothing -- it places already-honest nodes in space and walks them in
+ * order. That is deliberate: a whole-model view is a *presentation* of a
+ * forward pass, and every number in it has to come from a stage that could
+ * stand on its own.
+ *
+ * `stages` is an object rather than an array because `util.copyTree` round
+ * trips through flatten/unflatten, which does not handle arrays; string keys
+ * keep their insertion order, which is the forward-pass order.
+ *
+ * Each stage carries an optional `row`, and rows stack down the scene. The
+ * model view puts one transformer block per row, so the residual stream reads
+ * as a spine down the left edge and each block expands rightwards through
+ * attention and then the MLP.
+ *
+ * ## The rendering decision that makes this possible
+ *
+ * At model level every matrix draws as one LOD-reduced heatmap texture.
+ * Full-resolution texels -- and the `elements` sphere path -- are spent only on
+ * the matrices in the currently active stage. distilgpt2 at seq 64 is millions
+ * of elements across ~37 stages; as instanced quads at full resolution it does
+ * not run at all, and the budget below is what is enforced rather than hoped
+ * for. `setStage` promotes one stage and demotes the last one, so the cost is
+ * bounded by the largest single stage and not by the model.
+ */
+export class Stack extends OpNode {
+  stages: any[] = []
+  active = 0
+  playing = false
+  onStageChange: any = null
+
+  constructor(params, context, init_viz = false) {
+    super(params, context)
+    // `copyTree` round trips through flatten/unflatten, which drops empty
+    // sub-objects -- so an empty `stages` arrives here as `undefined` and
+    // Object.entries would throw "Cannot convert undefined or null to object".
+    // Say what is actually wrong instead.
+    if (!this.params.stages || !Object.keys(this.params.stages).length) {
+      throw new Error(`stack '${this.params.name}' has no stages`)
+    }
+    const entries = Object.entries(this.params.stages)
+    entries.forEach(([key, sp]: [string, any]) => {
+      const cp = this.prepChildParams(sp)
+      // 'inherit' has no meaning at the top of a stage -- MatMul.initAnimation
+      // looks the algorithm up in a table and would find nothing.
+      if (!cp.anim.alg || cp.anim.alg === 'inherit') cp.anim.alg = this.params.anim.alg
+      cp.anim.alg = 'none'           // every stage starts static; setStage arms one
+      const obj = buildChildNode(cp, this.context, nodeHeight(sp), nodeWidth(sp))
+      this.stages.push({
+        key, name: sp.name, kind: sp.op || (sp.matmul ? 'matmul' : 'leaf'),
+        note: sp.note || '', row: sp.row || 0, params: cp, obj,
+      })
+    })
+    if (!this.stages.length) {
+      throw new Error(`stack '${this.params.name}' has no stages`)
+    }
+    this.H = this.stages[this.stages.length - 1].obj.H
+    this.W = this.stages[this.stages.length - 1].obj.W
+    if (init_viz) this.initViz()
+  }
+
+  childNodes() { return this.stages.map(s => s.obj) }
+  childParams() { return this.stages.map(s => s.params) }
+
+  // A stack has no matrix of its own. The last stage's result is the model's
+  // output, which is the only reading of "this stack's data" that is not made
+  // up, so that is what these return.
+  getDataArray() { return this.stages[this.stages.length - 1].obj.getDataArray() }
+  getData(i, j) { return this.stages[this.stages.length - 1].obj.getData(i, j) }
+
+  /** Per-matrix texel cap for the stages that are not active. */
+  stageBudget() {
+    const scene = this.params.viz['scene texel budget'] || HEATMAP_SCENE_TEXEL_BUDGET
+    return Math.max(1 << 12, Math.floor(scene / Math.max(1, this.stages.length)))
+  }
+
+  /**
+   * The render path a stage gets, `active` or not.
+   *
+   * C3's rule -- every matrix a LOD-reduced heatmap at model level, with
+   * full-resolution texels and the sphere path spent only on the active stage
+   * -- is what `auto` does, and `auto` is the default. It is a default and not
+   * an invariant: an explicit 'spheres' or 'heatmap' is taken at its word
+   * everywhere, because a control that declined to do what it says would be
+   * worse than no control. Forcing spheres on the whole model is millions of
+   * instanced quads and will be slow; the status bar prints the count so the
+   * cost is visible rather than a surprise.
+   */
+  stageRenderMode(active: boolean) {
+    const want = this.params.viz['render mode'] || 'auto'
+    if (want !== 'auto') return want
+    return active ? 'auto' : 'heatmap'
+  }
+
+  initViz(params = undefined) {
+    if (params) this.params = params
+    util.disposeAndClear(this.group)
+    this.stages.forEach(st => {
+      st.obj.setVizProp('texel budget', this.stageBudget())
+      st.obj.setVizProp('render mode', this.stageRenderMode(false))
+      st.obj.initViz()
+    })
+    this.layoutStages()
+    this.setRowGuides()
+    this.setAlignGrid()
+  }
+
+  layoutStages() {
+    const gap = this.params.layout.gap
+    const margin = gap * 4
+    const rows: any = {}
+    this.stages.forEach(st => (rows[st.row] ||= []).push(st))
+
+    let y = 0
+    let [maxx, maxz] = [0, 0]
+    Object.keys(rows).sort((a, b) => +a - +b).forEach(k => {
+      let x = 0, rh = 0
+      rows[k].forEach(st => {
+        const e = st.obj.getExtent()
+        util.updateProps(st.obj.group.position, { x, y, z: 0 })
+        this.group.add(st.obj.group)
+        x += e.x + margin
+        rh = Math.max(rh, e.y)
+        maxz = Math.max(maxz, e.z)
+      })
+      maxx = Math.max(maxx, Math.max(0, x - margin))
+      y += rh + margin
+    })
+    this._extents = { x: maxx, y: Math.max(0, y - margin), z: maxz }
+  }
+
+  stageList() {
+    return this.stages.map((st, i) => ({ i, name: st.name, kind: st.kind, note: st.note }))
+  }
+
+  /**
+   * Make stage `i` the active one: promoted to the full texel budget and the
+   * `auto` render path, animated by the stack's algorithm. The stage that was
+   * active goes back to the scene budget and to heatmap, fully shown.
+   */
+  setStage(i, playing = undefined) {
+    if (playing !== undefined) this.playing = !!playing
+    const n = this.stages.length
+    const next = ((i % n) + n) % n
+    if (next !== this.active) {
+      const prev = this.stages[this.active]
+      if (prev) {
+        prev.params.anim.alg = 'none'
+        prev.obj.setVizProp('texel budget', this.stageBudget())
+        prev.obj.setVizProp('render mode', this.stageRenderMode(false))
+        // Decoration is per stage, never over the whole stack. Re-running
+        // setLegends() across 135 matrices costs seconds -- `util.getText`
+        // tessellates glyphs -- and a timeline that pauses for that is not a
+        // timeline. Only the two stages that changed are re-decorated, which is
+        // C3's budget rule applied to text as well as to texels.
+        prev.obj.initViz()
+        prev.obj.show()
+      }
+      this.active = next
+    }
+    const cur = this.stages[this.active]
+    cur.params.anim.alg = this.params.anim.alg
+    cur.obj.setVizProp('texel budget', 0)          // 0 = the full per-matrix cap
+    cur.obj.setVizProp('render mode', this.stageRenderMode(true))
+    cur.obj.initViz()
+    this.layoutStages()
+    this.armActive()
+    this.onStageChange && this.onStageChange(this.active, this.playing)
+  }
+
+  armActive() {
+    const cur = this.stages[this.active]
+    const advance = () => {
+      if (this.playing) {
+        this.setStage(this.active + 1)
+      } else {
+        this.bump = () => { }        // parked at the end of a finished stage
+      }
+    }
+
+    // A finished stage is held before the timeline moves on. Some stages have
+    // nothing to sweep at all -- an `add` never does, because the sum is
+    // elementwise and pretending otherwise would animate an algorithm the model
+    // does not run -- and those would otherwise flash past in a single frame.
+    // `speed` is bumps per second, so that many bumps is about a second.
+    const hold = () => {
+      let ticks = 0
+      return () => {
+        if (++ticks >= Math.max(1, this.params.anim.speed)) { ticks = 0; advance() }
+      }
+    }
+
+    if (cur.params.anim.alg === 'none' || !cur.obj.initAnimation) {
+      cur.obj.show()
+      this.bump = hold()
+      return
+    }
+    let done = false
+    cur.obj.initAnimation(() => { done = true; this.bump = hold() })
+    const inner = cur.obj.bump
+    this.bump = () => { if (!done) { inner ? inner() : advance() } }
+  }
+
+  initAnimation(cb = undefined) {
+    this.setStage(this.active)
+  }
+
+  override setVizProp(k, v) {
+    this.params.viz[k] = v
+    this.stages.forEach(st => st.obj.setVizProp(k, v))
+  }
+}
+
+//
 // layout schemes
 //
 
@@ -1869,15 +2739,18 @@ export const childLayout = (parent_layout, rule, left_child) =>
 export function setLayoutScheme(params, scheme_name = undefined) {
   scheme_name = util.syncProp(params.layout, 'scheme', scheme_name)
   const rule = LAYOUT_RULES[scheme_name]
+  // The scheme is a rule about how a matmul's three faces fold relative to its
+  // parent's, so it applies to matmuls and to nothing else: it descends
+  // *through* the other node kinds (which have no polarity or placement) into
+  // whatever matmuls hang off them, rather than stopping at the first one or
+  // writing a `layout` onto a node that has no use for it.
   function f(p) {
-    if (p.left.matmul) {
-      p.left.layout = childLayout(p.layout, rule, true)
-      f(p.left)
-    }
-    if (p.right.matmul) {
-      p.right.layout = childLayout(p.layout, rule, false)
-      f(p.right)
-    }
+    childParamsOf(p).forEach(c => {
+      if (c.matmul) {
+        c.layout = childLayout(p.layout || params.layout, rule, c === p.left)
+      }
+      f(c)
+    })
   }
   rule && f(params)
 }
@@ -2037,7 +2910,43 @@ function parseExpr(s) {
   }
 }
 
+/** Does this tree contain a node kind the expression grammar cannot spell? */
+export function treeHasOps(p) {
+  return !!p.op || childParamsOf(p).some(treeHasOps)
+}
+
+/**
+ * A read-only descriptor for a tree that is not an expression.
+ *
+ * mm's grammar is matmul-only: `parseExpr` maps '@' and nothing else. Handed a
+ * tree containing an `add`, `genExpr` would happily print `x @ attn_y` -- a
+ * matmul where an add is drawn, which is precisely the kind of plausible lie
+ * this repository exists to refuse. So a tree with any op node gets a
+ * description instead, and it deliberately contains no '@'.
+ */
+export function describeTree(p) {
+  const counts = {}
+  const walk = q => {
+    const kind = q.op || (q.matmul ? 'matmul' : q.matmul === false ? 'matrix' : 'matmul')
+    counts[kind] = (counts[kind] || 0) + 1
+    childParamsOf(q).forEach(walk)
+  }
+  walk(p)
+  const stages = p.op === 'stack' ? `${Object.keys(p.stages).length} stages · ` : ''
+  const parts = Object.entries(counts).sort().map(([k, n]) => `${n} ${k}`).join(', ')
+  return `${p.name} — ${stages}${parts} (not an expression)`
+}
+
 export function syncExpr(params) {
+  if (treeHasOps(params)) {
+    // Refuse rather than round-trip. `childParams` below rebuilds every node as
+    // a matmul or a leaf, so parsing an expression back over this tree would
+    // silently turn the adds and the materialized stages into matmuls and
+    // change what is drawn without changing what is said about it.
+    console.log(`cannot parse an expression over '${params.name}': ` +
+      `it contains node kinds the grammar has no notation for (${describeTree(params)})`)
+    return false
+  }
   if (params.expr == genExpr(params)) {
     return true
   }
@@ -2128,6 +3037,9 @@ export function syncExpr(params) {
 }
 
 export function genExpr(p) {
+  if (treeHasOps(p)) {
+    return describeTree(p)
+  }
   const passign = e => /^\w+\s+=/.test(e) ? `(${e})` : e
   const l = p.left.matmul ? passign(genExpr(p.left)) : p.left.name
   const r = p.right.matmul ? '(' + genExpr(p.right) + ')' : p.right.name
