@@ -87,14 +87,17 @@ What it does not list is the rest of the checkpoint. The panel that used to sit
 to the left of the viewer showed all 82 tensors including the ones no view
 draws, and said why each was undrawn. That panel is gone, and with it the
 click-a-tensor-to-open-the-view-that-draws-it navigation. What each kind of
-tensor is, and why 33 of distilgpt2's 82 are drawn by no view on this page, is
-recorded below rather than in a panel:
+tensor is, and why most of distilgpt2's tensors are drawn by no view on this
+page, is recorded here rather than in a panel. The split below is the one
+`/api/meta.json` reported for this checkpoint; it is a property of these views
+and that file, so re-derive it from `role` and `kinds` rather than trusting the
+counts if either changes:
 
 | | |
 | --- | --- |
-| **drawn** | 49 of 82. `c_attn.weight` is reachable three ways — `attention head`, `qkv projection`, and inside the staged model — and they are three different pictures of it. |
-| **a bias** | drawn as the augmenting row or column of its weight, in the views that *ask* for it. `attn.c_proj.bias` is a term of `attention output` and not of `attention head` — that is the `NO_BIAS` refusal below, not an oversight. |
-| **a LayerNorm gain or shift** | not drawn: the forward pass folds it into the activation, so it is already inside every matrix built from that activation. 26 tensors. |
+| **drawn** | 49 of the 82. `c_attn.weight` is reachable three ways — `attention head`, `qkv projection`, and inside the staged model — and they are three different pictures of it. |
+| **a bias** | drawn as the augmenting row or column of its weight, in the views that *ask* for it. `attn.c_proj.bias` is a term of `attention output` and not of `attention head` — that is the `wo:h` refusal under *The biases are drawn, by augmenting* below, not an oversight. |
+| **a LayerNorm gain or shift** | not drawn: the forward pass folds it into the activation, so it is already inside every matrix built from that activation. 26 of the 33 undrawn. |
 | **a registered buffer** | `h.N.attn.bias` is the causal mask — not a learned parameter, and not read: `_forward` builds its own with `np.tril`. Six copies of a 1024×1024 float32 buffer are 25,165,824 of the checkpoint's bytes that nothing here touches. |
 | **`wpe`** | the positional embedding, added to the residual stream before the first block rather than multiplied by anything. |
 

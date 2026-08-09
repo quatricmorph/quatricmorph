@@ -858,7 +858,13 @@ const initInstructions = () => {
   max_button.onclick = show
 
   instr.style.display = "block"
-  show()
+  // Minimized on arrival, not expanded. The panel is fixed at the top left and
+  // is ~480px wide; the outliner sits at left:12 top:48 underneath it, and
+  // since the checkpoint pages' own sidebar went away that outliner is the only
+  // scene tree there is. Covering it on every load would hide the one panel
+  // that selects and hides. The `>` chip is 36x40 at the very corner, clear of
+  // the outliner, and one click still brings the whole table back.
+  hide()
 }
 
 if (document.readyState === 'complete') {
