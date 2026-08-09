@@ -276,9 +276,23 @@ function postStages(active = undefined, playing = undefined) {
 // *viewer's* viewport, which the page does not know, so a claim computed on
 // that side would be optimistic about how much resolution is on screen. This
 // is measured, after the fact, from the objects that exist.
+//
+// `mode` is the one field here that is *not* measured: it is the override
+// itself — 'auto' | 'spheres' | 'heatmap' — and it is reported because the page
+// owns a selector over the same state and re-pushes its value on every rebuild.
+// Without this, flipping the panel's toggle and then changing the layer would
+// silently restore the selector's stale choice.
+//
+// It cannot be inferred from the measured fields. A scene where `auto` chose
+// heatmap for every matrix reports exactly what 'heatmap' reports, and adopting
+// 'heatmap' there would quietly delete the page's 'auto' — a different setting,
+// which decides per matrix rather than for all of them.
+//
 function postRender() {
   if (!obj || window.parent === window) return
-  window.parent.postMessage({ render: obj.getVizSummary() }, '*')
+  window.parent.postMessage({
+    render: { ...obj.getVizSummary(), mode: params.viz['render mode'] || 'auto' },
+  }, '*')
 }
 
 //

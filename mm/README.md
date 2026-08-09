@@ -63,7 +63,10 @@ gpt2/ attngpt2/ attnqkov/    checkpoint pages (one index.html each + README)
 src/                  all application TypeScript
   main.ts             entry: renderer, camera, animation loop, messaging
   viz.ts              Mat / MatMul — geometry, layout, animation, numerics
-  points.ts           instanced-quad element rendering (WebGPU)
+  points.ts           instanced-quad element rendering (WebGPU) — 'spheres'
+  heatmap.ts          the other render path, as pure arithmetic: mode, LOD, cells
+  heatmapmesh.ts      the same path's THREE half: one textured quad per block
+  colormap.ts         the heatmap ramp and the value → texel encoding
   gui.ts              lil-gui control panel
   util.ts             params (de)serialization, three.js helpers
   params.ts           the default params tree

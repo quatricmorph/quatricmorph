@@ -95,6 +95,74 @@ describe('initGui', () => {
     }
   })
 
+  it('puts the render-path toggle at the root, outside every folder', () => {
+    // The point of the control is that it is reachable without opening
+    // anything. Inside a folder it would be the dropdown it duplicates.
+    build()
+    expect(gui.controllers.map(c => c.property)).toContain('flip')
+  })
+
+  it('names the toggle with the mode in force and the one a click gives', () => {
+    // Both, because neither alone is honest. "draw as spheres" alone would be a
+    // promise of no change over the viewer's own default scene, which is small
+    // enough that 'auto' is already drawing it as spheres; "render: auto"
+    // alone would hide that a click leaves 'auto' and cannot get back to it.
+    const p = defaultParams()
+    expect(p.viz['render mode']).toBe('auto')
+    build(p)
+    expect(gui.controllers.find(c => c.property === 'flip')._name)
+      .toBe('render: auto → spheres')
+  })
+
+  it('flips render mode between spheres and heatmap, rebuilding each time', () => {
+    // Two halves, both required: params is what serialises into the URL, and
+    // initObj is what puts the other primitive on screen. The render path is
+    // chosen when a Mat is built, so a repaint would change nothing.
+    const p = defaultParams()
+    const cbs = callbacks()
+    gui = initGui(p, cbs, info())
+    const toggle = gui.controllers.find(c => c.property === 'flip')
+
+    toggle.$button.click()
+    expect(p.viz['render mode']).toBe('spheres')
+    expect(toggle._name).toBe('render: spheres → heatmap')
+    expect(cbs.initObj).toHaveBeenCalledTimes(1)
+
+    toggle.$button.click()
+    expect(p.viz['render mode']).toBe('heatmap')
+    expect(toggle._name).toBe('render: heatmap → spheres')
+    expect(cbs.initObj).toHaveBeenCalledTimes(2)
+  })
+
+  it('saves the url itself, because lil-gui buttons never fire onFinishChange', () => {
+    // FunctionController calls _callOnChange and stops there, so the
+    // panel-wide gui.onFinishChange(saveUrl) does not see a click. Without the
+    // explicit call the render mode would be missing from the scene's own link.
+    const p = defaultParams()
+    const cbs = callbacks()
+    gui = initGui(p, cbs, info())
+    gui.controllers.find(c => c.property === 'flip').$button.click()
+    expect(cbs.saveUrl).toHaveBeenCalled()
+  })
+
+  it('keeps the toggle and the render mode dropdown showing one value', () => {
+    // One setting, two controls. The dropdown is the complete one -- it is the
+    // only way back to 'auto' -- so neither may show a mode the other changed.
+    const p = defaultParams()
+    build(p)
+    const toggle = gui.controllers.find(c => c.property === 'flip')
+    const viz = gui.folders.find(f => f._title === 'colors and sizes')
+    const dropdown = viz.controllers.find(c => c.property === 'render mode')
+
+    toggle.$button.click()
+    expect(dropdown.getValue()).toBe('spheres')
+    expect(dropdown._listening).toBe(true)   // so the widget redraws itself
+
+    dropdown.setValue('auto')
+    expect(p.viz['render mode']).toBe('auto')
+    expect(toggle._name).toBe('render: auto → spheres')
+  })
+
   it('writes changes back into the params object it was given', () => {
     const p = defaultParams()
     build(p)

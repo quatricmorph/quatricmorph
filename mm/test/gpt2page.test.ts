@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import {
   abs, esc, L, A, B, leaf, inner, node, root, BASE,
   countPoints, bbox, height, width, merge, mount,
-  dataClaim, productClaim, renderClaim, checkShapes,
+  dataClaim, productClaim, renderClaim, checkShapes, adoptRenderMode,
 } from '../src/gpt2page.js'
 import { flatten, unflatten } from '../src/util.js'
 
@@ -371,6 +371,50 @@ describe('productClaim', () => {
   })
 })
 
+//
+// The render mode is the one piece of state the page and the viewer both own:
+// the header's `Render` selector and the viewer's own panel write it, and
+// `refresh` pushes the selector's value back on every rebuild. So a change made
+// inside the viewer has to come back, or it survives until the next layer
+// change and is then silently undone -- a picture that quietly stops being the
+// one that was asked for, which is the failure this whole file exists to catch.
+//
+describe('adoptRenderMode', () => {
+  it('adopts a mode the viewer reports and the page does not have', () => {
+    expect(adoptRenderMode('auto', 'spheres')).toBe('spheres')
+    expect(adoptRenderMode('heatmap', 'spheres')).toBe('spheres')
+    expect(adoptRenderMode('spheres', 'heatmap')).toBe('heatmap')
+  })
+
+  it('adopts auto, which no measurement of the built scene could recover', () => {
+    // The reason `mode` is reported rather than inferred: a scene where auto
+    // chose heatmap for every matrix is indistinguishable from an explicit
+    // 'heatmap' in the summary, and auto is a different setting -- per matrix,
+    // not for all of them.
+    expect(adoptRenderMode('spheres', 'auto')).toBe('auto')
+  })
+
+  it('says nothing when there is nothing to change', () => {
+    expect(adoptRenderMode('heatmap', 'heatmap')).toBe(null)
+    expect(adoptRenderMode('auto', 'auto')).toBe(null)
+  })
+
+  it('says nothing when the viewer sent no mode at all', () => {
+    // An older viewer, or the `{render: …}` summary before this field existed.
+    // Leaving the selector alone keeps the page's own value authoritative.
+    expect(adoptRenderMode('auto', undefined)).toBe(null)
+    expect(adoptRenderMode('auto', null)).toBe(null)
+    expect(adoptRenderMode('auto', '')).toBe(null)
+  })
+
+  it('refuses a mode the selector has no option for', () => {
+    // Assigning an absent value to a <select> blanks it, and the next refresh
+    // would push that empty string into params as the render mode.
+    expect(adoptRenderMode('auto', 'elements', ['auto', 'spheres', 'heatmap'])).toBe(null)
+    expect(adoptRenderMode('auto', 'spheres', ['auto', 'heatmap'])).toBe(null)
+  })
+})
+
 describe('mount', () => {
   it('is the module entry point the example pages import', () => {
     // mount() itself needs a live /gpt2 server and is exercised by loading a
@@ -576,5 +620,220 @@ describe('renderClaim', () => {
 
   it('promises the hover readout is still the checkpoint\'s own number', () => {
     expect(renderClaim(sum({ lod: 2 }))).toContain("checkpoint's own value")
+  })
+})
+
+//
+// The hierarchy sidebar.
+//
+// The failure this file keeps guarding against, in its sidebar form: a tree
+// that looks like the checkpoint and is not. A name the splitter cannot place
+// drops a tensor silently, and 76 rows where there should be 82 read as
+// complete. So the leaf count is asserted against the input everywhere below,
+// not eyeballed.
+//
+import { tensorTree, viewsFor, whyNotDrawn, hierarchyHTML, bytesShort } from '../src/gpt2page.js'
+
+// Stand-ins for /api/meta.json tensor entries, shaped like `tensor_roles`
+// output. `kinds` are the matrix kinds that address a weight; `bias_for` the
+// kinds a bias augments.
+const w = (name, shape, kinds, layer = null) =>
+  ({ name, shape, dtype: 'F32', bytes: shape.reduce((a, b) => a * b, 1) * 4,
+     role: 'weight', note: null, layer, bias_for: [],
+     kinds: kinds.map(k => ({ kind: k, bias: null, no_bias: null })) })
+const b = (name, shape, bias_for, layer = null) =>
+  ({ name, shape, dtype: 'F32', bytes: shape[0] * 4, role: 'bias', note: null,
+     layer, kinds: [], bias_for })
+const other = (name, shape, role, note, layer = null) =>
+  ({ name, shape, dtype: 'F32', bytes: shape.reduce((a, x) => a * x, 1) * 4,
+     role, note, layer, kinds: [], bias_for: [] })
+
+// distilgpt2's shape, at two layers: 13 tensors per block plus 4 outside.
+const TENSORS = [
+  w('transformer.wte.weight', [50257, 768], ['wte', 'wte_t']),
+  w('transformer.wpe.weight', [1024, 768], ['wpe']),
+  other('transformer.ln_f.weight', [768], 'norm', 'folded into `final`'),
+  other('transformer.ln_f.bias', [768], 'norm', 'folded into `final`'),
+  ...[0, 1].flatMap(l => [
+    other(`transformer.h.${l}.attn.bias`, [1, 1, 1024, 1024], 'buffer', 'the causal mask', l),
+    w(`transformer.h.${l}.attn.c_attn.weight`, [768, 2304], ['wq', 'wk', 'wk_t', 'wv', 'c_attn'], l),
+    b(`transformer.h.${l}.attn.c_attn.bias`, [2304], ['wq', 'wk', 'wk_t', 'wv', 'c_attn'], l),
+    w(`transformer.h.${l}.attn.c_proj.weight`, [768, 768], ['wo', 'attn_c_proj'], l),
+    b(`transformer.h.${l}.attn.c_proj.bias`, [768], ['attn_c_proj'], l),
+    other(`transformer.h.${l}.ln_1.weight`, [768], 'norm', 'folded into ln_1', l),
+    other(`transformer.h.${l}.ln_1.bias`, [768], 'norm', 'folded into ln_1', l),
+    other(`transformer.h.${l}.ln_2.weight`, [768], 'norm', 'folded into ln_2', l),
+    other(`transformer.h.${l}.ln_2.bias`, [768], 'norm', 'folded into ln_2', l),
+    w(`transformer.h.${l}.mlp.c_fc.weight`, [768, 3072], ['c_fc'], l),
+    b(`transformer.h.${l}.mlp.c_fc.bias`, [3072], ['c_fc'], l),
+    w(`transformer.h.${l}.mlp.c_proj.weight`, [3072, 768], ['mlp_c_proj'], l),
+    b(`transformer.h.${l}.mlp.c_proj.bias`, [768], ['mlp_c_proj'], l),
+  ]),
+]
+
+// The gpt2 page's views, reduced to the only field that decides reachability.
+const VIEWS = {
+  'attention head': { kinds: ['ln_1:w', 'ln_1:th', 'wq:h', 'wk_t:w', 'wv:h', 'wo'] },
+  'qkv projection': { kinds: ['ln_1:w', 'c_attn:ch'] },
+  'attention output': { kinds: ['attn_out:w', 'attn_c_proj:ch'] },
+  'mlp up (gelu)': { kinds: ['ln_2:w', 'c_fc:ch'] },
+  'mlp down': { kinds: ['mlp_h:w', 'mlp_c_proj:ch'] },
+  'logits (tied wte)': { kinds: ['final', 'wte_t:r'] },
+}
+
+const leaves = n => n.children.length || !n.tensor
+  ? n.children.flatMap(leaves).concat(n.tensor ? [n] : [])
+  : [n]
+
+describe('tensorTree', () => {
+  it('holds every tensor it was given — the count is the whole point', () => {
+    const t = tensorTree(TENSORS, 'distilgpt2')
+    expect(t.count).toBe(TENSORS.length)
+    expect(leaves(t).length).toBe(TENSORS.length)
+    // and no name was invented along the way
+    expect(new Set(leaves(t).map(n => n.tensor.name)))
+      .toEqual(new Set(TENSORS.map(x => x.name)))
+  })
+
+  it('sums bytes up the tree', () => {
+    const t = tensorTree(TENSORS, 'distilgpt2')
+    expect(t.bytes).toBe(TENSORS.reduce((s, x) => s + x.bytes, 0))
+    const h = t.children.find(c => c.label == 'transformer').children.find(c => c.label == 'h')
+    expect(h.count).toBe(13 * 2)
+  })
+
+  it('collapses a chain that says nothing — wte/weight is one row', () => {
+    const t = tensorTree(TENSORS, 'distilgpt2')
+    const tr = t.children.find(c => c.label == 'transformer')
+    expect(tr.children.map(c => c.label).sort())
+      .toEqual(['h', 'ln_f', 'wpe.weight', 'wte.weight'])
+    // ...but a node with two children keeps them
+    expect(tr.children.find(c => c.label == 'ln_f').children.map(c => c.label))
+      .toEqual(['bias', 'weight'])
+  })
+
+  it('orders layers numerically, so h.10 follows h.9', () => {
+    const many = Array.from({ length: 12 }, (_, l) =>
+      w(`transformer.h.${l}.mlp.c_fc.weight`, [4, 4], ['c_fc'], l))
+    // Nothing here but blocks, so `transformer` and `h` collapse into one node
+    // and each block collapses onto its single tensor — which is the case a
+    // whole-label numeric test would get wrong, '10.mlp…' sorting under '1'.
+    const h = tensorTree(many).children[0]
+    expect(h.label).toBe('transformer.h')
+    expect(h.children.map(c => c.label)).toEqual(
+      Array.from({ length: 12 }, (_, l) => `${l}.mlp.c_fc.weight`))
+  })
+
+  it('keeps a tensor whose name is a prefix of another', () => {
+    // `a.b` and `a.b.c` both exist: the first is a node that carries a tensor
+    // *and* children. Dropping either would be the silent loss this guards.
+    const t = tensorTree([w('a.b', [2, 2], []), w('a.b.c', [2, 2], [])])
+    expect(t.count).toBe(2)
+  })
+})
+
+describe('viewsFor', () => {
+  const find = n => TENSORS.find(t => t.name == n)
+
+  it('reaches a weight through any view naming one of its kinds', () => {
+    expect(viewsFor(find('transformer.h.0.attn.c_attn.weight'), VIEWS))
+      .toEqual(['attention head', 'qkv projection'])
+    expect(viewsFor(find('transformer.h.1.mlp.c_fc.weight'), VIEWS)).toEqual(['mlp up (gelu)'])
+    expect(viewsFor(find('transformer.wte.weight'), VIEWS)).toEqual(['logits (tied wte)'])
+  })
+
+  it('reaches a bias only where the view asks to augment with it', () => {
+    // 'attention head' names `wo` with no flag, so it does not draw
+    // attn.c_proj.bias — which is exactly what the server's NO_BIAS refuses.
+    // 'attention output' names `attn_c_proj:ch`, and there it does.
+    expect(viewsFor(find('transformer.h.0.attn.c_proj.bias'), VIEWS))
+      .toEqual(['attention output'])
+    expect(viewsFor(find('transformer.h.0.attn.c_attn.bias'), VIEWS))
+      .toEqual(['attention head', 'qkv projection'])
+  })
+
+  it('reaches nothing for a tensor no view names', () => {
+    expect(viewsFor(find('transformer.wpe.weight'), VIEWS)).toEqual([])
+    expect(viewsFor(find('transformer.h.0.attn.bias'), VIEWS)).toEqual([])
+    expect(viewsFor(find('transformer.h.0.ln_1.weight'), VIEWS)).toEqual([])
+  })
+
+  it('narrows with the page — attngpt2 has one view', () => {
+    const one = { 'attention head': { kinds: ['ln_1:w', 'wq:h', 'wk_t:w', 'wv:h', 'wo'] } }
+    expect(viewsFor(find('transformer.h.0.mlp.c_fc.weight'), one)).toEqual([])
+    expect(viewsFor(find('transformer.h.0.attn.c_attn.weight'), one)).toEqual(['attention head'])
+  })
+})
+
+describe('whyNotDrawn', () => {
+  const find = n => TENSORS.find(t => t.name == n)
+
+  it('says nothing about a tensor a view does draw', () => {
+    expect(whyNotDrawn(find('transformer.h.0.mlp.c_fc.weight'), VIEWS)).toBe(null)
+  })
+
+  it('prefers the server\'s own note, which is where the claim is checked', () => {
+    expect(whyNotDrawn(find('transformer.h.0.attn.bias'), VIEWS)).toBe('the causal mask')
+    expect(whyNotDrawn(find('transformer.h.0.ln_1.weight'), VIEWS)).toBe('folded into ln_1')
+  })
+
+  it('names the kinds an undrawn weight does have', () => {
+    expect(whyNotDrawn(find('transformer.wpe.weight'), VIEWS)).toContain('wpe')
+  })
+
+  it('is loud about a tensor the server could not classify', () => {
+    const u = { name: 'x.y', shape: [1], dtype: 'F32', bytes: 4,
+                role: 'unclassified', note: null, layer: null, kinds: [], bias_for: [] }
+    expect(whyNotDrawn(u, VIEWS)).toContain('not classified')
+  })
+})
+
+describe('hierarchyHTML', () => {
+  const html = () => hierarchyHTML(tensorTree(TENSORS, 'distilgpt2'), VIEWS)
+
+  it('draws one row per tensor, and one link per view that draws it', () => {
+    const h = html()
+    expect((h.match(/class="ten /g) || []).length).toBe(TENSORS.length)
+    // c_attn.weight alone is reachable three ways, so a row-per-link count is
+    // the only one that can be right.
+    const links = TENSORS.reduce((s, t) => s + viewsFor(t, VIEWS).length, 0)
+    expect((h.match(/<a href="#" class="lbl"/g) || []).length).toBe(links)
+  })
+
+  it('carries the layer a link needs, taken from the tensor\'s own name', () => {
+    expect(html()).toContain('data-view="mlp up (gelu)" data-layer="1"')
+    // wte is outside the blocks, so it carries no layer rather than a made-up 0
+    expect(html()).toContain('data-view="logits (tied wte)">logits (tied wte)</a>')
+    expect(html()).not.toContain('data-view="logits (tied wte)" data-layer')
+  })
+
+  it('only ever names a view the selector actually has, and a real layer', () => {
+    // The contract `mount`'s click handler runs on: it sets $('view').value
+    // from data-view, and a name no <option> carries would leave the selector
+    // where it was and quietly redraw the wrong thing.
+    const h = html()
+    for (const m of h.matchAll(/data-view="([^"]*)"(?: data-layer="(\d+)")?/g)) {
+      expect(Object.keys(VIEWS)).toContain(m[1].replace(/&amp;/g, '&'))
+      if (m[2] !== undefined) expect(+m[2]).toBeLessThan(2)   // the fixture has 2 layers
+    }
+  })
+
+  it('marks a buffer apart from a merely undrawn weight', () => {
+    expect(html()).toContain('class="ten buffer"')
+    expect(html()).toContain('class="ten norm"')
+  })
+
+  it('escapes a hostile tensor name rather than injecting it', () => {
+    const h = hierarchyHTML(tensorTree([w('<img src=x>', [2, 2], [])]), VIEWS)
+    expect(h).not.toContain('<img src=x>')
+    expect(h).toContain('&lt;img src=x&gt;')
+  })
+})
+
+describe('bytesShort', () => {
+  it('scales without overstating precision', () => {
+    expect(bytesShort(768)).toBe('768 B')
+    expect(bytesShort(3072)).toBe('3.1 kB')
+    expect(bytesShort(154389504)).toBe('154 MB')
   })
 })

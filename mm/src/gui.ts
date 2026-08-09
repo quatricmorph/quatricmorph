@@ -407,6 +407,64 @@ export function initGui(params, callbacks, info) {
   params.viz['heatmap filter'] ||= 'nearest' // temp BC
   params.viz['lod reduce'] ||= 'maxAbs' // temp BC
   params.viz['texel budget'] ??= 0 // temp BC
+
+  //
+  // The render-path toggle.
+  //
+  // Same state as the `render mode` dropdown in 'colors and sizes' below —
+  // deliberately one value with two controls, not two settings. The dropdown is
+  // the complete control and is the only way back to 'auto'; this is the flip
+  // between the two things 'auto' chooses between, at the root of the panel
+  // because it is the one viz knob that changes what a matrix *is* rather than
+  // how it is coloured, and three clicks deep is the wrong place for that.
+  //
+  // The two stay in step in both directions: the dropdown `.listen()`s, and its
+  // onChange renames this button.
+  //
+  // The label carries the setting *and* the click — `render: auto → spheres` —
+  // rather than one or the other, because neither alone is honest here. A
+  // button naming only its destination would read "draw as spheres" over the
+  // viewer's own default scene, which `auto` is already drawing as spheres: a
+  // promise of no change. A button naming only the current mode would hide that
+  // 'auto' is a third value the dropdown has and this cannot return to.
+  //
+  // 'auto' flips to 'spheres', not to 'heatmap'. `auto` picks heatmap for
+  // anything from 256x256 up (HEATMAP_MIN_ELEMENTS in heatmap.ts), so on a
+  // checkpoint-sized scene it is already drawing the heatmap and the sphere
+  // path is the one a click cannot otherwise reach. It is also the expensive
+  // direction — the whole-model view is tens of millions of instanced quads as
+  // spheres — which is the other reason the destination is named up front.
+  const OTHER_MODE = {
+    heatmap: 'spheres',
+    spheres: 'heatmap',
+    elements: 'heatmap',   // the pre-rename spelling of 'spheres'
+    auto: 'spheres',
+  }
+
+  const otherMode = () => OTHER_MODE[params.viz['render mode']] || 'spheres'
+  const renderLabel = () =>
+    `render: ${params.viz['render mode']} → ${otherMode()}`
+
+  let render_toggle = null
+
+  function addRenderToggle(g) {
+    const flip = () => {
+      params.viz['render mode'] = otherMode()
+      render_toggle.name(renderLabel())
+      // Which path a matrix takes is decided when it is built, so this is a
+      // rebuild and not a repaint — the same reason the dropdown passes
+      // initObj rather than a setter.
+      initObj()
+      // lil-gui's FunctionController fires onChange but never onFinishChange,
+      // so the panel-wide `gui.onFinishChange(saveUrl)` at the bottom of this
+      // file does not see a button. Without this the mode would be missing
+      // from the URL the scene serialises to.
+      saveUrl()
+    }
+    render_toggle = g.add({ flip }, 'flip').name(renderLabel())
+    return render_toggle
+  }
+
   function addVizParams(g) {
     const gui_viz = addFolder(g, 'colors and sizes', params.viz)
     addChoiceParam(gui_viz, 'sensitivity', viz.SENSITIVITIES, initObj, p => p.viz)
@@ -421,7 +479,13 @@ export function initGui(params, callbacks, info) {
     // encoding, the filter and the mip ladder are all decided when a Mat is
     // built, and a knob that changed a label without changing the picture
     // would be worse than no knob.
-    addChoiceParam(gui_viz, 'render mode', viz.RENDER_MODES, initObj, p => p.viz)
+    //
+    // `.listen()` and the rename are the other half of the root toggle above:
+    // one value, and neither control may show a mode the other one changed.
+    addChoiceParam(gui_viz, 'render mode', viz.RENDER_MODES, v => {
+      render_toggle && render_toggle.name(renderLabel())
+      initObj()
+    }, p => p.viz).listen()
     addChoiceParam(gui_viz, 'heatmap encoding', viz.HEATMAP_ENCODINGS, initObj, p => p.viz)
     addChoiceParam(gui_viz, 'heatmap filter', ['nearest', 'linear'], initObj, p => p.viz)
     addChoiceParam(gui_viz, 'lod reduce', viz.HEATMAP_REDUCERS, initObj, p => p.viz)
@@ -449,6 +513,11 @@ export function initGui(params, callbacks, info) {
       saveUrl()
     }
   })
+
+  // Before the scene section, so it is the first control in the panel and is
+  // visible without opening a folder. Everything below it is grouped; this one
+  // is not, because a folder is exactly what it exists to get out of.
+  addRenderToggle(gui)
 
   params.op ? addStackParams(gui) : addMatmulParams(gui)
   addDecoParams(gui)

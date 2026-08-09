@@ -516,6 +516,42 @@ NO_BIAS = {
     "wpe": "the position embedding is a lookup, not an affine map; it has no bias.",
 }
 
+# Stored tensors that no logical matrix addresses, and what they are instead.
+#
+# WEIGHT_KINDS and BIAS_KINDS between them name every tensor a view can draw;
+# this names the rest, so that `tensor_roles` can classify all of them and
+# report anything left over as 'unclassified' rather than dropping it.  A tree
+# that silently omits what it cannot draw is the failure this avoids: it would
+# show 76 of distilgpt2's 82 tensors and look complete.
+#
+# Keyed by the last two dotted components, which is what distinguishes them --
+# `attn.bias` is the causal mask, `c_attn.bias` is a real bias and is in
+# BIAS_KINDS above.
+NON_MATRIX_ROLES = {
+    "ln_1.weight": ("norm", "LayerNorm gain before attention. `_forward` folds "
+                    "it into the ln_1 activation, so it is already inside every "
+                    "matrix drawn from that activation rather than being one."),
+    "ln_1.bias": ("norm", "LayerNorm shift before attention, folded into the "
+                  "ln_1 activation by the forward pass."),
+    "ln_2.weight": ("norm", "LayerNorm gain before the MLP, folded into the "
+                    "ln_2 activation by the forward pass."),
+    "ln_2.bias": ("norm", "LayerNorm shift before the MLP, folded into the "
+                  "ln_2 activation by the forward pass."),
+    "ln_f.weight": ("norm", "final LayerNorm gain, folded into the `final` "
+                    "activation the logits view multiplies."),
+    "ln_f.bias": ("norm", "final LayerNorm shift, folded into the `final` "
+                  "activation the logits view multiplies."),
+    # Not a parameter, and not read: `_forward` builds its own causal mask with
+    # np.tril rather than loading this one.  Stating that is the point -- six
+    # copies of a 1024x1024 float32 buffer are 25,165,824 of the checkpoint's
+    # bytes, and "unreachable by a view" and "never read at all" are different
+    # facts that a single grey "not drawn" would merge.
+    "attn.bias": ("buffer", "the causal mask: a registered buffer saved with the "
+                  "weights, not a learned parameter. `_forward` builds its own "
+                  "with np.tril and never reads this tensor; mm draws the "
+                  "masking as a tril epilog on the scores, not as a matrix."),
+}
+
 
 class Model:
     def __init__(self, model_dir: Path):
@@ -532,6 +568,7 @@ class Model:
         }
         self.cfg["head_dim"] = self.cfg["n_embd"] // self.cfg["n_head"]
         self.acts = Activations(self.store, self.cfg)
+        self._roles = None      # filled on first meta.json; see tensor_roles
 
     # -- weight slices -------------------------------------------------------
 
@@ -558,6 +595,61 @@ class Model:
         if builtin_t:
             flat, h, w = transpose(flat, h, w)
         return flat, h, w
+
+    # -- what reaches each stored tensor -------------------------------------
+
+    def tensor_roles(self):
+        """Which logical matrix, if any, addresses each tensor in the file.
+
+        Built by expanding WEIGHT_KINDS and BIAS_KINDS over this checkpoint's
+        own layer count, so it cannot drift from what `weight()` actually slices
+        and `augment_vector()` actually appends.  That matters more than it
+        looks: the sidebar draws a "this tensor is drawn by that view" link from
+        this, and a second hand-written copy of the mapping would be wrong the
+        first time a kind moved.
+
+        Every name in the file gets exactly one role.  A tensor neither table
+        names falls to NON_MATRIX_ROLES, and one that table misses too is
+        reported as 'unclassified' -- never omitted, because a hierarchy that
+        drops what it cannot explain is the one failure it must not have.
+        """
+        if self._roles is not None:
+            return self._roles
+
+        def layer_of(name):
+            p = name.split(".")
+            return int(p[2]) if len(p) > 3 and p[1] == "h" and p[2].isdigit() else None
+
+        roles = {}
+        for name in self.store.meta:
+            tail = ".".join(name.split(".")[-2:])
+            role, note = NON_MATRIX_ROLES.get(tail, ("unclassified", None))
+            roles[name] = {"role": role, "note": note, "kinds": [],
+                           "bias_for": [], "layer": layer_of(name)}
+
+        # every (kind, layer) pair this checkpoint actually has
+        pairs = [(k, l) for k in WEIGHT_KINDS
+                 for l in (range(self.cfg["n_layer"]) if "{l}" in WEIGHT_KINDS[k][0]
+                           else [None])]
+
+        for kind, l in pairs:
+            tmpl = WEIGHT_KINDS[kind][0]
+            name = tmpl.format(l=l) if l is not None else tmpl
+            if name not in roles:
+                continue        # a kind this checkpoint does not carry
+            e = roles[name]
+            e["role"], e["note"], e["layer"] = "weight", None, layer_of(name)
+            bias = BIAS_KINDS.get(kind)
+            bias = bias.format(l=l) if bias and l is not None else bias
+            e["kinds"].append({"kind": kind, "bias": bias,
+                               "no_bias": NO_BIAS.get(kind)})
+            if bias and bias in roles:
+                b = roles[bias]
+                b["role"], b["note"], b["layer"] = "bias", None, layer_of(bias)
+                b["bias_for"].append(kind)
+
+        self._roles = roles
+        return roles
 
     # -- augmentation --------------------------------------------------------
 
@@ -778,9 +870,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def route_meta(self, qs):
         m = self.model
+        roles = m.tensor_roles()
         tensors = [
             {"name": n, "dtype": v["dtype"], "shape": v["shape"],
-             "bytes": v["data_offsets"][1] - v["data_offsets"][0]}
+             "bytes": v["data_offsets"][1] - v["data_offsets"][0],
+             **roles[n]}
             for n, v in sorted(m.store.meta.items())
         ]
         return self._json({

@@ -184,40 +184,189 @@ body {
   color: #ddd;
 }
 
-#mm {
+/* The viewer and the hierarchy sidebar, side by side. Both `min-*: 0` are
+   load-bearing: a flex item's default `min-width/height: auto` is its content
+   size, so without them the iframe refuses to shrink, the row overflows the
+   window and the sidebar's own `overflow: auto` never engages. */
+#stage {
   flex: 1 1 auto;
-  width: 100%;
-  border: none;
+  display: flex;
+  flex-direction: row;
   min-height: 0;
 }
 
-#tensors {
-  display: none;
-  flex: 0 0 40%;
-  overflow: auto;
+#mm {
+  flex: 1 1 auto;
+  border: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A column, so the tree body is the only part that scrolls and the two notes
+   stay put -- the header names what the tree is and the footer says what the
+   colours mean, and both are useless scrolled off the top. */
+#tree {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
   background: #0d0d0d;
-  border-top: 1px solid #333;
+  border-right: 1px solid #333;
   font-size: 12px;
+  line-height: 17px;
+  resize: horizontal;
 }
 
-#tensors table {
-  border-collapse: collapse;
-  width: 100%;
+#stage.collapsed #tree {
+  display: none;
 }
 
-#tensors td {
-  padding: 1px 10px;
-  border-bottom: 1px solid #1c1c1c;
-  white-space: nowrap;
+#tree_body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+  padding: 4px 0;
 }
 
-#tensors td.n {
+#tree_head,
+#tree_foot {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid #262626;
+}
+
+#tree_foot {
+  border-bottom: none;
+  border-top: 1px solid #262626;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+#tree_head b {
   color: #9cf;
 }
 
-#tensors td.r {
-  text-align: right;
-  color: #999;
+/* `display: flex` on a summary drops the native disclosure marker in every
+   engine, and a group that cannot be told from a leaf is worse than an ugly
+   one -- so the triangle is drawn back explicitly. */
+#tree .grp > summary {
+  cursor: pointer;
+  padding: 1px 10px 1px 0;
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  list-style: none;
+}
+
+#tree .grp > summary::-webkit-details-marker {
+  display: none;
+}
+
+#tree .grp > summary::before {
+  content: '\25B8';
+  flex: 0 0 auto;
+  width: 10px;
+  color: #888;
+}
+
+#tree .grp[open] > summary::before {
+  content: '\25BE';
+}
+
+#tree .grp > summary:hover {
+  background: #1a1a1a;
+}
+
+#tree .grp > summary .lbl {
+  color: #ddd;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tree .grp > summary .c::after {
+  content: ' tensors';
+}
+
+#tree .c,
+#tree .b {
+  color: #777;
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+/* Indentation is the only thing carrying depth here, so it is drawn rather
+   than left to the disclosure marker's own inset. */
+#tree .kids {
+  margin-left: 9px;
+  border-left: 1px solid #232323;
+  padding-left: 3px;
+}
+
+#tree .ten {
+  padding: 1px 10px 1px 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tree .ten:hover {
+  background: #1a1a1a;
+}
+
+#tree .ten > .lbl {
+  color: #ddd;
+}
+
+#tree .ten a.lbl {
+  color: #7d7;
+  text-decoration: none;
+}
+
+#tree .ten a.lbl:hover {
+  color: #9f9;
+  text-decoration: underline;
+}
+
+#tree .ten .sep {
+  color: #555;
+}
+
+#tree .ten .sh {
+  color: #777;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+/* what draws it, and — in a different colour, because they are different
+   claims — what it is when nothing does */
+#tree .ten .in {
+  display: block;
+  color: #7d7;
+  font-size: 11px;
+  padding-left: 8px;
+  white-space: normal;
+}
+
+#tree .ten .no {
+  display: block;
+  color: #888;
+  font-size: 11px;
+  padding-left: 8px;
+  white-space: normal;
+}
+
+/* A registered buffer is not a parameter, which is a different statement from
+   "no view draws it" — so it does not get the same grey. */
+#tree .ten.buffer .no {
+  color: #c9a;
+}
+
+#tree .ten.unclassified .no {
+  color: #f77;
 }
 
 a {
