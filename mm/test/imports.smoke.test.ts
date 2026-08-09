@@ -51,4 +51,41 @@ describe('headless import of every src module', () => {
     const page = await import('../src/gpt2page.js')
     expect(typeof page.mount).toBe('function')
   })
+
+  it('imports the editor primitives, which are deliberately THREE-free', async () => {
+    // address/scenetree/selection are the logical layer of the tensor editor:
+    // pure index arithmetic and state. If any of them ever grows a THREE
+    // import it stops being importable in the leanest contexts, and this
+    // stops being the reason the layering exists. (scenetree reaches only
+    // into heatmap.js, itself pinned THREE-free above.)
+    const address = await import('../src/address.js')
+    const scenetree = await import('../src/scenetree.js')
+    const selection = await import('../src/selection.js')
+    expect(address.LEVELS).toContain('scalar')
+    expect(typeof scenetree.SceneTree).toBe('function')
+    expect(typeof selection.SelectionManager).toBe('function')
+  })
+
+  it('imports the editor render/controller modules, whose shared materials build at module scope', async () => {
+    // highlight builds its shared Line/MeshBasicMaterials and unit geometries
+    // at import; picking/cameractl/interaction pull THREE in. Same contract
+    // as points above: constructing these headless must not need a GPU.
+    const picking = await import('../src/picking.js')
+    const highlight = await import('../src/highlight.js')
+    const cameractl = await import('../src/cameractl.js')
+    const editops = await import('../src/editops.js')
+    const interaction = await import('../src/interaction.js')
+    expect(typeof picking.Picker).toBe('function')
+    expect(typeof highlight.HighlightRenderer).toBe('function')
+    expect(typeof cameractl.CameraRig).toBe('function')
+    expect(typeof editops.EditStack).toBe('function')
+    expect(typeof interaction.createEditor).toBe('function')
+  })
+
+  it('imports the editor panels, which are DOM-only by design', async () => {
+    const inspector = await import('../src/inspector.js')
+    const outliner = await import('../src/outliner.js')
+    expect(typeof inspector.createInspector).toBe('function')
+    expect(typeof outliner.createOutliner).toBe('function')
+  })
 })

@@ -89,6 +89,8 @@ function operandsEdited(e: SceneEntity, edited: Set<string>): boolean {
 
 export class EditStack {
   ops: EditOp[] = []
+  /** Paths whose data changed in the last recompute — what needs repainting. */
+  lastTouched: Set<string> = new Set()
   private next_id = 1
   private pristine = new Map<string, Float32Array>()
   private undo_stack: OpsSnapshot[] = []
@@ -112,9 +114,9 @@ export class EditStack {
   /** The scene was rebuilt: captured baselines describe freed arrays. Drop
    *  them and re-derive from the fresh data — ops are descriptions and
    *  reapply, exactly like modifiers across a mesh reload. */
-  onTreeRebuilt() {
+  onTreeRebuilt(): Set<string> {
     this.pristine.clear()
-    if (this.ops.length) this.recomputeAll()
+    return this.ops.length ? this.recomputeAll() : new Set()
   }
 
   private snapshot(): OpsSnapshot {
@@ -229,6 +231,7 @@ export class EditStack {
   recomputeAll(): Set<string> {
     const tree = this.getTree()
     const touched = new Set<string>()
+    this.lastTouched = touched
     if (!tree) return touched
 
     // 1. Capture baselines for newly-touched paths, restore all known ones.
@@ -248,9 +251,16 @@ export class EditStack {
 
     const enabled = this.ops.filter(o => o.enabled)
 
-    // Recomputed results feed *their* parents in turn; track them alongside
-    // directly-edited paths so the chain climbs all the way up.
-    const editedOrRecomputed = new Set(enabled.map(o => o.path))
+    // Downstream recompute follows every path that ever had a baseline
+    // captured, not only currently-enabled ops: disabling or removing an op
+    // restores its operand from pristine, and the product computed from the
+    // *edited* operand is still on screen — only a recompute from the
+    // restored operand takes the lie back down. Recomputed results join the
+    // set so the chain climbs all the way up.
+    const editedOrRecomputed = new Set([
+      ...enabled.map(o => o.path),
+      ...this.pristine.keys(),
+    ])
 
     // 2. Post-order walk: operands first, then the product they feed, then
     // any ops targeting that product — so an op on a result survives the

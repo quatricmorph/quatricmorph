@@ -9,6 +9,7 @@ import * as util from './util.js'
 import * as gui from './gui.js'
 import { defaultParams, type Params } from './params.js'
 import { colormapHex, elementHSL, indexValue } from './colormap.js'
+import { createEditor } from './interaction.js'
 
 // The element material's magnifier uniform. points.ts hangs `.uniforms` on the
 // NodeMaterial as a deliberate alias for this one call site -- NodeMaterial
@@ -205,7 +206,13 @@ function initObj() {
   if (obj.stages) {
     // The page owns the timeline chrome, so it needs the stage list and every
     // change of active stage. See the protocol note above RESPONDERS.
-    obj.onStageChange = (i, playing) => postStages(i, playing)
+    // setStage rebuilds the two stages that changed hands, which replaces
+    // their pickable objects and (for leaf stages) their groups — the editor
+    // re-indexes, but keeps its edit baselines: the data arrays survive.
+    obj.onStageChange = (i, playing) => {
+      postStages(i, playing)
+      editor.refreshTree(obj)
+    }
     // Parked, not playing: a 25-stage scene that starts walking on load has
     // moved on before anyone has read the first stage.
     obj.playing = params.anim['play stages'] === true
@@ -215,6 +222,7 @@ function initObj() {
   }
   scene.add(obj.group)
   frameStagedScene()
+  editor.attach(obj)
 
   updateTitle()
   postRender()
@@ -371,6 +379,11 @@ const orbit = new OrbitControls(camera, renderer.domElement)
 orbit.keys = { LEFT: orbit.keys.LEFT, RIGHT: orbit.keys.RIGHT } as any   // up/down deliberately unbound
 orbit.zoomSpeed = 0.2
 orbit.listenToKeyEvents(window)
+
+// The tensor editor: selection, picking, highlights, outliner/inspector
+// panels, camera framing, edit stack. It owns no scene objects of the viz
+// tree — attach() below hands it each rebuilt root, and it indexes by path.
+const editor = createEditor({ scene, camera, orbit, renderer, raycaster, getObj })
 
 const viewState = () => ({
   ...camera.position,
@@ -725,6 +738,10 @@ let last_render = 0, last_anim = 0
 
 function animate() {
   const t = performance.now()
+
+  // Camera transitions (frame selected/all, presets, pivot moves) tween
+  // through the editor's rig; a no-op when nothing is in flight.
+  editor.update(t)
   // A staged scene keeps ticking while it is playing even with the algorithm
   // set to 'none': the thing being animated then is the *timeline*, not any one
   // matmul, and the stage driver dwells on each stage rather than sweeping it.
