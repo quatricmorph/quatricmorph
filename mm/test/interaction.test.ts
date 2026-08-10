@@ -166,11 +166,15 @@ describe('visibility keys', () => {
 })
 
 describe('box-select arming', () => {
-  it('B arms, Esc disarms and reports the key consumed; Esc with nothing armed is not consumed', () => {
-    const { editor } = makeEditor()
-    expect(editor.handleKey(key('Escape'))).toBe(false)
+  it('B arms and Esc disarms — disarming takes precedence over Esc\'s framing', () => {
+    const { editor, camera } = makeEditor()
     expect(editor.handleKey(key('KeyB'))).toBe(true)
+    const before = camera.position.clone()
     expect(editor.handleKey(key('Escape'))).toBe(true)
+    expect(camera.position.equals(before)).toBe(true)   // disarmed, did not fly
+    // nothing is armed now, so the same key frames the model instead
+    expect(editor.handleKey(key('Escape'))).toBe(true)
+    expect(camera.position.equals(before)).toBe(false)
   })
 })
 
@@ -185,7 +189,21 @@ describe('camera keys', () => {
     expect(orbit.target.length()).toBeGreaterThan(0)
   })
 
-  it('selecting a mat moves the orbit pole onto that mat\'s own axis, and clearing puts it back', () => {
+  it('Esc with nothing armed clears the selection and fits the whole model', () => {
+    const { editor, camera, orbit, mm } = makeEditor()
+    editor.selection.selectEntity('out/result', 'set')
+    editor.handleKey(key('KeyF'))
+    const framed = camera.position.clone()
+    expect(editor.handleKey(key('Escape'))).toBe(true)
+    expect(editor.selection.isEmpty()).toBe(true)
+    expect(camera.position.equals(framed)).toBe(false)
+    // the whole model's box, not the mat's: its centre and every corner of it
+    mm.group.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(mm.group)
+    expect(orbit.target.distanceTo(box.getCenter(new THREE.Vector3()))).toBeLessThan(1e-6)
+  })
+
+  it('selecting a mat moves the orbit pole onto that mat\'s own axis; clearing hands it to the model\'s', () => {
     const { editor, camera, mm } = makeEditor()
     expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])
     // tilt the scene: the result mat's own up is no longer the world's
@@ -194,8 +212,11 @@ describe('camera keys', () => {
     editor.selection.selectEntity('out/result', 'set')
     expect(camera.up.x).toBeCloseTo(-Math.sin(Math.PI / 6), 4)
     expect(camera.up.y).toBeCloseTo(Math.cos(Math.PI / 6), 4)
+    // with nothing selected the subject is the model, so the pole follows the
+    // root's own axis — which here is the same 30° tilt, not world +Y
     editor.selection.clear()
-    expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])
+    expect(camera.up.x).toBeCloseTo(-Math.sin(Math.PI / 6), 4)
+    expect(camera.up.y).toBeCloseTo(Math.cos(Math.PI / 6), 4)
   })
 
   it('selecting a face-placed mat never puts the orbit pole along the view direction', () => {

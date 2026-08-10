@@ -1133,6 +1133,9 @@ export const POLARITIES = ['negative', 'positive']
 export const LEFT_PLACEMENTS = ['left', 'right']
 export const RIGHT_PLACEMENTS = ['top', 'bottom']
 export const RESULT_PLACEMENTS = ['front', 'back']
+// Which way a Stack's rows advance. Read only by Stack.layoutStages — a matmul
+// has no rows — but it lives in `layout` with the rest of the arrangement.
+export const ROW_FLOWS = ['vertical', 'horizontal']
 
 function layoutDesc(layout) {
   const pol = { 'positive': '+', 'negative': '-', }[layout.polarity]
@@ -2590,28 +2593,51 @@ export class Stack extends OpNode {
     this.setAlignGrid()
   }
 
+  /**
+   * Place every stage. Rows are the model's layers, and `row flow` decides
+   * which way successive rows advance:
+   *
+   *   vertical    (default) rows stack up the scene, stages run across a row.
+   *               Six blocks read top to bottom, each expanding rightwards.
+   *   horizontal  rows advance across the scene, stages stack up a row. The
+   *               model reads left to right as one strip of columns, which is
+   *               the arrangement that fits a many-layer model into a landscape
+   *               viewport.
+   *
+   * The two are a transpose of one another, not a rotation: a stage is never
+   * turned on its side, only placed on the other axis. An absent or unknown
+   * value is 'vertical', so a scene built before this existed lays out
+   * unchanged.
+   */
   layoutStages() {
     const gap = this.params.layout.gap
     const margin = gap * 4
+    const horizontal = (this.params.layout || {})['row flow'] === 'horizontal'
     const rows: any = {}
     this.stages.forEach(st => (rows[st.row] ||= []).push(st))
 
-    let y = 0
-    let [maxx, maxz] = [0, 0]
+    // `along` runs within a row, `across` steps from row to row; which of the
+    // two is x and which is y is the whole difference between the arrangements.
+    let across = 0
+    let [max_along, maxz] = [0, 0]
     Object.keys(rows).sort((a, b) => +a - +b).forEach(k => {
-      let x = 0, rh = 0
+      let along = 0, depth = 0
       rows[k].forEach(st => {
         const e = st.obj.getExtent()
-        util.updateProps(st.obj.group.position, { x, y, z: 0 })
+        util.updateProps(st.obj.group.position,
+          horizontal ? { x: across, y: along, z: 0 } : { x: along, y: across, z: 0 })
         this.group.add(st.obj.group)
-        x += e.x + margin
-        rh = Math.max(rh, e.y)
+        along += (horizontal ? e.y : e.x) + margin
+        depth = Math.max(depth, horizontal ? e.x : e.y)
         maxz = Math.max(maxz, e.z)
       })
-      maxx = Math.max(maxx, Math.max(0, x - margin))
-      y += rh + margin
+      max_along = Math.max(max_along, Math.max(0, along - margin))
+      across += depth + margin
     })
-    this._extents = { x: maxx, y: Math.max(0, y - margin), z: maxz }
+    const total_across = Math.max(0, across - margin)
+    this._extents = horizontal
+      ? { x: total_across, y: max_along, z: maxz }
+      : { x: max_along, y: total_across, z: maxz }
   }
 
   stageList() {

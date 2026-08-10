@@ -173,6 +173,9 @@ export const BASE = () => ({
     scheme: 'blocks', gap: 24, scatter: 0, molecule: 1, blast: 0,
     polarity: 'negative', 'left placement': 'left',
     'right placement': 'top', 'result placement': 'front',
+    // Which way a staged scene's rows — one per transformer block — advance.
+    // `refresh` overwrites this from the page's own Layers switch.
+    'row flow': 'vertical',
   },
   deco: {
     legends: 6, shape: true, spotlight: 4, 'row guides': 0.1, 'flow guides': 0,
@@ -281,6 +284,14 @@ const rowOf = (parts, margin = 0) => ({
   d: Math.max(...parts.map(b => b.d)),
 })
 
+// The same, stacked instead of laid across — a stack's row under
+// `row flow: horizontal`, where stages advance up the row rather than along it.
+const colOf = (parts, margin = 0) => ({
+  h: parts.reduce((n, b) => n + b.h + margin, -margin),
+  w: Math.max(...parts.map(b => b.w)),
+  d: Math.max(...parts.map(b => b.d)),
+})
+
 export function bbox(p, gap = (p.layout && p.layout.gap) || 0) {
   // The matmul cases ignore `gap`, as they always have — a matmul's own extent
   // dwarfs it. The staged cases cannot: `Stack.layoutStages` puts a `gap * 4`
@@ -290,14 +301,24 @@ export function bbox(p, gap = (p.layout && p.layout.gap) || 0) {
   // camera distance derived from it framed a fifth of the model.
   const pad = 2 * gap, margin = 4 * gap
   if (p.op === 'stack') {
-    // stages laid out left to right within a row, rows stacked downwards
+    // Follows `Stack.layoutStages` and must keep following it, including its
+    // transpose: vertically, stages run along a row and rows stack up the
+    // scene; horizontally, both swap. Read off `p.layout` — a stack is a root
+    // node, and stages carry no layout of their own.
+    const horizontal = (p.layout || {})['row flow'] === 'horizontal'
     const rows: any = {}
     Object.values(p.stages).forEach((st: any) => (rows[st.row || 0] ||= []).push(bbox(st, gap)))
-    const laid = Object.keys(rows).map(k => rowOf(rows[k], margin))
-    return {
+    const laid = Object.keys(rows).map(k =>
+      horizontal ? colOf(rows[k], margin) : rowOf(rows[k], margin))
+    const d = Math.max(...laid.map(r => r.d))
+    return horizontal ? {
+      h: Math.max(...laid.map(r => r.h)),
+      w: laid.reduce((n, r) => n + r.w + margin, -margin),
+      d,
+    } : {
       h: laid.reduce((n, r) => n + r.h + margin, -margin),
       w: Math.max(...laid.map(r => r.w)),
-      d: Math.max(...laid.map(r => r.d)),
+      d,
     }
   }
   if (p.op === 'unary') {
@@ -526,6 +547,11 @@ const CHROME = `
   <select id="seq"></select>
   <label for="stride">Stride</label>
   <select id="stride"></select>
+  <label for="flow">Layers</label>
+  <select id="flow">
+    <option value="vertical">vertical (rows)</option>
+    <option value="horizontal">horizontal (columns)</option>
+  </select>
   <label for="anim">Animate</label>
   <select id="anim"></select>
   <label for="render">Render</label>
@@ -693,6 +719,7 @@ export async function mount(config: any) {
     seq: +$('seq').value,
     anim: $('anim').value,
     render: $('render').value,
+    flow: $('flow').value,
     dims: META.dims,
   })
 
@@ -704,7 +731,7 @@ export async function mount(config: any) {
     history.replaceState({}, '', '?' + new URLSearchParams({
       view: s.view, layer: String(s.layer), head: String(s.head),
       stride: String(s.stride), seq: String(s.seq), anim: s.anim,
-      render: s.render, prompt: s.prompt,
+      render: s.render, flow: s.flow, prompt: s.prompt,
     }))
 
   // -- build + push --------------------------------------------------------
@@ -763,6 +790,11 @@ export async function mount(config: any) {
     // apply to every matrix in the tree, including a staged model scene, which
     // would otherwise force heatmap on everything and make this control a lie.
     params.viz['render mode'] = s.render
+
+    // How a staged scene arranges its rows — one row per transformer block, so
+    // this is "layers down the screen" vs "layers across it". Written before
+    // `bbox` below, which follows the same arrangement to size the camera.
+    params.layout['row flow'] = s.flow
 
     // refuse a tree mm would tile rather than reject
     try {
@@ -996,6 +1028,9 @@ export async function mount(config: any) {
     $('head').style.opacity = v.head ? 1 : 0.4
     $('stride').disabled = !strideable
     $('stride').style.opacity = strideable ? 1 : 0.4
+    // Rows exist only in a staged scene; a single matmul has nothing to arrange
+    $('flow').disabled = !v.layers
+    $('flow').style.opacity = v.layers ? 1 : 0.4
   }
 
   $('view').addEventListener('change', () => { applyViewDefaults(); refresh(true) })
@@ -1003,7 +1038,7 @@ export async function mount(config: any) {
   // A render-mode change rebuilds the scene from scratch: which path a matrix
   // takes is decided when it is built, so this reloads rather than patching.
   $('render').addEventListener('change', () => refresh(true))
-  ;['layer', 'head', 'stride', 'seq', 'anim'].forEach(id =>
+  ;['layer', 'head', 'stride', 'seq', 'anim', 'flow'].forEach(id =>
     $(id).addEventListener('change', () => refresh(false)))
   $('popout_link').addEventListener('click', e => { e.preventDefault(); popout() })
 
@@ -1013,7 +1048,7 @@ export async function mount(config: any) {
   const qp = new URLSearchParams(location.search)
   if (qp.has('prompt')) $('prompt').value = qp.get('prompt')
   if (views[qp.get('view')]) { $('view').value = qp.get('view'); applyViewDefaults() }
-  for (const id of ['layer', 'head', 'stride', 'seq', 'anim', 'render']) {
+  for (const id of ['layer', 'head', 'stride', 'seq', 'anim', 'render', 'flow']) {
     if (qp.has(id) && [...$(id).options].some(o => o.value == qp.get(id))) {
       $(id).value = qp.get(id)
     }

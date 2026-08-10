@@ -1,9 +1,10 @@
 //
 // cameractl.ts — framing, presets, tweens.
 //
-// What this file pins: the fitting arithmetic (screen-extent fitting, so the
-// binding dimension exactly fills the frame — hand-computed for a wide box and
-// a unit cube), the up-axis swap that makes the orbit rotate about an object's
+// What this file pins: the fitting arithmetic (per-corner frustum fitting, so
+// the binding dimension exactly fills the frame — hand-computed for a wide box
+// and a unit cube, and checked as a containment property for a box seen down a
+// diagonal), the up-axis swap that makes the orbit rotate about an object's
 // own axis, smoothstep interpolation at its exact midpoint, preset geometry,
 // and that duration 0 lands instantly (the mode every other suite relies on).
 // Deliberately untested: interaction with a real OrbitControls (a fake with
@@ -11,7 +12,7 @@
 //
 import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
-import { CameraRig, PRESET_DIRS, rangeWorldBox, entityUpAxis } from '../src/cameractl.js'
+import { CameraRig, PRESET_DIRS, rangeWorldBox, entityUpAxis, fitBox } from '../src/cameractl.js'
 import * as viz from '../src/viz.js'
 
 const rig = (duration = 0) => {
@@ -108,6 +109,44 @@ describe('frameBox', () => {
     r.setUpAxis(new THREE.Vector3(1, 0, 0))   // roll: the long side is now horizontal
     r.frameBox(box)
     expect(camera.position.length()).toBeLessThan(upright)
+  })
+
+  it('fits a box viewed down a diagonal without backing off for a corner that is not there', () => {
+    // The staged model scene: wide, shallow in y, very deep, seen from (-1,1,1).
+    // Bounding the maximum lateral extent and the maximum depth *independently*
+    // assumes one corner holds both, which no corner of this box does — and the
+    // model came out small in the middle of the frame. Per corner it does not.
+    const camera = new THREE.PerspectiveCamera(45, 1.9, 5, 10000)
+    const box = new THREE.Box3(
+      new THREE.Vector3(-809, -557, -1560), new THREE.Vector3(809, 557, 1560))
+    const up = new THREE.Vector3(0, 1, 0)
+    const f = fitBox(box, camera, new THREE.Vector3(-1, 1, 1), up)
+
+    const d = f.dir
+    const right = new THREE.Vector3().crossVectors(up, d).normalize()
+    const vup = new THREE.Vector3().crossVectors(d, right).normalize()
+    const ty = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+    const tx = Math.tan(Math.atan(ty * camera.aspect))
+    const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+    const ext = (a: any) =>
+      Math.abs(half.x * a.x) + Math.abs(half.y * a.y) + Math.abs(half.z * a.z)
+
+    // strictly closer than the per-axis bound this replaced
+    const per_axis = 1.05 * Math.max(ext(right) / tx, ext(vup) / ty) + ext(d)
+    expect(f.dist).toBeLessThan(per_axis * 0.95)
+
+    // …and still contains every corner, which is the property that matters
+    let tightest = 0
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+      const c = new THREE.Vector3(sx * half.x, sy * half.y, sz * half.z)
+      const [x, y, z] = [c.dot(right), c.dot(vup), c.dot(d)]
+      expect(Math.abs(x)).toBeLessThanOrEqual((f.dist - z) * tx * (1 + 1e-9))
+      expect(Math.abs(y)).toBeLessThanOrEqual((f.dist - z) * ty * (1 + 1e-9))
+      tightest = Math.max(tightest,
+        Math.abs(x) / ((f.dist - z) * tx), Math.abs(y) / ((f.dist - z) * ty))
+    }
+    // one corner sits right on the 5% margin: fitted, not merely contained
+    expect(tightest).toBeCloseTo(1 / 1.05, 3)
   })
 
   it('ignores an empty box', () => {

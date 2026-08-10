@@ -232,6 +232,9 @@ export function defaultParams(): Params {
       'left placement': 'left',
       'right placement': 'top',
       'result placement': 'front',
+      // Staged scenes only (viz.ts ROW_FLOWS): which way a Stack's rows — one
+      // per transformer block in the whole-model view — advance.
+      'row flow': 'vertical',
       folder: 'closed',
     },
     deco: {

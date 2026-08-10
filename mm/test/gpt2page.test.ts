@@ -545,6 +545,47 @@ describe('countPoints and bbox over the new node kinds', () => {
     expect(bb.d).toBeGreaterThan(0)
   })
 
+  it('transposes the row/column composition when the layers switch to horizontal', () => {
+    // The page's Layers switch writes layout['row flow'], and this bbox is what
+    // sizes the camera for it — so it has to follow Stack.layoutStages through
+    // the transpose. Two rows of known leaves, gap 0 so the margins vanish:
+    //
+    //   vertical    row 0 = 2×3 beside 4×5 → h 4, w 8;  row 1 = 6×7
+    //               rows sum in h, widest row wins w   → h 10, w 8
+    //   horizontal  row 0 = 2×3 above 4×5  → h 6, w 5;  row 1 = 6×7
+    //               rows sum in w, tallest row wins h  → h 6,  w 12
+    const two = () => stack('m', [
+      { ...leaf('a', sp(2, 3)), row: 0 }, { ...leaf('b', sp(4, 5)), row: 0 },
+      { ...leaf('c', sp(6, 7)), row: 1 },
+    ])
+    const flowed = flow => bbox({ ...two(), layout: { gap: 0, ...(flow ? { 'row flow': flow } : {}) } })
+    expect(flowed('vertical')).toEqual({ h: 10, w: 8, d: 0 })
+    expect(flowed('horizontal')).toEqual({ h: 6, w: 12, d: 0 })
+    // an absent flow is the vertical arrangement, so a scene built before this
+    // existed — the whole model tree included — is sized exactly as before
+    expect(flowed(undefined)).toEqual(flowed('vertical'))
+    expect(bbox({ ...modelTree(), layout: { gap: 24 } }))
+      .toEqual(bbox({ ...modelTree(), layout: { gap: 24, 'row flow': 'vertical' } }))
+  })
+
+  it('sizes the six-layer model differently in each arrangement, and finitely in both', () => {
+    // The camera distance mount() derives is (h + w + d) / 2, and it has to be
+    // sane in both: a switch that framed nothing would look like a broken layout.
+    const six = () => stack('distilgpt2', [0, 1, 2, 3, 4, 5].flatMap(l => [
+      { ...headStage(), row: l }, { ...attnAdd(), row: l },
+      { ...mlpStage(), row: l }, { ...mlpAdd(), row: l },
+    ]))
+    const d = flow => {
+      const b = bbox({ ...six(), layout: { gap: 24, 'row flow': flow } })
+      expect(Number.isFinite(b.h + b.w + b.d)).toBe(true)
+      return b
+    }
+    const v = d('vertical'), h = d('horizontal')
+    expect(h.d).toBe(v.d)                       // depth is untouched by the flow
+    expect(h.w).toBeGreaterThan(v.w)            // six layers now advance across
+    expect(h.h).toBeLessThan(v.h)               // and no longer stack up
+  })
+
   it('gives the model scene a camera distance that is not the old matmul rule', () => {
     // The old bbox would have thrown on `p.left` of a stack; this pins that the
     // camera rule in mount() gets a finite, sane distance out of the new shape.

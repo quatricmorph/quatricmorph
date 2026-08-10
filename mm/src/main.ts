@@ -10,6 +10,7 @@ import * as gui from './gui.js'
 import { defaultParams, type Params } from './params.js'
 import { colormapHex, elementHSL, indexValue } from './colormap.js'
 import { createEditor } from './interaction.js'
+import { fitBox } from './cameractl.js'
 
 // The element material's magnifier uniform. points.ts hangs `.uniforms` on the
 // NodeMaterial as a deliberate alias for this one call site -- NodeMaterial
@@ -264,17 +265,17 @@ function frameStagedScene() {
   obj.group.updateMatrixWorld(true)
   const box = new THREE.Box3().setFromObject(obj.group)
   if (box.isEmpty()) return
-  const centre = box.getCenter(new THREE.Vector3())
-  const radius = box.getBoundingSphere(new THREE.Sphere()).radius
-  // Fit the sphere in the narrower of the two half-angles, with a little air.
-  const vfov = THREE.MathUtils.degToRad(camera.fov)
-  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect)
-  const dist = 1.15 * radius / Math.sin(Math.min(vfov, hfov) / 2)
-  const dir = new THREE.Vector3(-1, 1, 1).normalize()
-  camera.position.copy(centre).addScaledVector(dir, dist)
-  camera.far = Math.max(camera.far, dist + 2 * radius)
+  // Screen-extent fit, not a bounding sphere: a model laid out as six wide rows
+  // (or one long strip, with the layers switched to horizontal) has a sphere far
+  // larger than what it occupies on screen, and fitting that left the whole
+  // model small in the middle of the viewport. See `fitBox` in cameractl.ts —
+  // the same arithmetic F uses, placed instantly here rather than tweened.
+  const f = fitBox(box, camera, new THREE.Vector3(-1, 1, 1), camera.up)
+  camera.position.copy(f.centre).addScaledVector(f.dir, f.dist)
+  camera.near = Math.min(camera.near, f.near)
+  camera.far = Math.max(camera.far, f.far)
   camera.updateProjectionMatrix()
-  util.updateProps(orbit.target, centre)
+  util.updateProps(orbit.target, f.centre)
   orbit.update()
 }
 

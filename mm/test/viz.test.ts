@@ -11,6 +11,7 @@
 // captured from this code, so the assertions are independent of it.
 //
 import { describe, it, expect } from 'vitest'
+import * as THREE from 'three'
 import {
   INIT_FUNCS, INITS, useRange, useDropout, EPILOGS, Array2D, setElemSize,
 } from '../src/viz.js'
@@ -306,6 +307,14 @@ import {
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 
+// The layout tests below are the one place here that needs real geometry: stage
+// positions only exist once initViz has run. No GPU is involved — the same
+// context test/cameractl.test.ts builds a MatMul with.
+const vizCtx = () => ({
+  raycaster: new THREE.Raycaster(), camera: new THREE.PerspectiveCamera(45, 1, 0.1, 1000),
+  pointer: new THREE.Vector2(),
+})
+
 // A leaf whose values are i*w + j, so every assertion below is hand-checkable.
 const lf = (name, h, w, init = 'row major') => ({
   name, matmul: false, h, w, init, url: '', expr: '', min: 0, max: 1, dropout: 0,
@@ -436,6 +445,63 @@ describe('Stack', () => {
       expect(st.stageRenderMode(false)).toBe(want)
       expect(st.stageRenderMode(true)).toBe(want)
     }
+  })
+
+  describe('row flow — how the layers are arranged', () => {
+    // Two rows: s0 and s1 together, then s2 on its own. `row flow` decides
+    // which way the rows advance and which way stages run inside one.
+    const laid = (flow: string | undefined) => {
+      const p: any = stackParams()
+      p.layout = { ...p.layout, ...(flow ? { 'row flow': flow } : {}) }
+      p.stages.s0.row = 0
+      p.stages.s1.row = 0
+      p.stages.s2.row = 1
+      const st = new Stack(p, vizCtx(), true)
+      return { st, pos: st.stages.map(s => s.obj.group.position) }
+    }
+    const margin = 2 * 4        // OPTS' gap of 2, times layoutStages' 4
+
+    it('vertical stacks rows in y and runs stages across a row in x', () => {
+      const { st, pos } = laid('vertical')
+      expect([pos[0].x, pos[0].y]).toEqual([0, 0])
+      expect(pos[1].x).toBeGreaterThan(0)         // second stage of row 0
+      expect(pos[1].y).toBe(0)                    // …same row, same y
+      expect(pos[2].x).toBe(0)                    // row 1 restarts at x = 0
+      expect(pos[2].y).toBeGreaterThan(0)         // …one row up
+      const e = st.stages.map(s => s.obj.getExtent())
+      expect(st.getExtent().x).toBeCloseTo(
+        Math.max(e[0].x + margin + e[1].x, e[2].x), 6)      // widest row
+      expect(st.getExtent().y).toBeCloseTo(
+        Math.max(e[0].y, e[1].y) + margin + e[2].y, 6)      // rows summed
+    })
+
+    it('horizontal advances rows in x and stacks stages within a row in y', () => {
+      const { st, pos } = laid('horizontal')
+      expect([pos[0].x, pos[0].y]).toEqual([0, 0])
+      expect(pos[1].x).toBe(0)                    // second stage of row 0…
+      expect(pos[1].y).toBeGreaterThan(0)         // …stacked above it
+      expect(pos[2].x).toBeGreaterThan(0)         // row 1 is the next column
+      expect(pos[2].y).toBe(0)
+      const e = st.stages.map(s => s.obj.getExtent())
+      expect(st.getExtent().y).toBeCloseTo(
+        Math.max(e[0].y + margin + e[1].y, e[2].y), 6)      // tallest column
+      expect(st.getExtent().x).toBeCloseTo(
+        Math.max(e[0].x, e[1].x) + margin + e[2].x, 6)      // columns summed
+    })
+
+    it('is vertical when the scene does not say — a params tree built before it', () => {
+      const { pos } = laid(undefined)
+      expect(pos[1].y).toBe(0)
+      expect(pos[2].x).toBe(0)
+      expect(pos[2].y).toBeGreaterThan(0)
+    })
+
+    it('never turns a stage on its side: the same stage keeps its own extent', () => {
+      const v = laid('vertical').st, h = laid('horizontal').st
+      for (let i = 0; i < 3; i++) {
+        expect(h.stages[i].obj.getExtent()).toEqual(v.stages[i].obj.getExtent())
+      }
+    })
   })
 
   it('refuses an empty stack rather than drawing an empty scene', () => {

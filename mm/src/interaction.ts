@@ -22,8 +22,8 @@
 //
 // Bindings:  1-5 selection level (matrix/block/row/col/scalar) · Tab cycle ·
 // click select · shift+click toggle · alt+click whole matrix · double-click
-// frame · B box select · Esc cancel · F fit selection to the viewport ·
-// Home frame all ·
+// frame · B box select · Esc cancel box select, else fit the whole model ·
+// F fit selection to the viewport · Home frame all ·
 // A all · alt+A none · I invert · U / shift+U selection undo/redo · H hide ·
 // shift+H isolate · alt+H unhide · C cursor at hover · shift+C clear cursor ·
 // . pivot to cursor/selection · X zero selection · shift+1/3/7 view presets.
@@ -171,7 +171,14 @@ export function createEditor(ctx: EditorContext): Editor {
   const syncOrbitAxis = () => {
     const path = selection.activePath()
     const e = path ? tree?.get(path) : null
-    if (e) rig.setUpAxis(entityUpAxis(e, rig.upTarget()))
+    // With nothing selected the subject is the whole model, so the pole follows
+    // the *root's* own axis rather than snapping back to the world's. Only the
+    // axis — not the pivot: an empty-canvas click clears the selection, and a
+    // camera jump on every one of those is a move nobody asked for. Esc is the
+    // gesture that reframes the model.
+    const axis = e ? entityUpAxis(e, rig.upTarget())
+      : tree ? entityUpAxis(tree.root, rig.upTarget()) : null
+    if (axis) rig.setUpAxis(axis)
     else rig.resetUpAxis()
   }
 
@@ -214,7 +221,7 @@ export function createEditor(ctx: EditorContext): Editor {
     status.appendChild(b)
     status.appendChild(document.createTextNode(
       `  ·  ${n} selected · ${cells.toLocaleString()} cells  ·  ` +
-      `[1-5] level  B box  F fit  H hide  C cursor  X zero  U undo-sel`))
+      `[1-5] level  B box  F fit  Esc model  H hide  C cursor  X zero  U undo-sel`))
   }
 
   //
@@ -504,7 +511,13 @@ export function createEditor(ctx: EditorContext): Editor {
           updateStatus()
           return true
         }
-        return false
+        // Escape out to the whole model: drop the selection (which returns the
+        // orbit pole to the model's own axis through syncOrbitAxis) and fit the
+        // model's box to the viewport. One key back to the overview, whatever
+        // the camera was doing.
+        if (!selection.isEmpty()) selection.clear()
+        rig.frameAll(ctx.getObj())
+        return true
       case 'KeyH':
         if (!selection.isEmpty()) {
           visibility.hide(selection.paths())

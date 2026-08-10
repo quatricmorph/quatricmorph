@@ -90,6 +90,72 @@ export function entityUpAxis(e: SceneEntity, ref: any = WORLD_UP): any | null {
   return best
 }
 
+/**
+ * Where to stand to fit `box` in `camera`'s frame, looking along `dir`.
+ *
+ * Measures the box's own corners against the frustum rather than its bounding
+ * sphere. Each corner, in camera coordinates (`x` right, `y` up, `z` towards
+ * the camera), has to sit inside the frame at its own depth:
+ *
+ *     dist ≥ pad · |x| / tan(hfov/2) + z     and     pad · |y| / tan(vfov/2) + z
+ *
+ * and the answer is the largest such bound over the eight. `pad` multiplies
+ * the lateral term only, so depth clears the frame instead of eating the
+ * margin.
+ *
+ * Per corner rather than per axis, because the two differ exactly where it
+ * matters. Taking the box's maximum lateral extent and its maximum depth
+ * independently assumes a corner that has both at once — true for a matrix
+ * facing the camera, false for a scene viewed down a diagonal, where it backs
+ * off far enough to leave the whole model small in the middle of the frame.
+ * The staged model view is precisely that case. Where the box *is* aligned to
+ * the view, one corner does hold both maxima and this reduces to the per-axis
+ * formula.
+ *
+ * Returns the numbers rather than moving anything, because its two callers
+ * want different things: the rig tweens there (`frameBox`), while main.ts's
+ * `frameStagedScene` places the camera instantly on first build.
+ */
+export function fitBox(box: any, camera: any, dir: any, up: any, pad = 1.05) {
+  const centre = box.getCenter(new THREE.Vector3())
+  const d = new THREE.Vector3().copy(dir)
+  if (d.lengthSq() < 1e-6) d.set(-1, 1, 1)
+  d.normalize()
+
+  // Screen basis. Near the pole the up axis is parallel to the view, so fall
+  // back to any perpendicular rather than dividing by a zero-length cross.
+  const right = new THREE.Vector3().crossVectors(up, d)
+  if (right.lengthSq() < 1e-8) right.crossVectors(new THREE.Vector3(0, 0, 1), d)
+  if (right.lengthSq() < 1e-8) right.set(1, 0, 0)
+  right.normalize()
+  const vup = new THREE.Vector3().crossVectors(d, right).normalize()
+
+  const vfov = THREE.MathUtils.degToRad(camera.fov)
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect)
+  const tx = Math.tan(hfov / 2), ty = Math.tan(vfov / 2)
+
+  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+  const c = new THREE.Vector3()
+  let dist = 1e-3, near_z = -Infinity, far_z = Infinity
+  for (const sx of [-1, 1]) {
+    for (const sy of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        c.set(sx * half.x, sy * half.y, sz * half.z)
+        const x = c.dot(right), y = c.dot(vup), z = c.dot(d)
+        dist = Math.max(dist, pad * Math.abs(x) / tx + z, pad * Math.abs(y) / ty + z)
+        near_z = Math.max(near_z, z)      // the corner closest to the camera
+        far_z = Math.min(far_z, z)
+      }
+    }
+  }
+
+  return {
+    centre, dir: d, dist,
+    near: Math.max(0.05, (dist - near_z) * 0.5),
+    far: (dist - far_z) * 1.5,
+  }
+}
+
 export class CameraRig {
   camera: any
   orbit: any
@@ -160,7 +226,11 @@ export class CameraRig {
     // groups); taking it raw would flip the world upside down on selection.
     if (up.dot(cur) < 0) up.negate()
     if (up.dot(cur) > 0.9999) return false
-    this.flyTo(this.camera.position.clone(), this.orbit.target.clone(), now, up)
+    // Where the camera is *going*, not where it is: a rebuild fires a selection
+    // change, and rolling to a new pole must not cancel a framing already in
+    // flight by re-aiming it at the current position.
+    this.flyTo(this.tween ? this.tween.to_pos.clone() : this.camera.position.clone(),
+      this.tween ? this.tween.to_target.clone() : this.orbit.target.clone(), now, up)
     return true
   }
 
@@ -203,60 +273,26 @@ export class CameraRig {
   }
 
   /**
-   * Fit a world box to the viewport along the current view direction.
-   *
-   * Measures the box's actual extent on the screen axes (right / up / view,
-   * taken from the up axis the rig is heading for) rather than its bounding
-   * sphere, then backs off until whichever of width or height binds first
-   * exactly fills the frame:
-   *
-   *     dist = pad · max(halfW / tan(hfov/2), halfH / tan(vfov/2)) + halfDepth
-   *
-   * `pad` multiplies the fitting term only — the half-depth is added after, so
-   * a deep box clears the frame instead of eating the margin. A wide matrix,
-   * which the sphere formula used to leave floating in the middle of the
-   * screen, now spans the full width.
+   * Fit a world box to the viewport along the current view direction, tweening
+   * there. See `fitBox` for the arithmetic; main.ts's staged-scene framing uses
+   * the same function without the tween.
    */
   frameBox(box: any, pad = 1.05) {
     if (!box || box.isEmpty()) return
-    const centre = box.getCenter(new THREE.Vector3())
-    const dir = this.camera.position.clone().sub(this.orbit.target)
-    if (dir.lengthSq() < 1e-6) dir.set(-1, 1, 1)
-    dir.normalize()
-
-    // Screen basis. Near the pole the up axis is parallel to the view, so fall
-    // back to any perpendicular rather than dividing by a zero-length cross.
-    const up = this.upTarget()
-    const right = new THREE.Vector3().crossVectors(up, dir)
-    if (right.lengthSq() < 1e-8) right.crossVectors(new THREE.Vector3(0, 0, 1), dir)
-    if (right.lengthSq() < 1e-8) right.set(1, 0, 0)
-    right.normalize()
-    const vup = new THREE.Vector3().crossVectors(dir, right).normalize()
-
-    // Half-extent of an axis-aligned box projected on a unit axis.
-    const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
-    const extent = (a: any) =>
-      Math.abs(half.x * a.x) + Math.abs(half.y * a.y) + Math.abs(half.z * a.z)
-    const hw = extent(right), hh = extent(vup), hd = extent(dir)
-
-    const vfov = THREE.MathUtils.degToRad(this.camera.fov)
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect)
-    const fit = Math.max(hw / Math.tan(hfov / 2), hh / Math.tan(vfov / 2), 1e-3)
-    const dist = pad * fit + hd
-
+    const f = fitBox(box, this.camera,
+      this.camera.position.clone().sub(this.orbit.target), this.upTarget(), pad)
     // A tight fit can pull the camera inside its own near plane (main.ts ships
     // near = 5), which would hide the very thing being framed. Clip planes only
-    // ever open outwards, as with far below.
-    const near = Math.max(0.05, (dist - hd) * 0.5)
-    if (this.camera.near > near) {
-      this.camera.near = near
+    // ever open outwards.
+    if (this.camera.near > f.near) {
+      this.camera.near = f.near
       this.camera.updateProjectionMatrix()
     }
-    if (this.camera.far < dist + 2 * hd + 2 * fit) {
-      this.camera.far = dist + 2 * hd + 2 * fit
+    if (this.camera.far < f.far) {
+      this.camera.far = f.far
       this.camera.updateProjectionMatrix()
     }
-    this.flyTo(centre.clone().addScaledVector(dir, dist), centre)
+    this.flyTo(f.centre.clone().addScaledVector(f.dir, f.dist), f.centre)
   }
 
   /** Frame the selection: union of all selected ranges/entities. */
