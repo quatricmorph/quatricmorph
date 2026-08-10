@@ -1,8 +1,8 @@
 "use strict"
 
 import { GUI } from 'lil-gui'
-import * as viz from './viz.js'
-import * as util from './util.js'
+import * as viz from '../scene/viz.js'
+import * as util from '../common/util.js'
 
 let gui // global! we manage reinitialization, disposal etc.
 

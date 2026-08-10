@@ -4,13 +4,13 @@ import * as THREE from 'three'
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-import * as viz from './viz.js'
-import * as util from './util.js'
-import * as gui from './gui.js'
-import { defaultParams, type Params } from './params.js'
-import { colormapHex, elementHSL, indexValue } from './colormap.js'
-import { createEditor } from './interaction.js'
-import { fitBox } from './cameractl.js'
+import * as viz from './scene/viz.js'
+import * as util from './common/util.js'
+import * as gui from './gui/gui.js'
+import { defaultParams, type Params } from './scene/params.js'
+import { colormapHex, elementHSL, indexValue } from './render/colormap.js'
+import { createEditor } from './editor/interaction.js'
+import { fitBox } from './editor/cameractl.js'
 
 // The element material's magnifier uniform. points.ts hangs `.uniforms` on the
 // NodeMaterial as a deliberate alias for this one call site -- NodeMaterial

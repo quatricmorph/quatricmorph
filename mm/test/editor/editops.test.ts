@@ -8,9 +8,9 @@
 // (refreshTouched needs built geometry; the recompute itself must not).
 //
 import { describe, it, expect } from 'vitest'
-import * as viz from '../src/viz.js'
-import { SceneTree } from '../src/scenetree.js'
-import { EditStack, applyOpToData } from '../src/editops.js'
+import * as viz from '../../src/scene/viz.js'
+import { SceneTree } from '../../src/editor/scenetree.js'
+import { EditStack, applyOpToData } from '../../src/editor/editops.js'
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 

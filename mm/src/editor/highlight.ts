@@ -23,7 +23,7 @@
 import * as THREE from 'three'
 import { CellRange, fullRange } from './address.js'
 import { SceneTree, SceneEntity, matLayoutInfo } from './scenetree.js'
-import { elementPosition } from './heatmap.js'
+import { elementPosition } from '../render/heatmap.js'
 import { SelectionManager } from './selection.js'
 
 export const COLOR_SELECTED = 0xff8c1a

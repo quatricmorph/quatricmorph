@@ -19,7 +19,7 @@
 // but builds nothing of its own. Geometry helpers live in picking/highlight.
 //
 
-import { elementPosition } from './heatmap.js'
+import { elementPosition } from '../render/heatmap.js'
 
 export type EntityKind = 'stack' | 'matmul' | 'unary' | 'add' | 'mat'
 

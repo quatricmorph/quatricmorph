@@ -77,7 +77,7 @@ reflected in the page URL, so a particular view is a shareable link:
 ## The scene tree
 
 There is one panel over the scene and it lives inside the viewer: the outliner
-(`src/outliner.ts`), top left. It lists what is actually drawn — every matrix
+(`src/editor/outliner.ts`), top left. It lists what is actually drawn — every matrix
 and matmul in the current view, by scene path — and it is a control surface, not
 a legend: a row selects, shift-click adds, the eye hides, double-click frames.
 Selection is shared with the viewport, so clicking a matrix in 3D reveals its

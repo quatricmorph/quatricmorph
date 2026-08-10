@@ -55,7 +55,7 @@
 //
 
 import './gpt2page.css'
-import { RENDER_MODES } from './heatmap.js'
+import { RENDER_MODES } from './render/heatmap.js'
 
 // Typed `any` deliberately. Everything this module looks up is an <input>, a
 // <select> or the <iframe>, and it reads .value / .options / .disabled / .src

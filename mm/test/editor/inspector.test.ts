@@ -15,10 +15,10 @@
 // picking, highlights and framing live elsewhere and never under jsdom.
 //
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createInspector } from '../src/inspector.js'
-import { SelectionManager, VisibilityState } from '../src/selection.js'
-import { EditStack } from '../src/editops.js'
-import { Array2D } from '../src/viz.js'
+import { createInspector } from '../../src/editor/inspector.js'
+import { SelectionManager, VisibilityState } from '../../src/editor/selection.js'
+import { EditStack } from '../../src/editor/editops.js'
+import { Array2D } from '../../src/scene/viz.js'
 
 //
 // The fake tree: just enough SceneTree for the inspector and the managers.

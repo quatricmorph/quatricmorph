@@ -203,7 +203,7 @@ body {
    default `min-width/height: auto` is its content size, so without them the
    iframe refuses to shrink and the row overflows the window. There is no
    second panel out here on purpose: the scene tree is the viewer's own
-   outliner (src/outliner.ts), which is the one that selects and hides. */
+   outliner (src/editor/outliner.ts), which is the one that selects and hides. */
 #stage {
   flex: 1 1 auto;
   display: flex;

@@ -12,8 +12,8 @@
 //
 import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
-import { CameraRig, PRESET_DIRS, rangeWorldBox, entityUpAxis, fitBox } from '../src/cameractl.js'
-import * as viz from '../src/viz.js'
+import { CameraRig, PRESET_DIRS, rangeWorldBox, entityUpAxis, fitBox } from '../../src/editor/cameractl.js'
+import * as viz from '../../src/scene/viz.js'
 
 const rig = (duration = 0) => {
   const camera = new THREE.PerspectiveCamera(45, 1, 5, 10000)

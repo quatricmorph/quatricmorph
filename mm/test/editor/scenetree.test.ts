@@ -9,11 +9,11 @@
 // block gap) off, which looks fine until a gap is crossed.
 //
 import { describe, it, expect } from 'vitest'
-import * as viz from '../src/viz.js'
-import { elementPosition } from '../src/heatmap.js'
+import * as viz from '../../src/scene/viz.js'
+import { elementPosition } from '../../src/render/heatmap.js'
 import {
   SceneTree, nodeKind, matLayoutInfo, cellLocal, localToCell, dispToCell,
-} from '../src/scenetree.js'
+} from '../../src/editor/scenetree.js'
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 

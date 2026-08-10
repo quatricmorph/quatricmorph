@@ -9,8 +9,8 @@
 // breaks at panel-construction time, which is before the scene draws.
 //
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { initGui } from '../src/gui.js'
-import { defaultParams } from '../src/params.js'
+import { initGui } from '../../src/gui/gui.js'
+import { defaultParams } from '../../src/scene/params.js'
 
 // Stands in for the live viz.Mat. Controls call it back by name
 // (`getObj().setLegends(x)`, `.setRowGuides(x)`, …), so rather than enumerate

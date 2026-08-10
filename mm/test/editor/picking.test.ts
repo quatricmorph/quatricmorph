@@ -11,12 +11,12 @@
 //
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import * as viz from '../src/viz.js'
-import { SceneTree, cellLocal } from '../src/scenetree.js'
+import * as viz from '../../src/scene/viz.js'
+import { SceneTree, cellLocal } from '../../src/editor/scenetree.js'
 import {
   Picker, levelRange, cellCeil, cellFloor, rectRangeForMat, rectSelect,
   isWorldVisible,
-} from '../src/picking.js'
+} from '../../src/editor/picking.js'
 
 const lf = (name, h, w, init = 'row major') => ({
   name, matmul: false, h, w, init, url: '', expr: '', min: 0, max: 1, dropout: 0,

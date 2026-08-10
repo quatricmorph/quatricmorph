@@ -9,9 +9,9 @@
 // stat that miscounts non-finite values.
 //
 import { describe, it, expect } from 'vitest'
-import * as viz from '../src/viz.js'
-import { SceneTree } from '../src/scenetree.js'
-import { SelectionManager, VisibilityState, selectionStats } from '../src/selection.js'
+import * as viz from '../../src/scene/viz.js'
+import { SceneTree } from '../../src/editor/scenetree.js'
+import { SelectionManager, VisibilityState, selectionStats } from '../../src/editor/selection.js'
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 

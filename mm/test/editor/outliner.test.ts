@@ -10,10 +10,10 @@
 // that a name arriving from a URL cannot inject markup into the panel.
 //
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import * as viz from '../src/viz.js'
-import { SceneTree } from '../src/scenetree.js'
-import { SelectionManager, VisibilityState } from '../src/selection.js'
-import { createOutliner } from '../src/outliner.js'
+import * as viz from '../../src/scene/viz.js'
+import { SceneTree } from '../../src/editor/scenetree.js'
+import { SelectionManager, VisibilityState } from '../../src/editor/selection.js'
+import { createOutliner } from '../../src/editor/outliner.js'
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 

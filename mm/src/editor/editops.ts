@@ -29,7 +29,7 @@
 
 import { CellRange, fullRange, forEachCell } from './address.js'
 import { SceneTree, SceneEntity } from './scenetree.js'
-import { applyUnary } from './viz.js'
+import { applyUnary } from '../scene/viz.js'
 
 export const OP_KINDS = ['zero', 'fill', 'scale', 'add', 'clamp'] as const
 export type OpKind = typeof OP_KINDS[number]

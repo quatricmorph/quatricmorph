@@ -15,9 +15,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as THREE from 'three'
 
-import * as viz from '../src/viz.js'
-import { defaultParams } from '../src/params.js'
-import { createEditor } from '../src/interaction.js'
+import * as viz from '../../src/scene/viz.js'
+import { defaultParams } from '../../src/scene/params.js'
+import { createEditor } from '../../src/editor/interaction.js'
 
 // A 2×2 @ 2×2 matmul with hand-knowable data: left is the identity ('eye'),
 // right is 'row major' over [0, 1] → [[0, 1/3], [2/3, 1]], so result === right.

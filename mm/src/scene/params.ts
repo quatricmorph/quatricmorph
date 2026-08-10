@@ -266,7 +266,7 @@ export function defaultParams(): Params {
       'hue gap': 0.7,
       'hue spread': 0.04,
       // Which element-render path a matrix gets, and what a heatmap texel
-      // means. See src/heatmap.ts for the thresholds behind 'auto'.
+      // means. See src/render/heatmap.ts for the thresholds behind 'auto'.
       'render mode': 'auto',
       'heatmap encoding': 'magnitude',
       'heatmap filter': 'nearest',

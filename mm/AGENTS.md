@@ -35,11 +35,87 @@ compares them against its own numpy + `safetensors` forward pass — a reference
 that owes nothing to `gpt2_server.py`'s arithmetic. Tolerance is set by the wire
 (`to_csv` writes `%.6g`), not by the maths.
 
+## Module layout
+
+`src/` is five library modules plus the two entry points. The entries stay at
+the root because that is what they are — the four HTML pages name them by path
+(`/src/main.ts` from `viewer/index.html`, `./src/gpt2page.ts` from the three
+checkpoint pages), and nothing but `npm run build` checks those strings.
+
+```text
+src/
+  main.ts, gpt2page.ts, gpt2page.css   entries — not library, referenced by HTML
+  common/    util.ts                            params codec, object-tree helpers, THREE guides + text
+  render/    points.ts colormap.ts              a matrix becomes pixels: instanced-quad elements,
+             heatmap.ts heatmapmesh.ts          the colour ramp, the heatmap arithmetic and its mesh
+  scene/     viz.ts params.ts                   the scene built from a params tree, and its defaults
+  editor/    address.ts scenetree.ts            the tensor editor: addressing, selection, picking,
+             selection.ts picking.ts            edit stack, highlights, camera, controller, and its
+             editops.ts highlight.ts            own two DOM panels
+             cameractl.ts interaction.ts
+             inspector.ts outliner.ts
+  gui/       gui.ts                             the lil-gui params panel (unrelated to editor panels)
+```
+
+The module graph is a DAG and must stay one:
+
+```text
+common ← scene ← editor          render ← scene, editor, gpt2page
+       ← gui   ← main            common ← main, gui, scene
+```
+
+`inspector.ts` and `outliner.ts` live in `editor/` rather than beside `gui.ts`
+for exactly this reason: they import `editops`/`selection` while `interaction`
+imports them back. As files that is acyclic; split across two modules it would
+be a module cycle. Keep the editor's own panels inside the editor.
+
+**There are no `index.ts` barrels, on purpose.** No module here is uniformly
+pure: `render/` holds THREE-free arithmetic (`colormap`, `heatmap`) beside TSL
+shader graphs (`points`, `heatmapmesh`), and `editor/` holds pure index algebra
+(`address`, `scenetree`, `selection`) beside modules that build materials at
+import. A barrel re-exporting both halves would pull THREE into every consumer
+of the pure half — silently growing the page bundle and defeating the very
+property `test/imports.smoke.test.ts` was written to pin. Import deep paths.
+If a module ever becomes uniformly pure or uniformly THREE, a barrel is fine.
+
+`common/util.ts` is the one file that straddles a boundary: it holds the pure
+params codec (`flatten`/`compress`/`makeSearchParams`) *and* the THREE guides,
+axes and text geometry. It moved whole rather than being split, because it
+builds a `NodeMaterial` and parses a typeface at module scope — splitting it
+changes what gets imported when, which is a behaviour change, not a move. Do
+that split as its own change with `imports.smoke.test.ts` watched.
+
 ## What the tests actually pin
 
-`test/` has one suite per `src/` module. They were written against the
-JavaScript that preceded the TypeScript port and passed unchanged after it,
-which is the only reason the port can be called behaviour-preserving.
+`test/` mirrors `src/` **folder for folder**, and that is the granularity —
+not file for file. `test/editor/` is genuinely one suite per file (ten and
+ten), and so is `test/common/` and `test/gui/`; the other two are not, and it
+matters which:
+
+* `test/render/points.test.ts` is the single suite for all four of
+  `points`, `colormap`, `heatmap` and `heatmapmesh` — it imports all four,
+  and the `points` bullet below describes the contract it pins.
+* `test/scene/viz.test.ts` covers `viz.ts`. **`scene/params.ts` has no suite
+  of its own**: it is reached only through `gui.test.ts` and
+  `interaction.test.ts`, which build against the real `defaultParams`. Say
+  that rather than implying the mirror means per-file coverage.
+
+`test/modules.test.ts` enforces the mirror at that same folder granularity —
+it asserts each suite imports the module it sits under, not that each file has
+a suite.
+
+Four files stay at `test/` root because they are cross-cutting rather than
+per-module: `setup.ts`; `imports.smoke.test.ts`, which asserts every `src/`
+module imports headless and is the precondition every other suite depends on;
+`modules.test.ts`, which is about the layout rather than any one module; and
+`gpt2page.test.ts`, matching its entry, which has no folder either.
+
+`vite.config.ts` needs no change to find any of it: `test.include` is already
+`test/**/*.test.{js,ts}`.
+
+The suites were written against the JavaScript that preceded the TypeScript
+port and passed unchanged after it, which is the only reason the port can be
+called behaviour-preserving.
 
 They are deliberately weighted toward properties over line coverage:
 
@@ -74,7 +150,7 @@ Two conventions worth keeping:
   are load-bearing. Do not "fix" one without deciding to change the pictures.
 
 `main.ts` has no exports and builds a renderer at import, so it is covered only
-by the build and by `defaultParams` (extracted into `src/params.ts` precisely so
+by the build and by `defaultParams` (extracted into `src/scene/params.ts` precisely so
 it could be reached). Say so rather than implying the suite covers it.
 
 ## TypeScript
@@ -103,8 +179,12 @@ generics cannot express what the node graph carries at runtime), by-id DOM
 lookups in `gpt2page.ts`, and the `Params` tree.
 
 Import specifiers differ by where you are, and both are correct: modules under
-`src/` import each other with `.js` (`import * as viz from './viz.js'`) — the
-extension the emitted code would use, which the bundler maps to the `.ts` file.
+`src/` import each other with `.js` (`import * as viz from '../scene/viz.js'`)
+— the extension the emitted code would use, which the bundler maps to the `.ts`
+file. They are plain relative paths, with no `@mm/*` alias, deliberately: an
+alias would have to be declared twice, in `tsconfig.json`'s `paths` and in
+`vite.config.ts`'s `resolve.alias`, and those two drifting apart is the failure
+the `three` entry in both already exists to prevent.
 The inline `<script type="module">` in each page HTML imports `.ts` directly
 (`'./src/gpt2page.ts'` from the home page, `'../src/gpt2page.ts'` from the two
 under a directory), because it is not itself TypeScript.

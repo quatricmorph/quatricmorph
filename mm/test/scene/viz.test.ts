@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import {
   INIT_FUNCS, INITS, useRange, useDropout, EPILOGS, Array2D, setElemSize,
-} from '../src/viz.js'
+} from '../../src/scene/viz.js'
 
 const close = (a, b, p = 6) => expect(a).toBeCloseTo(b, p)
 
@@ -303,7 +303,7 @@ describe('setElemSize', () => {
 import {
   UnaryOp, AddOp, Stack, buildOpNode, genExpr, syncExpr, treeHasOps, describeTree,
   nodeHeight, nodeWidth, mergeVizSummaries, UNARY_FUNCS,
-} from '../src/viz.js'
+} from '../../src/scene/viz.js'
 
 const ctx = () => ({ raycaster: null, camera: null, pointer: null })
 

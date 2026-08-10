@@ -1,19 +1,19 @@
 "use strict"
 
 import * as THREE from 'three'
-import * as util from './util.js'
+import * as util from '../common/util.js'
 
 //
 // element rendering
 //
 // Elements were GL points shaded as sphere impostors. WebGPU has no sized point
-// primitive, so both the geometry and that shading now live in ./points.js as
+// primitive, so both the geometry and that shading now live in ../render/points.js as
 // an instanced quad; MATERIAL is re-exported because main.js drives the
 // magnifier through its `mag` uniform.
 //
 
-import { PointCloud } from './points.js'
-export { MATERIAL } from './points.js'
+import { PointCloud } from '../render/points.js'
+export { MATERIAL } from '../render/points.js'
 
 //
 // The second element-render path: texture-backed heatmap.
@@ -25,13 +25,13 @@ export { MATERIAL } from './points.js'
 // 768x3072 weight is drawable at all: as instanced quads it is 2.4M elements
 // and ~9.4M vertices.
 //
-import { HeatmapMesh } from './heatmapmesh.js'
+import { HeatmapMesh } from '../render/heatmapmesh.js'
 import {
   pickRenderMode, chooseLodFactor, lodSize,
   HEATMAP_TEXEL_BUDGET, HEATMAP_SCENE_TEXEL_BUDGET,
   TEXEL_HIDDEN, TEXEL_SHOWN, TEXEL_BUMPED, RENDER_MODES,
-} from './heatmap.js'
-import { colormapLUT, elementHSL, HEATMAP_ENCODINGS, HEATMAP_REDUCERS } from './colormap.js'
+} from '../render/heatmap.js'
+import { colormapLUT, elementHSL, HEATMAP_ENCODINGS, HEATMAP_REDUCERS } from '../render/colormap.js'
 export { RENDER_MODES, HEATMAP_ENCODINGS, HEATMAP_REDUCERS }
 
 //

@@ -10,7 +10,7 @@
 //
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { PointCloud, MATERIAL } from '../src/points.js'
+import { PointCloud, MATERIAL } from '../../src/render/points.js'
 
 // Three element centres in a row, 10 apart.
 const CENTERS = () => new Float32Array([0, 0, 0, 10, 0, 0, 20, 0, 0])
@@ -147,15 +147,15 @@ describe('MATERIAL', () => {
 import {
   COLORMAP_STOPS, colormapSRGB, colormapLUT, colormapHex,
   texelIndex, indexValue, elementHSL,
-} from '../src/colormap.js'
+} from '../../src/render/colormap.js'
 import {
   pickRenderMode, RENDER_MODES, chooseLodFactor, lodSize, reduceLevel, reduceTexel,
   elementPosition, blockQuad, texelUV, uvToCell,
   HEATMAP_MIN_ELEMENTS, HEATMAP_TEXEL_BUDGET,
   TEXEL_HIDDEN, TEXEL_SHOWN, TEXEL_BUMPED,
-} from '../src/heatmap.js'
-import { HeatmapMesh } from '../src/heatmapmesh.js'
-import { emptyPoints } from '../src/viz.js'
+} from '../../src/render/heatmap.js'
+import { HeatmapMesh } from '../../src/render/heatmapmesh.js'
+import { emptyPoints } from '../../src/scene/viz.js'
 
 // The block descriptor viz.js's `emptyPoints` and the heatmap are both built
 // from. One block per axis unless a test says otherwise.

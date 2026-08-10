@@ -10,10 +10,10 @@
 //
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import * as viz from '../src/viz.js'
-import { SceneTree } from '../src/scenetree.js'
-import { SelectionManager } from '../src/selection.js'
-import { HighlightRenderer, rangeRect } from '../src/highlight.js'
+import * as viz from '../../src/scene/viz.js'
+import { SceneTree } from '../../src/editor/scenetree.js'
+import { SelectionManager } from '../../src/editor/selection.js'
+import { HighlightRenderer, rangeRect } from '../../src/editor/highlight.js'
 
 const lf = (name, h, w, init = 'row major') => ({
   name, matmul: false, h, w, init, url: '', expr: '', min: 0, max: 1, dropout: 0,

@@ -11,7 +11,7 @@ import {
   cellRange, cellAt, fullRange, clampRange, rangeCount, rangesContain,
   subtractRange, addToRanges, subtractFromRanges, toggleRange, invertRanges,
   rangesCover, countCells, forEachCell, fmtValue, formatRange, formatRanges,
-} from '../src/address.js'
+} from '../../src/editor/address.js'
 
 describe('subtractRange', () => {
   it('returns the whole of a when b misses it', () => {

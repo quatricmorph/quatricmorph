@@ -14,8 +14,8 @@
 // not captured from a run.
 //
 import { describe, it, expect } from 'vitest'
-import * as util from '../src/util.js'
-import * as viz from '../src/viz.js'
+import * as util from '../../src/common/util.js'
+import * as viz from '../../src/scene/viz.js'
 
 // Shaped like the real thing: nested sub-objects, mixed value types, the
 // dotted-key hazard of duplicate leaf names at different depths.

@@ -17,7 +17,7 @@ import {
   countPoints, bbox, height, width, merge, mount,
   dataClaim, productClaim, renderClaim, checkShapes, adoptRenderMode,
 } from '../src/gpt2page.js'
-import { flatten, unflatten } from '../src/util.js'
+import { flatten, unflatten } from '../src/common/util.js'
 
 // Stand-ins for /api/specs.json entries.
 const spec = (h, w, url = '/api/m.csv') => ({ h, w, url })

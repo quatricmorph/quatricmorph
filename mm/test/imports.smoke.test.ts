@@ -1,10 +1,11 @@
 //
 // The precondition every other spec in this directory depends on.
 //
-// Three of the four src modules do real work at *import* time, before any test
-// calls anything: util builds a `NodeMaterial` and parses a Three.js typeface
-// from assets/, points builds another NodeMaterial plus its TSL `Fn()` shader
-// graphs, and viz imports points. If constructing those headless throws, every
+// Several src files do real work at *import* time, before any test calls
+// anything: common/util builds a `NodeMaterial` and parses a Three.js typeface
+// from assets/, render/points builds another NodeMaterial plus its TSL `Fn()`
+// shader graphs, editor/highlight builds shared materials and unit geometries,
+// and scene/viz imports points. If constructing those headless throws, every
 // downstream spec fails with the same unrelated stack and the actual assertion
 // is never reached.
 //
@@ -13,21 +14,25 @@
 // three/webgpu alias, jsdom, a missing WebGPU global) and not the module under
 // test. If it is green, importing anything in src/ headless is known-safe.
 //
+// It stays at test/ root rather than in a module folder, and it imports *deep
+// paths* rather than any barrel, because half its job is pinning which files
+// are THREE-free — a barrel would hide exactly that.
+//
 import { describe, it, expect } from 'vitest'
 
 describe('headless import of every src module', () => {
   it('imports util without touching a GPU', async () => {
-    const util = await import('../src/util.js')
+    const util = await import('../src/common/util.js')
     expect(typeof util.flatten).toBe('function')
   })
 
   it('imports points, whose NodeMaterial and TSL graphs build at module scope', async () => {
-    const points = await import('../src/points.js')
+    const points = await import('../src/render/points.js')
     expect(points.MATERIAL).toBeDefined()
   })
 
   it('imports viz, which pulls points in with it', async () => {
-    const viz = await import('../src/viz.js')
+    const viz = await import('../src/scene/viz.js')
     expect(Array.isArray(viz.INITS)).toBe(true)
   })
 
@@ -35,14 +40,14 @@ describe('headless import of every src module', () => {
     // These two are pure arithmetic so a jsdom test can reach every decision
     // the heatmap shader acts on. If either ever grows a THREE import, the
     // page bundle grows with it and this stops being the reason they exist.
-    const colormap = await import('../src/colormap.js')
-    const heatmap = await import('../src/heatmap.js')
+    const colormap = await import('../src/render/colormap.js')
+    const heatmap = await import('../src/render/heatmap.js')
     expect(colormap.COLORMAP_STOPS).toHaveLength(7)
     expect(typeof heatmap.chooseLodFactor).toBe('function')
   })
 
   it('imports heatmapmesh, whose per-block TSL graphs build on construction', async () => {
-    const { HeatmapMesh } = await import('../src/heatmapmesh.js')
+    const { HeatmapMesh } = await import('../src/render/heatmapmesh.js')
     const info = { i: { n: 1, size: 2, max: 2 }, j: { n: 1, size: 2, max: 2 }, gap: 0 }
     expect(new HeatmapMesh(2, 2, info, { lod: 1 }).blocks).toHaveLength(1)
   })
@@ -58,9 +63,9 @@ describe('headless import of every src module', () => {
     // import it stops being importable in the leanest contexts, and this
     // stops being the reason the layering exists. (scenetree reaches only
     // into heatmap.js, itself pinned THREE-free above.)
-    const address = await import('../src/address.js')
-    const scenetree = await import('../src/scenetree.js')
-    const selection = await import('../src/selection.js')
+    const address = await import('../src/editor/address.js')
+    const scenetree = await import('../src/editor/scenetree.js')
+    const selection = await import('../src/editor/selection.js')
     expect(address.LEVELS).toContain('scalar')
     expect(typeof scenetree.SceneTree).toBe('function')
     expect(typeof selection.SelectionManager).toBe('function')
@@ -70,11 +75,11 @@ describe('headless import of every src module', () => {
     // highlight builds its shared Line/MeshBasicMaterials and unit geometries
     // at import; picking/cameractl/interaction pull THREE in. Same contract
     // as points above: constructing these headless must not need a GPU.
-    const picking = await import('../src/picking.js')
-    const highlight = await import('../src/highlight.js')
-    const cameractl = await import('../src/cameractl.js')
-    const editops = await import('../src/editops.js')
-    const interaction = await import('../src/interaction.js')
+    const picking = await import('../src/editor/picking.js')
+    const highlight = await import('../src/editor/highlight.js')
+    const cameractl = await import('../src/editor/cameractl.js')
+    const editops = await import('../src/editor/editops.js')
+    const interaction = await import('../src/editor/interaction.js')
     expect(typeof picking.Picker).toBe('function')
     expect(typeof highlight.HighlightRenderer).toBe('function')
     expect(typeof cameractl.CameraRig).toBe('function')
@@ -83,8 +88,8 @@ describe('headless import of every src module', () => {
   })
 
   it('imports the editor panels, which are DOM-only by design', async () => {
-    const inspector = await import('../src/inspector.js')
-    const outliner = await import('../src/outliner.js')
+    const inspector = await import('../src/editor/inspector.js')
+    const outliner = await import('../src/editor/outliner.js')
     expect(typeof inspector.createInspector).toBe('function')
     expect(typeof outliner.createOutliner).toBe('function')
   })
