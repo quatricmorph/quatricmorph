@@ -185,6 +185,31 @@ describe('camera keys', () => {
     expect(orbit.target.length()).toBeGreaterThan(0)
   })
 
+  it('selecting a mat moves the orbit pole onto that mat\'s own axis, and clearing puts it back', () => {
+    const { editor, camera, mm } = makeEditor()
+    expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])
+    // tilt the scene: the result mat's own up is no longer the world's
+    mm.group.rotation.z = Math.PI / 6
+    mm.group.updateMatrixWorld(true)
+    editor.selection.selectEntity('out/result', 'set')
+    expect(camera.up.x).toBeCloseTo(-Math.sin(Math.PI / 6), 4)
+    expect(camera.up.y).toBeCloseTo(Math.cos(Math.PI / 6), 4)
+    editor.selection.clear()
+    expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])
+  })
+
+  it('selecting a face-placed mat never puts the orbit pole along the view direction', () => {
+    const { editor, camera, orbit } = makeEditor()
+    // 'right placement' is 'top' by default: that mat's own +Y is world −Z,
+    // i.e. straight down the view. Every mat must still leave a usable pole.
+    for (const path of ['out/right', 'out/left', 'out/result']) {
+      editor.selection.selectEntity(path, 'set')
+      const view = camera.position.clone().sub(orbit.target).normalize()
+      expect(Math.abs(camera.up.dot(view))).toBeLessThan(Math.cos(Math.PI / 6))
+      expect(camera.up.length()).toBeCloseTo(1, 6)
+    }
+  })
+
   it('Shift+1 flies to the front preset, preserving distance to the target', () => {
     const { editor, camera, orbit } = makeEditor()
     const dist = camera.position.distanceTo(orbit.target)

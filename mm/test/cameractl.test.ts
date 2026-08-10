@@ -1,26 +1,36 @@
 //
 // cameractl.ts — framing, presets, tweens.
 //
-// What this file pins: the fitting arithmetic (the same bounding-sphere/
-// half-angle formula frameStagedScene uses, hand-computed for a unit case),
-// smoothstep interpolation at its exact midpoint, preset geometry, and that
-// duration 0 lands instantly (the mode every other suite relies on).
+// What this file pins: the fitting arithmetic (screen-extent fitting, so the
+// binding dimension exactly fills the frame — hand-computed for a wide box and
+// a unit cube), the up-axis swap that makes the orbit rotate about an object's
+// own axis, smoothstep interpolation at its exact midpoint, preset geometry,
+// and that duration 0 lands instantly (the mode every other suite relies on).
 // Deliberately untested: interaction with a real OrbitControls (a fake with
-// target/update is the whole surface the rig touches).
+// target/update/_quat is the whole surface the rig touches).
 //
 import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
-import { CameraRig, PRESET_DIRS, rangeWorldBox } from '../src/cameractl.js'
+import { CameraRig, PRESET_DIRS, rangeWorldBox, entityUpAxis } from '../src/cameractl.js'
 import * as viz from '../src/viz.js'
 
 const rig = (duration = 0) => {
   const camera = new THREE.PerspectiveCamera(45, 1, 5, 10000)
   camera.position.set(0, 0, 10)
-  const orbit = { target: new THREE.Vector3(), update: vi.fn() }
+  // _quat / _quatInverse are OrbitControls' orbit frame: it derives them from
+  // camera.up once, in its constructor, so the rig has to re-derive them.
+  const orbit = {
+    target: new THREE.Vector3(),
+    update: vi.fn(),
+    _quat: new THREE.Quaternion().setFromUnitVectors(camera.up, new THREE.Vector3(0, 1, 0)),
+    _quatInverse: new THREE.Quaternion(),
+  }
   const r = new CameraRig(camera, orbit)
   r.duration = duration
   return { r, camera, orbit }
 }
+
+const HALF = Math.tan(THREE.MathUtils.degToRad(22.5))   // tan of the 45° fov's half-angle
 
 describe('flyTo', () => {
   it('lands instantly at duration 0 and tells the controls', () => {
@@ -47,16 +57,57 @@ describe('flyTo', () => {
 })
 
 describe('frameBox', () => {
-  it('fits a box at pad·radius/sin(half-angle) along the current view direction', () => {
+  it('fits a box at pad·max(halfW/tan(hfov/2), halfH/tan(vfov/2)) + halfDepth', () => {
     const { r, camera } = rig(0)
-    // unit cube [−1,1]³: bounding sphere radius √3. fov 45, aspect 1 →
-    // half-angle 22.5°, so dist = 1.15·√3 / sin 22.5° ≈ 5.2050.
+    // unit cube [−1,1]³ down +z: hw = hh = hd = 1, fov 45 / aspect 1 → both
+    // half-angles 22.5°, so dist = 1.05·1/tan 22.5° + 1 ≈ 3.5349.
     const box = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1))
     r.frameBox(box)
-    const want = 1.15 * Math.sqrt(3) / Math.sin(THREE.MathUtils.degToRad(22.5))
+    const want = 1.05 / HALF + 1
     expect(camera.position.length()).toBeCloseTo(want, 4)
     // view direction preserved: camera was on +z looking at the origin
     expect(camera.position.z).toBeCloseTo(want, 4)
+  })
+
+  it('fills the viewport width for a box wider than it is tall', () => {
+    const { r, camera } = rig(0)
+    // 16 × 2 × 1 box: width binds, so the near face should span the frame
+    // horizontally bar the 5% margin — the old bounding-sphere fit left it
+    // floating at ~24 units back instead of ~20.8.
+    const box = new THREE.Box3(new THREE.Vector3(-8, -1, -0.5), new THREE.Vector3(8, 1, 0.5))
+    r.frameBox(box)
+    expect(camera.position.z).toBeCloseTo(1.05 * 8 / HALF + 0.5, 4)
+    // half-width visible at the depth of the box's near face, from where the
+    // camera actually landed
+    const visible = (camera.position.z - 0.5) * HALF
+    expect(8 / visible).toBeCloseTo(1 / 1.05, 6)
+    const radius = box.getBoundingSphere(new THREE.Sphere()).radius
+    expect(camera.position.z).toBeLessThan(1.15 * radius / Math.sin(THREE.MathUtils.degToRad(22.5)))
+  })
+
+  it('opens the near plane so a tight fit cannot clip the thing it framed', () => {
+    const { r, camera } = rig(0)
+    expect(camera.near).toBe(5)             // main.ts ships near = 5
+    const box = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1))
+    r.frameBox(box)
+    // the box's near face sits at |pos| − 1; the near plane must be in front of it
+    expect(camera.near).toBeLessThan(camera.position.length() - 1)
+    expect(camera.near).toBeGreaterThan(0)
+  })
+
+  it('measures the box against the rig\'s up axis, not the world\'s', () => {
+    const { r, camera } = rig(0)
+    // a box wide in y, thin in x, viewed down +z. With world up it is tall and
+    // height binds; rolled 90° it is wide on screen and width binds — same
+    // number either way at aspect 1, so tilt the aspect to tell them apart.
+    camera.aspect = 2
+    camera.updateProjectionMatrix()
+    const box = new THREE.Box3(new THREE.Vector3(-1, -8, -0.5), new THREE.Vector3(1, 8, 0.5))
+    r.frameBox(box)
+    const upright = camera.position.z
+    r.setUpAxis(new THREE.Vector3(1, 0, 0))   // roll: the long side is now horizontal
+    r.frameBox(box)
+    expect(camera.position.length()).toBeLessThan(upright)
   })
 
   it('ignores an empty box', () => {
@@ -64,6 +115,115 @@ describe('frameBox', () => {
     const before = camera.position.clone()
     r.frameBox(new THREE.Box3())
     expect(camera.position.equals(before)).toBe(true)
+  })
+})
+
+describe('up axis — orbiting about the object instead of the world', () => {
+  it('re-derives OrbitControls\' orbit frame, which it computes only in its constructor', () => {
+    const { r, camera, orbit } = rig(0)
+    expect(r.setUpAxis(new THREE.Vector3(1, 0, 0))).toBe(true)
+    expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([1, 0, 0])
+    // _quat is the map from the orbit axis to +Y: it must now send +X there
+    const probe = new THREE.Vector3(1, 0, 0).applyQuaternion(orbit._quat)
+    expect(probe.y).toBeCloseTo(1, 6)
+    // and _quatInverse must undo it
+    expect(probe.applyQuaternion(orbit._quatInverse).x).toBeCloseTo(1, 6)
+  })
+
+  it('flips an axis that points away from the current up, so selecting never turns the view over', () => {
+    const { r, camera } = rig(0)
+    expect(r.setUpAxis(new THREE.Vector3(0, -1, 0))).toBe(false)
+    expect(camera.up.y).toBeCloseTo(1, 6)
+    r.setUpAxis(new THREE.Vector3(-1, -1, 0))
+    expect(camera.up.y).toBeCloseTo(Math.SQRT1_2, 6)   // negated into the +Y hemisphere
+    expect(camera.up.x).toBeCloseTo(Math.SQRT1_2, 6)
+  })
+
+  it('no-ops when the axis is already in force — selection changes fire on every box-drag step', () => {
+    const { r, orbit } = rig(0)
+    expect(r.setUpAxis(new THREE.Vector3(0, 1, 0))).toBe(false)
+    expect(r.setUpAxis(null)).toBe(false)
+    expect(r.setUpAxis(new THREE.Vector3(0, 0, 0))).toBe(false)
+    expect(orbit.update).not.toHaveBeenCalled()
+    expect(r.isMoving()).toBe(false)
+  })
+
+  it('resetUpAxis returns to world +Y, which is what an empty selection means', () => {
+    const { r, camera } = rig(0)
+    r.setUpAxis(new THREE.Vector3(1, 0, 0))
+    expect(r.resetUpAxis()).toBe(true)
+    expect(camera.up.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])
+  })
+
+  it('rolls smoothly rather than snapping, and the framing basis leads the roll', () => {
+    const { r, camera } = rig(320)
+    r.setUpAxis(new THREE.Vector3(1, 0, 0), 1000)
+    // the destination is in force for framing before the roll has played out
+    expect(r.upTarget().x).toBeCloseTo(1, 6)
+    r.update(1000 + 160)
+    expect(camera.up.length()).toBeCloseTo(1, 6)
+    expect(camera.up.x).toBeCloseTo(Math.SQRT1_2, 6)   // halfway: 45° of roll
+    r.update(1000 + 320)
+    expect(camera.up.x).toBeCloseTo(1, 6)
+    expect(camera.up.y).toBeCloseTo(0, 6)
+    expect(r.isMoving()).toBe(false)
+  })
+})
+
+const matAt = (rot: (o: any) => void) => {
+  const inner = new THREE.Object3D()
+  rot(inner)
+  inner.updateMatrixWorld(true)
+  return { mat: { inner_group: inner } } as any
+}
+
+describe('entityUpAxis', () => {
+  it('is the entity\'s own +Y for an upright mat, tilted with it', () => {
+    expect(entityUpAxis(matAt(() => { })).toArray().map(v => +v.toFixed(6)))
+      .toEqual([0, 1, 0])
+    const axis = entityUpAxis(matAt(o => { o.rotation.z = Math.PI / 6 }))
+    expect(axis.x).toBeCloseTo(-0.5, 6)
+    expect(axis.y).toBeCloseTo(Math.sqrt(3) / 2, 6)
+  })
+
+  it('picks a different basis axis rather than a pole: a quarter-turned mat\'s +Y points at the viewer', () => {
+    // this is the top-placed right operand — local +Y lands on world −Z, which
+    // is exactly the default view direction
+    const e = matAt(o => { o.rotation.x = -Math.PI / 2 })
+    expect(new THREE.Vector3().setFromMatrixColumn(e.mat.inner_group.matrixWorld, 1)
+      .toArray().map(v => +v.toFixed(6))).toEqual([0, 0, -1])
+    const axis = entityUpAxis(e)
+    expect(axis.toArray().map(v => +v.toFixed(6))).toEqual([0, 1, 0])   // its local +Z
+  })
+
+  it('measures against the up in force, not the world\'s', () => {
+    // rolled 60°: local +X is 60° off world +X, local +Y is 30° off world +X
+    const e = matAt(o => { o.rotation.z = Math.PI / 3 })
+    expect(entityUpAxis(e, new THREE.Vector3(1, 0, 0)).x).toBeCloseTo(Math.sqrt(3) / 2, 6)
+    expect(entityUpAxis(e, new THREE.Vector3(0, 1, 0)).y).toBeCloseTo(Math.sqrt(3) / 2, 6)
+    // and they are different axes, 90° apart
+    expect(entityUpAxis(e, new THREE.Vector3(1, 0, 0))
+      .dot(entityUpAxis(e, new THREE.Vector3(0, 1, 0)))).toBeCloseTo(0, 6)
+  })
+
+  it('flips the chosen axis into the reference hemisphere, so selecting never turns the view over', () => {
+    const axis = entityUpAxis(matAt(o => { o.rotation.z = Math.PI }))   // +Y is now −Y
+    expect(axis.y).toBeCloseTo(1, 6)
+  })
+
+  it('falls back to the node group for a non-mat entity, and skips degenerate columns', () => {
+    const group = new THREE.Object3D()
+    group.rotation.x = Math.PI / 2
+    group.updateMatrixWorld(true)
+    const axis = entityUpAxis({ node: { group } } as any)   // its own −Z, flipped up
+    expect(axis.x).toBeCloseTo(0, 6)
+    expect(axis.y).toBeCloseTo(1, 6)
+    expect(axis.z).toBeCloseTo(0, 6)
+    const flat = new THREE.Object3D()
+    flat.scale.set(0, 0, 0)
+    flat.updateMatrixWorld(true)
+    expect(entityUpAxis({ mat: { inner_group: flat } } as any)).toBe(null)
+    expect(entityUpAxis({} as any)).toBe(null)
   })
 })
 

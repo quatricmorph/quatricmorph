@@ -22,7 +22,8 @@
 //
 // Bindings:  1-5 selection level (matrix/block/row/col/scalar) · Tab cycle ·
 // click select · shift+click toggle · alt+click whole matrix · double-click
-// frame · B box select · Esc cancel · F frame selection · Home frame all ·
+// frame · B box select · Esc cancel · F fit selection to the viewport ·
+// Home frame all ·
 // A all · alt+A none · I invert · U / shift+U selection undo/redo · H hide ·
 // shift+H isolate · alt+H unhide · C cursor at hover · shift+C clear cursor ·
 // . pivot to cursor/selection · X zero selection · shift+1/3/7 view presets.
@@ -34,7 +35,7 @@ import { SceneTree, cellLocal } from './scenetree.js'
 import { SelectionManager, VisibilityState } from './selection.js'
 import { Picker, PickHit, levelRange, rectSelect } from './picking.js'
 import { HighlightRenderer } from './highlight.js'
-import { CameraRig, entityWorldBox } from './cameractl.js'
+import { CameraRig, entityWorldBox, entityUpAxis } from './cameractl.js'
 import { EditStack, refreshTouched, OpKind } from './editops.js'
 import { createInspector, HoverInfo } from './inspector.js'
 import { createOutliner } from './outliner.js'
@@ -161,6 +162,19 @@ export function createEditor(ctx: EditorContext): Editor {
     if (box && !box.isEmpty()) rig.frameBox(box)
   }
 
+  /**
+   * Orbit about the selected object's own axis rather than world +Y — with
+   * nothing selected, back to world up. The rig no-ops when the axis is
+   * already in force, so this is safe to call on every selection change
+   * (including each step of a box drag).
+   */
+  const syncOrbitAxis = () => {
+    const path = selection.activePath()
+    const e = path ? tree?.get(path) : null
+    if (e) rig.setUpAxis(entityUpAxis(e, rig.upTarget()))
+    else rig.resetUpAxis()
+  }
+
   const refreshHighlights = () => {
     highlight.refresh(tree, selection)
     const ci = cursorInfo()
@@ -200,7 +214,7 @@ export function createEditor(ctx: EditorContext): Editor {
     status.appendChild(b)
     status.appendChild(document.createTextNode(
       `  ·  ${n} selected · ${cells.toLocaleString()} cells  ·  ` +
-      `[1-5] level  B box  F frame  H hide  C cursor  X zero  U undo-sel`))
+      `[1-5] level  B box  F fit  H hide  C cursor  X zero  U undo-sel`))
   }
 
   //
@@ -225,6 +239,7 @@ export function createEditor(ctx: EditorContext): Editor {
   unsubs.push(selection.onChange(type => {
     refreshHighlights()
     updateStatus()
+    syncOrbitAxis()
     if (type === 'select' && selection.activePath()) {
       outliner?.revealPath(selection.activePath()!)
     }
@@ -249,6 +264,9 @@ export function createEditor(ctx: EditorContext): Editor {
     outliner?.refresh()
     inspector?.refresh()
     updateStatus()
+    // A rebuild can move the selected mat (stage change, layout knob), so its
+    // own axis — the one the orbit is pivoting about — may have moved with it.
+    syncOrbitAxis()
   }
 
   /** A brand-new scene object (initObj): data arrays are fresh, so edit
