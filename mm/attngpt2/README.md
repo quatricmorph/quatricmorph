@@ -74,8 +74,10 @@ produce a matrix that is neither the head's contribution nor the layer's output.
 does belong.
 
 Every *input* matrix is the checkpoint's own, apart from the appended all-ones
-column that carries the bias. The status bar states all of this separately,
-`data:` and `product:`.
+column that carries the bias. `showStatus` states all of this separately, `data:`
+and `product:` — though since the status bar was removed to give the viewer its
+height, those two lines are built and hidden rather than printed; see
+[`../docs/gpt2/README.md`](../docs/gpt2/README.md) under *Fidelity*.
 
 `softmax(tril(x/sqrt(k)))` is the correct scale in this factoring: `attn` is
 `Q @ K_t`, which contracts over `head_dim`, and mm binds `k` in an epilog to the

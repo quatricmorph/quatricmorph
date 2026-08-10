@@ -81,7 +81,7 @@ QK  =  [wQ ; bq] @ [wK_t | bk]              769×769
 which is the same score matrix the conventional form draws. `bv` rides the same
 ones column: `attn @ [input | 1] @ [[wV ; bv] @ wO]` is `attn @ V @ wO`.
 
-Two things the picture does not give you, both in the status bar:
+Two things the picture does not give you, both named in this view's `gap`:
 
 * **`attn.c_proj.bias` is not drawn.** GPT-2 adds it once to the sum over all
   heads, so it is not a term of a per-head matmul — the same call as in
@@ -94,7 +94,9 @@ Two things the picture does not give you, both in the status bar:
   matmul before `attn` ever touches it.
 
 Every input matrix is the checkpoint's own, apart from the appended all-ones
-column that carries the bias. The status bar separates the claims.
+column that carries the bias. `showStatus` keeps the claims separate — and since
+the status bar was removed to give the viewer its height, keeps them hidden; see
+[`../docs/gpt2/README.md`](../docs/gpt2/README.md) under *Fidelity*.
 
 ## Cost
 

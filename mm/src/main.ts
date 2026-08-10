@@ -139,11 +139,27 @@ function saveUrlInfo() {
 
 function saveUrl() {
   saveUrlInfo()
-  window.history.pushState({}, '', url_info.url)
-  // send to parent if we're in an iframe
+  // Framed, this window does not own the URL and must not write history.
+  //
+  // It used to pushState here on every panel change and every camera move (see
+  // requestCameraPositionSave), so orbiting a scene left a trail of Back steps
+  // whose top-level URL was the embedding page's. One swipe-back -- which is
+  // also this viewer's own documented zoom gesture, two fingers on a trackpad
+  // -- then took the frame off the scene that page had built and onto a
+  // previous one, or, for a staged scene whose URL carries no params at all,
+  // onto mm's default demo scene. The chrome outside went on describing the
+  // scene it asked for. That was the reported "auto redirect to another view".
+  //
+  // `saveUrlInfo` above still runs either way, so `url_info` -- the diag
+  // panel's json/url/compressed fields and the `getUrlInfo` responder that
+  // answers the page's `open↗` -- is as current as it ever was. The embedding
+  // page keeps its own deep link (`saveDeepLink` in gpt2page.ts), which is
+  // history-neutral for the same reason: it uses replaceState.
   if (window.parent != window) {
     window.parent.postMessage({ search_params: url_info.search_params }, parent.origin)
+    return
   }
+  window.history.pushState({}, '', url_info.url)
 }
 
 // obj
@@ -506,7 +522,15 @@ function initFromSearchParams() {
   initFromParams(false)
 }
 
-window.addEventListener('popstate', initFromSearchParams, false)
+// Top-level only, for the same reason `saveUrl` does not push when framed: this
+// window's URL is not a place the user navigated to. A staged scene arrives over
+// postMessage and leaves no params behind at all, so re-reading the frame's URL
+// on a back navigation would fall into `resetParams()` and silently replace the
+// checkpoint scene with mm's default one.
+window.addEventListener('popstate', () => {
+  if (window.parent != window) return
+  initFromSearchParams()
+}, false)
 
 window.addEventListener('resize', () => {
   camera.fov = fov()

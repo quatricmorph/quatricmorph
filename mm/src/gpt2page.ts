@@ -3,9 +3,13 @@
 //
 // The home page (`index.html`), `attngpt2/` and `attnqkov/` all do the same
 // thing: ask `tools/gpt2_server.py` (under /api/) for the shape and URL of every matrix in a
-// tree, hand that tree to the unmodified mm viewer in an iframe, and say in the
-// status bar exactly what the picture is and is not. Only the *tree* differs
-// between them, so only the tree lives in the page; everything else is here.
+// tree, hand that tree to the unmodified mm viewer in an iframe, and state
+// exactly what the picture is and is not. Only the *tree* differs between them,
+// so only the tree lives in the page; everything else is here.
+//
+// Those statements used to have a status bar of their own above the frame. They
+// do not any more — the frame has that height — and where they go now is the
+// note above `fail`/`claims`.
 //
 // The rule this module exists to state once instead of three times:
 //
@@ -38,9 +42,9 @@
 //                                           index, and what the renderer
 //                                           actually built (texels, LOD level,
 //                                           colour encoding), so the chrome and
-//                                           the status bar describe the picture
-//                                           on screen rather than the one this
-//                                           file asked for.
+//                                           the claims describe the picture on
+//                                           screen rather than the one this file
+//                                           asked for.
 //
 // So `viz.ts`, `util.ts`, `gui.ts` and `main.ts` are no longer untouched by the
 // checkpoint pages: the node kinds a staged forward pass needs (a materialized
@@ -311,7 +315,7 @@ export function bbox(p, gap = (p.layout && p.layout.gap) || 0) {
 }
 
 // ---------------------------------------------------------------------------
-// what the picture is — the two claims the status bar makes
+// what the picture is — the claims `showStatus` builds
 // ---------------------------------------------------------------------------
 //
 // These are separate on purpose, and both are separate from "it drew". A leaf
@@ -528,7 +532,6 @@ const CHROME = `
   <select id="render"></select>
   <a href="#" id="popout_link">open&#x2197;</a>
 </div>
-<div id="status">loading…</div>
 <div id="timeline" class="hidden">
   <button id="tl_prev" title="previous stage">&#x25C0;</button>
   <button id="tl_play" title="play / pause">&#x25B6;</button>
@@ -538,6 +541,7 @@ const CHROME = `
 </div>
 <div id="stage">
   <iframe id="mm" src="about:blank"></iframe>
+  <div id="status">loading&#x2026;</div>
 </div>
 `
 
@@ -554,7 +558,39 @@ function fillRange(elem, n) {
   for (let i = 0; i < n; i++) option(elem, String(i))
 }
 
-const status = html => { $('status').innerHTML = html }
+//
+// The status bar no longer has a row of its own. It was six wrapped lines deep
+// at the top of the page — tokens, the view's note, every leaf's shape, the
+// element count and the three claims — and all of that height came off the
+// viewer, which is the thing the page is for. It is now an overlay pinned to the
+// top of the stage, out of flow, so the frame below it is full height.
+//
+// Two ways in, and only one of them shows it:
+//
+//   `fail`    the model server is unreachable, a matrix is a 501 refusal, a
+//             tree would be tiled rather than contracted, a page's own
+//             precondition is unmet. Every one of these means there is nothing
+//             to look at, so the overlay is the only thing on screen that can
+//             say so — and the first of them is the failure a new checkout hits
+//             before anything works at all. Same for the `loading…` the chrome
+//             ships with, which the first successful refresh clears.
+//
+//   `claims`  what `showStatus` builds. Still built on every refresh, still
+//             written here, and still hidden: `data:`/`product:`/`render:` are
+//             not errors. Written rather than dropped so that the claim
+//             functions keep a caller and unhiding is one line — the height
+//             argument is about where the text goes, not about whether it is
+//             true.
+//
+const fail = html => {
+  $('status').innerHTML = html
+  $('status').classList.remove('hidden')
+}
+
+const claims = html => {
+  $('status').innerHTML = html
+  $('status').classList.add('hidden')
+}
 
 // ---------------------------------------------------------------------------
 // mount
@@ -608,6 +644,37 @@ export async function mount(config: any) {
   let META = null
   let current_view = null
   let mm_ready = false
+  // Whether the frame has been pointed at the viewer at all. Read where
+  // `$('mm').src != 'about:blank'` used to be: `navigate` below drives the frame
+  // through its own location rather than through the src attribute, so that
+  // attribute stays 'about:blank' for the life of the page and can no longer
+  // answer the question.
+  let mm_navigated = false
+
+  // Point the frame at a viewer URL.
+  //
+  // `location.replace`, not `$('mm').src = url`. Assigning src to a frame that
+  // already holds a document pushes an entry onto the joint session history, so
+  // every view, prompt, render-mode or stride change added a Back step. Backing
+  // over one of those -- deliberately, or with the two-finger swipe the viewer
+  // documents as its zoom gesture -- reloaded the frame at the *previous* view's
+  // URL while this page's chrome, selectors and status all went on describing
+  // the current one. That is the "auto redirect to another view", and it is a
+  // navigation bug rather than a page-structure one: nothing here needs to be
+  // split into another HTML file to fix it.
+  //
+  // `replace` swaps the frame's document in place and adds no entry. It is also
+  // correct for the first navigation: the frame's initial about:blank is
+  // same-origin, so `contentWindow` is reachable, and replacing it is what
+  // assigning src to a never-loaded frame does anyway.
+  //
+  // The URL is made absolute against this page rather than left relative: it is
+  // resolved against the *frame's* base URL, which for about:blank is inherited
+  // and not something to depend on.
+  const navigate = url => {
+    mm_navigated = true
+    $('mm').contentWindow.location.replace(abs(url))
+  }
 
   // A staged scene is far too big to travel as `?params=` on the iframe URL --
   // distilgpt2's is tens of thousands of nodes -- so it is pushed over the
@@ -671,7 +738,7 @@ export async function mount(config: any) {
       specs = Object.assign({}, ...by_layer)
       n_tokens = sps[0].n_tokens; toks = tk.tokens
     } catch (e) {
-      status(`<span class="err">${esc(e.message)}</span>`)
+      fail(`<span class="err">${esc(e.message)}</span>`)
       return
     }
 
@@ -681,7 +748,7 @@ export async function mount(config: any) {
     for (const [l, sp] of by_layer.entries()) {
       const missing = Object.entries(sp).filter(([, v]: any) => v.available === false)
       if (missing.length) {
-        status(`<span class="err">${esc((missing[0][1] as any).reason)}` +
+        fail(`<span class="err">${esc((missing[0][1] as any).reason)}` +
           `${view.layers ? ` (layer ${l})` : ''}</span>`)
         return
       }
@@ -701,7 +768,7 @@ export async function mount(config: any) {
     try {
       checkShapes(params)
     } catch (e) {
-      status(`<span class="err">${esc(e.message)}</span>`)
+      fail(`<span class="err">${esc(e.message)}</span>`)
       return
     }
 
@@ -740,10 +807,10 @@ export async function mount(config: any) {
         // protocol. `replace` (not a merge) because the default tree it comes
         // up with is a matmul and this one is not the same shape.
         pending_params = params
-        $('mm').src = viewer
+        navigate(viewer)
       } else {
         pending_params = null
-        $('mm').src = viewer + '?params=' + encodeURIComponent(JSON.stringify(params))
+        navigate(viewer + '?params=' + encodeURIComponent(JSON.stringify(params)))
       }
     } else if (params.op) {
       $('mm').contentWindow.postMessage(
@@ -757,8 +824,8 @@ export async function mount(config: any) {
     showStatus(s, view, specs, toks, n_tokens, params)
   }
 
-  // The last status render's inputs, so the bar can be redrawn when the viewer
-  // reports back what it built without refetching anything.
+  // The last status render's inputs, so the claims can be rebuilt when the
+  // viewer reports back what it built without refetching anything.
   let last_status = null
   let render_summary = null
 
@@ -775,7 +842,7 @@ export async function mount(config: any) {
     const data = dataClaim(specs, s.stride)
     const product = productClaim(view)
 
-    status(
+    claims(
       `<div style="flex-basis:100%">` +
         toks.map(t => `<span class="tok">${esc(t)}</span>`).join('') +
         `<span class="dim">${n_tokens} tokens</span></div>` +
@@ -808,7 +875,7 @@ export async function mount(config: any) {
   try {
     META = await getJSON('/api/meta.json')
   } catch (e) {
-    status(`<span class="err">cannot reach the model server (${esc(e.message)}).` +
+    fail(`<span class="err">cannot reach the model server (${esc(e.message)}).` +
       ` Start it with <code>../.venv/bin/python tools/gpt2_server.py</code>` +
       ` from the <code>mm/</code> directory, then open` +
       ` <code>${esc(location.pathname)}</code> on that origin` +
@@ -819,7 +886,7 @@ export async function mount(config: any) {
   // a page may declare a precondition it cannot draw honestly without
   const refusal = config.require && config.require(META)
   if (refusal) {
-    status(`<span class="err">${esc(refusal)}</span>`)
+    fail(`<span class="err">${esc(refusal)}</span>`)
     return
   }
 
@@ -846,7 +913,7 @@ export async function mount(config: any) {
   // await, so its message listener is installed after this fires -- but it is
   // the right moment to know the frame exists. The push waits for the viewer's
   // own `ready`.
-  $('mm').addEventListener('load', () => { mm_ready = $('mm').src != 'about:blank' })
+  $('mm').addEventListener('load', () => { mm_ready = mm_navigated })
 
   const flushPending = () => {
     if (!pending_params) return

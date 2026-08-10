@@ -154,8 +154,9 @@ and partial sum stays correct by construction.
 | mlp down | `mlp.c_proj.bias` | the model's |
 | logits (tied wte) | none — GPT-2's LM head is the tied embedding, which has no bias | the model's |
 
-Two things this does **not** do, both stated in the status bar rather than
-quietly absorbed:
+Two things this does **not** do, both named in `productClaim`'s `gap` rather than
+quietly absorbed (see *Fidelity* below for where that text goes now that the
+status bar has been removed):
 
 * **`attn.c_proj.bias` is not drawn on a single head.** GPT-2 adds it once to
   the sum over all twelve head outputs, so it is not a term of the matmul a
@@ -176,9 +177,19 @@ numpy + `safetensors` forward pass, over the same CSVs the page fetches.
 
 ## Fidelity
 
-Results are labelled in the status bar, and the labels mean what they say. This
-section is about the leaf **data**; what the rendered *product* leaves out is the
-section above.
+Results are labelled, and the labels mean what they say. This section is about
+the leaf **data**; what the rendered *product* leaves out is the section above.
+
+**Where the labels are.** The status bar that used to print them above the frame
+is gone — that height went to the viewer. `showStatus` still builds all three
+claims on every refresh and writes them to `#status`, which is now an overlay
+that only appears for the things that mean there is nothing to look at: the model
+server unreachable, a 501 refusal, a shape mismatch. What is still on screen for
+every scene is the *render* half — the viewer's own colorbar, bottom left, prints
+the encoding, the texel count and the LOD level with its reducer, and the stage
+timeline repeats it — plus the `Stride` control, which is the sampling itself. The
+`data:` and `product:` lines are one `classList.remove('hidden')` from being
+visible again if that trade turns out to be the wrong one.
 
 * **exact** — every element rendered is the checkpoint's own value, or an
   activation computed from it in float32. This is the default everywhere.

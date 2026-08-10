@@ -88,9 +88,20 @@ body {
   min-width: 140px;
 }
 
+/* The status bar was a flex row of its own between the header and the stage,
+   and six wrapped lines of claims deep — height the viewer never got back. It
+   is out of flow now: an overlay pinned across the top of the stage, shown only
+   for the things that mean there is nothing to look at yet (`fail` in
+   gpt2page.ts, plus the first `loading…`). `position: absolute` against
+   `#stage`, which is the positioned ancestor; the iframe beside it is a flex
+   item and does not see it at all. */
 #status {
-  flex: 0 0 auto;
-  background: #1a1a1a;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 5;
+  background: rgba(20, 20, 20, 0.94);
   padding: 5px 12px;
   font-size: 12px;
   line-height: 18px;
@@ -99,6 +110,10 @@ body {
   flex-wrap: wrap;
   gap: 4px 16px;
   align-items: baseline;
+}
+
+#status.hidden {
+  display: none;
 }
 
 #status .expr {
@@ -194,6 +209,8 @@ body {
   display: flex;
   flex-direction: row;
   min-height: 0;
+  /* the containing block for the #status overlay above */
+  position: relative;
 }
 
 #mm {

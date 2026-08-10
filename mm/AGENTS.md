@@ -141,12 +141,28 @@ and Vite's HTML pipeline would rewrite script tags in an entry.
   — a bias added in `applyPointwiseEpilog` would be added once per accumulated
   chunk, since it is affine and the partial sums are not. If you are tempted to
   put one there, that is the reason not to.
-* `q-`style honesty applies to the status bar, and it now makes three claims,
-  not two: what the *data* is (exact vs sampled), which part of it is
+* `q-`style honesty applies to the three claims `showStatus` builds, and there
+  are three, not two: what the *data* is (exact vs sampled), which part of it is
   *synthetic* (the all-ones vector — the only number in an augmented leaf the
   checkpoint did not supply), and what the *product* is (`bias` drawn, `gap`
   remaining). Do not let a sampled figure be presented as exact, and do not let
   "complete" print beside a known gap — `productClaim` enforces the second.
+  **These no longer have a status bar to print in**: that row was removed so the
+  viewer gets the height, and `claims()` writes them to a hidden overlay while
+  `fail()` is the only thing that shows it. What is still stated on screen is the
+  render fidelity — the viewer's own `#colorbar` prints encoding, texels and LOD
+  in-frame, and `#timeline` repeats it per stage. If you put the data/product
+  claims back in front of the user, that is a UI decision, not a licence to
+  weaken them.
+* Navigate the embedded viewer with `contentWindow.location.replace`, never by
+  assigning `$('mm').src`, and do not `pushState` from inside the frame
+  (`saveUrl` returns early when framed). Both push joint-history entries whose
+  top-level URL is the page's, so a back navigation — the trackpad swipe that is
+  also this viewer's zoom gesture — reloads the frame at a *previous* view while
+  the chrome goes on describing the current one, or, for a staged scene whose URL
+  carries no params, drops it into `resetParams()` and mm's default demo scene.
+  Verified by a browser A/B: `history.length` 2→3→4 across two view changes
+  before, constant after.
 
 ## Known, deliberately not changed
 
